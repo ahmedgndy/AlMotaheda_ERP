@@ -1,0 +1,27 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path=".gitignore" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="README.md" />
+    <File Path="docs/architecture.md" />
+  </Folder>
+  <Folder Name="/src/" />
+  <Folder Name="/src/BuildingBlocks/">
+    <Project Path="src/BuildingBlocks/AlMotaheda.BuildingBlocks/AlMotaheda.BuildingBlocks.csproj" />
+  </Folder>
+  <Folder Name="/src/Host/">
+    <Project Path="src/Host/AlMotaheda.Api/AlMotaheda.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/" />
+  <Folder Name="/src/Modules/Archive/">
+    <Project Path="src/Modules/Archive/AlMotaheda.Modules.Archive/AlMotaheda.Modules.Archive.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Projects/">
+    <Project Path="src/Modules/Projects/AlMotaheda.Modules.Projects/AlMotaheda.Modules.Projects.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AlMotaheda.Api.Tests/AlMotaheda.Api.Tests.csproj" />
+  </Folder>
+</Solution>

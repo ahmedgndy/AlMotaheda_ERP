@@ -1,0 +1,17 @@
+<Project>
+  <!--
+    Shared build settings for every project in the solution.
+    Keep project files small: only put project-specific settings in a .csproj.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Nullable warnings usually point at real bugs, so the build fails on them. -->
+    <WarningsAsErrors>$(WarningsAsErrors);nullable</WarningsAsErrors>
+
+    <Company>AlMotaheda</Company>
+    <Product>AlMotaheda ERP</Product>
+  </PropertyGroup>
+</Project>

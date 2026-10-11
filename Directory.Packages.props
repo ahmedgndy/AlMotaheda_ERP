@@ -1,0 +1,25 @@
+<Project>
+  <!--
+    Central Package Management: every NuGet version is declared once, here.
+    Project files reference packages without a version, so all modules
+    always use the same version of a shared library.
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <!--
+    Only the Swashbuckle parts we use. The Swashbuckle.AspNetCore meta-package also adds a build step
+    that starts the application after every build to export the OpenAPI file, which we don't need.
+  -->
+  <ItemGroup Label="API documentation">
+    <PackageVersion Include="Swashbuckle.AspNetCore.SwaggerGen" Version="9.0.1" />
+    <PackageVersion Include="Swashbuckle.AspNetCore.SwaggerUI" Version="9.0.1" />
+  </ItemGroup>
+
+  <ItemGroup Label="Testing">
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.1" />
+  </ItemGroup>
+</Project>
