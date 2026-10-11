@@ -1,4 +1,5 @@
 using AlMotaheda.BuildingBlocks.Modules;
+using AlMotaheda.Modules.Access;
 using AlMotaheda.Modules.Archive;
 using AlMotaheda.Modules.Projects;
 
@@ -16,6 +17,7 @@ internal static class ModuleCatalog
     /// <summary>Creates a new instance of every module. Called once at startup.</summary>
     public static IReadOnlyList<IModule> CreateAll() =>
     [
+        new AccessModule(),
         new ProjectsModule(),
         new ArchiveModule(),
     ];

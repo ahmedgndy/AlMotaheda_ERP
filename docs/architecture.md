@@ -9,7 +9,8 @@ This document explains how the AlMotaheda ERP backend is organised, why, and the
 - **Organised by feature.** Inside a module, code is grouped by use case (vertical slices), not by technical layer.
 - **Boundaries are enforced by tests**, not only by convention.
 
-**Current status:** foundation only. There are no business features, entities, database, or authentication yet.
+**Current status:** the foundation, plus the first feature: sign-in, users, roles and permissions (the Access module),
+stored in SQL Server through EF Core. Projects and Archive are still empty shells.
 
 ## 2. Solution layout
 
@@ -26,12 +27,16 @@ AlMotaheda_ERP/
 │   ├── BuildingBlocks/
 │   │   └── AlMotaheda.BuildingBlocks/  Technical code shared by modules (no business logic)
 │   └── Modules/
+│       ├── Access/
+│       │   └── AlMotaheda.Modules.Access/
 │       ├── Projects/
 │       │   └── AlMotaheda.Modules.Projects/
 │       └── Archive/
 │           └── AlMotaheda.Modules.Archive/
 └── tests/
-    └── AlMotaheda.Api.Tests/           Host-level tests and architecture rules
+    ├── AlMotaheda.Api.Tests/           Host-level tests and architecture rules
+    └── Modules/
+        └── AlMotaheda.Modules.Access.Tests/
 ```
 
 ## 3. What each project is for
@@ -39,10 +44,12 @@ AlMotaheda_ERP/
 | Project | Purpose | May reference |
 |---|---|---|
 | `AlMotaheda.Api` | The application that gets deployed. It wires up infrastructure (logging, errors, health checks, API docs) and plugs in the modules. No business logic. | BuildingBlocks, all modules |
-| `AlMotaheda.BuildingBlocks` | Technical, business-neutral code that every module needs. Today: the `IModule` contract and module registration. | .NET framework only |
+| `AlMotaheda.BuildingBlocks` | Technical, business-neutral code that every module needs: the `IModule` contract and module registration, the permission check (`RequirePermission`), the access-token claim names, and error responses with a `code` (`ApiProblem`). | .NET framework only |
+| `AlMotaheda.Modules.Access` | Sign-in, users, roles and permissions. Issues the access tokens. See its README. | BuildingBlocks, other modules' `.Contracts` |
 | `AlMotaheda.Modules.Projects` | Construction projects, and project-level access (who may open which project). | BuildingBlocks, other modules' `.Contracts` |
 | `AlMotaheda.Modules.Archive` | The documents and media of each project: categories, upload, storage, search, download, preview. | BuildingBlocks, other modules' `.Contracts` |
 | `AlMotaheda.Api.Tests` | Tests the host pipeline over real HTTP, plus the architecture rules. | Api (and through it, everything) |
+| `AlMotaheda.Modules.Access.Tests` | The Access module's unit tests, API tests, and SQL Server tests (Testcontainers). | Api, Access |
 
 **Why a project per module, not just a folder?** With separate projects, the compiler enforces the boundary.
 Anything marked `internal` in a module is invisible to every other module. Folders cannot do that.
@@ -54,19 +61,19 @@ A `.Contracts` project is created only when another module actually needs someth
 ## 4. Dependency rules
 
 ```
-                  ┌──────────────────┐
-                  │  AlMotaheda.Api  │   composition root
-                  └────────┬─────────┘
-             ┌─────────────┴─────────────┐
-             ▼                           ▼
-   ┌───────────────────┐       ┌───────────────────┐
-   │  Projects module  │       │  Archive module   │   no direct references between modules
-   └─────────┬─────────┘       └─────────┬─────────┘
-             └─────────────┬─────────────┘
-                           ▼
-                 ┌───────────────────┐
-                 │  BuildingBlocks   │
-                 └───────────────────┘
+                        ┌──────────────────┐
+                        │  AlMotaheda.Api  │   composition root
+                        └────────┬─────────┘
+          ┌──────────────────────┼──────────────────────┐
+          ▼                      ▼                      ▼
+ ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐
+ │  Access module  │   │ Projects module │   │ Archive module  │   no direct references between modules
+ └────────┬────────┘   └────────┬────────┘   └────────┬────────┘
+          └──────────────────────┼──────────────────────┘
+                                 ▼
+                       ┌───────────────────┐
+                       │  BuildingBlocks   │
+                       └───────────────────┘
 ```
 
 1. The host references modules. Modules never reference the host.
@@ -85,7 +92,13 @@ Rules 1 to 6 are checked by `tests/AlMotaheda.Api.Tests/Architecture/ModuleBound
 The tests find module assemblies automatically, so a new module is checked without editing the tests.
 They were verified to fail when a rule is broken. Rule 7 is checked in code review.
 
-**Data rule (from the database phase on):** each module owns its own tables.
+How rule 7 applies to the database and sign-in: a module that owns tables references the EF Core SQL Server
+provider itself, because its `DbContext` and migrations are part of the module. The Access module also registers
+the JWT bearer scheme, because it issues the tokens and must decide how they are checked. Both are part of the
+framework, not infrastructure vendors like Redis or telemetry exporters. The host still owns everything about the
+environment: the connection string, rate limits, forwarded headers and the database health check.
+
+**Data rule:** each module owns its own tables, in its own database schema (Access uses `access`).
 No module reads another module's tables. Modules exchange data only through contracts.
 
 ## 5. How the host works
@@ -101,11 +114,15 @@ The integration tests call the same two methods. So the tests always run the pro
 
 ### Request pipeline, in order
 
-1. **Request logging**: one structured log entry per request.
-2. **Exception handler**: unhandled exceptions become ProblemDetails responses.
-3. **Status code pages**: empty error responses (404, 405, ...) become ProblemDetails responses.
-4. **Swagger**: only when enabled.
-5. **Endpoints**: health checks, then module endpoints under `/api`.
+1. **Forwarded headers**: behind a trusted proxy, restores the real client address and scheme.
+2. **Request logging**: one structured log entry per request.
+3. **Exception handler**: unhandled exceptions become ProblemDetails responses.
+4. **Status code pages**: empty error responses (404, 405, ...) become ProblemDetails responses.
+5. **Swagger**: only when enabled.
+6. **Authentication**: reads the `Authorization: Bearer` access token.
+7. **Rate limiter**: per-client budgets for sign-in and token refresh.
+8. **Authorization**: every `/api` endpoint needs a signed-in user unless it allows anonymous access.
+9. **Endpoints**: health checks, then module endpoints under `/api`.
 
 Before step 1, .NET adds routing automatically. Health probes rely on that to skip request logging.
 If you ever call `app.UseRouting()` yourself (for example when adding authentication or CORS),
@@ -124,7 +141,8 @@ public interface IModule
 
 - Modules are listed explicitly in `ModuleCatalog.cs`. An explicit list is easier to read than assembly scanning and needs no reflection at startup.
 - `MapModules()` gives every module the shared `/api` route group, and returns that group.
-  When authentication is added, one call (`.RequireAuthorization()`) on that group will protect every module endpoint by default.
+  The host calls `.RequireAuthorization()` on it, so every module endpoint needs a signed-in user by default.
+  An endpoint opts out with `.AllowAnonymous()` (only sign-in, refresh and sign-out do).
 - Two modules with the same name stop the application at startup.
 - At startup, the log shows `Module <Name> loaded` for each module.
 
@@ -208,8 +226,11 @@ public void MapEndpoints(IEndpointRouteBuilder endpoints)
 - **Independence:** slices do not call each other. If several slices in one module truly share logic,
   move it into a well-named class in that module, and only once it is really shared.
 - **Size:** keep a slice in one file while it is small. When it grows, split it into several files in the same folder.
-- **Failures:** expected failures (validation error, not found, forbidden) are returned as results
-  (`TypedResults.ValidationProblem(...)`, `TypedResults.NotFound()`). Exceptions are only for the unexpected.
+- **Failures:** expected failures (validation error, not found, forbidden) are returned as results with a `code`,
+  through `ApiProblem` in BuildingBlocks (`ApiProblem.Validation(errors)`, `ApiProblem.NotFoundResult()`).
+  Exceptions are only for the unexpected.
+- **Validation:** each slice validates its own request explicitly and returns every failing field at once.
+  The server is the authority; the frontend's checks are only for convenience.
 - **Cancellation:** handlers accept a `CancellationToken` and pass it on.
 - **No mediator framework:** no MediatR or CQRS library. An endpoint calling a handler method is enough.
   A library is added only for a clear, concrete need.
@@ -220,14 +241,16 @@ public void MapEndpoints(IEndpointRouteBuilder endpoints)
 
 | File | Used in | Contents |
 |---|---|---|
-| `appsettings.json` | All environments | Defaults: log levels, readable console logs, Swagger off |
+| `appsettings.json` | All environments | Defaults: log levels, readable console logs, Swagger off, token issuer and audience, rate limits |
 | `appsettings.Development.json` | Development | More detailed logs |
 | `appsettings.Production.json` | Production | JSON logs, one object per line |
 
 - The environment comes from `ASPNETCORE_ENVIRONMENT` (`Development`, `Staging`, `Production`).
 - Environment variables override files. Use `__` for nesting, for example `ApiDocumentation__Enabled=true`.
-- **Secrets never go into appsettings files in git.** Locally, use User Secrets (`dotnet user-secrets init`, then `dotnet user-secrets set ...`).
-  On servers, use environment variables or a secret store.
+- **Secrets never go into appsettings files in git.** Locally, use User Secrets (the host already has a `UserSecretsId`;
+  run `dotnet user-secrets set ... --project src/Host/AlMotaheda.Api`). On servers, use environment variables or a secret store.
+- Required settings, checked at startup: `ConnectionStrings:Erp` and `Access:Tokens:SigningKey`.
+  The API refuses to start without them. See the README for the exact commands.
 
 ### Logging
 
@@ -261,10 +284,15 @@ Every error uses the RFC 9457 ProblemDetails format (`application/problem+json`)
   "title": "An error occurred while processing your request.",
   "status": 500,
   "instance": "/api/projects",
-  "traceId": "1bdb218431014c6084ad30fd544d910c"
+  "traceId": "1bdb218431014c6084ad30fd544d910c",
+  "code": "server_error"
 }
 ```
 
+- `code` is machine-readable, so the frontend can show its own Arabic or English message. Features set specific
+  codes (`email_taken`, `concurrency_conflict`, ...). Errors the framework produces get one from their status
+  (`validation_failed`, `unauthenticated`, `forbidden`, `not_found`, `too_many_requests`, `server_error`).
+- Validation errors (400) also list each failing field under `errors`.
 - `detail` (the exception message) appears only in Development. It can reveal internals.
 - `traceId` is the bare 32-character trace id, the same value as the logs' `TraceId` field.
 - Unhandled exceptions are logged exactly once, by `GlobalExceptionHandler`: with a stack trace for server errors (5xx),
@@ -275,7 +303,7 @@ Every error uses the RFC 9457 ProblemDetails format (`application/problem+json`)
 
 - `GET /health/live`: the process is up. Runs no checks. Use it for liveness probes.
 - `GET /health`: runs every registered check and returns 503 if any check is unhealthy. Use it for readiness and monitoring.
-  Database and file-storage checks will be added here as those parts are built.
+  Today it checks the database (`SELECT 1`, 5-second timeout). File-storage checks come with the Archive module.
 - Both endpoints are anonymous, and stay anonymous after authentication is added.
 - Check descriptions appear only in Development. When a check throws, .NET puts the exception message
   in its description, which can reveal connection strings. Elsewhere, the response shows each check's name,
@@ -315,12 +343,58 @@ No caching exists yet. When a feature shows a measured need, follow these rules:
 - **Failure:** the app must work, only slower, without the cache. A cache health check reports Degraded, not Unhealthy.
 - **Not for project data:** output caching (whole responses), because responses depend on the user and the project.
 
+### Database
+
+- **One SQL Server database, one schema per module.** The connection string is `ConnectionStrings:Erp`.
+- **Each module has its own `DbContext` and migrations**, with its own migration history table in its schema
+  (`access.__EFMigrationsHistory`), so modules' migrations never depend on each other.
+- **Migrations are internal classes.** `dotnet ef` generates them as `public`; change them to `internal`,
+  or the module-boundary test fails.
+- **Creating a migration** (from the repository root):
+  `dotnet tool restore`, then
+  `dotnet ef migrations add <Name> --project src/Modules/<Module>/AlMotaheda.Modules.<Module> --output-dir Data/Migrations`.
+- **Applying migrations:**
+  - Review the SQL first: `dotnet ef migrations script --idempotent --project src/Modules/Access/AlMotaheda.Modules.Access -o access.sql`.
+  - On a server, run that script, or a migration bundle (`dotnet ef migrations bundle`), before the new version starts.
+  - In development you can set `Database:ApplyMigrationsOnStartup` to `true`. It is `false` by default, so the
+    application never changes a schema nobody reviewed.
+- **Turn on `READ_COMMITTED_SNAPSHOT`** on the database (`ALTER DATABASE AlMotahedaErp SET READ_COMMITTED_SNAPSHOT ON`).
+  Readers then don't wait for writers, which removes most blocking between sign-ins and user changes.
+  Azure SQL has it on by default; a self-hosted SQL Server doesn't.
+- EF Core's own error logs are switched off for the Access context: the host's exception handler logs each failure
+  once, and EF's "save failed" entry would copy duplicate key values (emails) into the logs.
+
+### Authentication and authorization
+
+The Access module issues the tokens; every module checks them through BuildingBlocks.
+
+- **Access token:** a JWT (HS256) that lasts 15 minutes, sent as `Authorization: Bearer`. It carries the user id (`sub`),
+  role (`role`), sign-in id (`sid`) and one `perm` claim per module, such as `projects:VCEF`
+  (V = View, C = Create, E = Edit, A = Approve, F = See money).
+- **Checking a permission in any module:**
+  ```csharp
+  group.MapGet("/", ListProjects.HandleAsync).RequirePermission("projects", PermissionAction.View);
+  ```
+  In a handler: `httpContext.User.HasPermission("projects", PermissionAction.Edit)` and `httpContext.User.GetUserId()`.
+- **Building your own policy:** start from `PermissionAuthorization.SignedInPolicy()`. An endpoint with its own
+  policy object doesn't get the default policy, so a policy built from scratch would let a user who still has
+  to change their password call the endpoint. A test checks every `/api` endpoint for this.
+- **Freshness:** permissions in the token can be up to 15 minutes old. That is fine for reading and ordinary work.
+  Anything that grants or removes access must re-check the caller in the database; the Access module does this
+  for every user-management change.
+- **Project-level access** (which projects a user may open) belongs to the Projects module and is not built yet.
+
 ### Security defaults already in place
 
 - No `Server` response header.
 - No exception details outside Development.
 - No headers, query strings, or bodies in request logs.
 - No exception details or check descriptions in health responses outside Development.
+- Every `/api` endpoint needs a signed-in user unless it explicitly allows anonymous access.
+- Passwords are stored only as PBKDF2 hashes; refresh tokens only as SHA-256 hashes. Neither is ever logged.
+- Sign-in and token refresh are rate-limited per client address. Behind a proxy on another machine, list the
+  proxy in `ForwardedHeaders:KnownProxies`; otherwise all clients share one budget. The API logs a warning
+  the first time it ignores an `X-Forwarded-For` header from an untrusted address.
 
 ## 8. Adding a new module
 
@@ -339,6 +413,7 @@ No caching exists yet. When a feature shows a measured need, follow these rules:
 4. Map the endpoint in the module's `MapEndpoints`. Register any new services in its `RegisterServices`.
 5. Add tests in the module's test project. The first time, create `tests/Modules/AlMotaheda.Modules.<Name>.Tests`
    and add `<InternalsVisibleTo Include="AlMotaheda.Modules.<Name>.Tests" />` to the module's `.csproj`.
+   `tests/Modules/AlMotaheda.Modules.Access.Tests` is the example to copy, including its SQL Server test setup.
 6. Run `dotnet build` and `dotnet test`, then try the endpoint in Swagger.
 
 ## 10. Decisions intentionally left open
@@ -347,22 +422,26 @@ These are decided phase by phase, when the requirements are provided.
 
 | Topic | When | Current plan |
 |---|---|---|
-| Database and ORM | First feature that stores data | One DbContext per module, each in its own database schema, with its own migrations. |
-| Authentication and users | Authentication phase | Likely a Users/Identity module. The `/api` group gets `RequireAuthorization()`, so endpoints are protected by default. |
-| Project-level authorization | After authentication | The Projects module answers "may user X access project Y?" through `Projects.Contracts`. |
-| Validation approach | First feature with input | Built-in validation with an endpoint filter, or FluentValidation. |
+| Database and ORM | **Decided** (Access module) | SQL Server with EF Core 10: one DbContext per module, each in its own schema, with its own migrations. |
+| Authentication and users | **Decided** (Access module) | JWT access tokens (15 min) plus rotating refresh tokens in an HttpOnly cookie. The `/api` group requires a signed-in user. |
+| Project-level authorization | Projects feature | The Projects module answers "may user X access project Y?" through `Projects.Contracts`. The role's data scope (company, assigned projects, own records) plugs in there. |
+| Validation approach | **Decided** (Access module) | Explicit validation in each slice, collecting every failing field, returned as a 400 with `errors` and a `code`. |
+| Audit log table | Next small feature | User and permission changes are written to structured security logs until then. |
 | File storage | Archive upload phase | Local disk or cloud storage; size limits (Kestrel, IIS and multipart); file type checks. Shared storage once there are two or more servers. |
 | Observability | First feature | OpenTelemetry tracing and metrics, with an OTLP exporter that stays idle until configured. |
-| HTTPS, reverse proxy, CORS | When the hosting target is known | HTTPS redirection, HSTS, forwarded headers, and CORS for the frontend depend on where the API runs. |
+| HTTPS, reverse proxy, CORS | When the hosting target is known | Forwarded headers are in place (configure `ForwardedHeaders:KnownProxies`). HTTPS redirection, HSTS and CORS depend on where the API and frontend run; the sign-in cookie assumes they share a site. |
 
 ## 11. Build, run, and test
 
 ```bash
 dotnet build AlMotahedaERP.slnx
 dotnet test AlMotahedaERP.slnx
-dotnet run --project src/Host/AlMotaheda.Api --launch-profile http
-# then open http://localhost:5180/swagger and http://localhost:5180/health
+dotnet run --project src/Host/AlMotaheda.Api --launch-profile https
+# then open https://localhost:7180/swagger and https://localhost:7180/health
 ```
+
+Use the `https` profile when you test sign-in in a browser: the refresh cookie is `Secure`, and some browsers
+drop it over plain HTTP.
 
 Requirements:
 
@@ -372,3 +451,10 @@ Requirements:
 
 About the integration tests: `TestApplication` starts the real host on a free local port, using the same `ApiHost`
 methods as `Program.cs`, and tests call it over real HTTP. This needs no extra test package.
+It supplies a test signing key and a connection string that points nowhere, so tests that don't need a database
+never touch one.
+
+The SQL Server tests (`[DatabaseFact]`, in the Access test project) start SQL Server 2022 in Docker with Testcontainers,
+and give each test its own new database, created by the API's own startup migration. They need Docker running;
+without it they are reported as skipped, with the reason. On a Mac with Apple Silicon, turn on
+"Use Rosetta for x86_64/amd64 emulation" in Docker Desktop.

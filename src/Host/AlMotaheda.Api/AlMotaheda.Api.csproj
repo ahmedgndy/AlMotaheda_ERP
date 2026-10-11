@@ -6,19 +6,29 @@
     It contains no business logic.
   -->
 
+  <PropertyGroup>
+    <!-- Development secrets (connection string, token signing key) live outside the repository,
+         in user secrets. See README.md, "Local setup". -->
+    <UserSecretsId>almotaheda-erp-api</UserSecretsId>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />
+    <!-- Only for the database readiness check on /health. -->
+    <PackageReference Include="Microsoft.Data.SqlClient" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\BuildingBlocks\AlMotaheda.BuildingBlocks\AlMotaheda.BuildingBlocks.csproj" />
+    <ProjectReference Include="..\..\Modules\Access\AlMotaheda.Modules.Access\AlMotaheda.Modules.Access.csproj" />
     <ProjectReference Include="..\..\Modules\Projects\AlMotaheda.Modules.Projects\AlMotaheda.Modules.Projects.csproj" />
     <ProjectReference Include="..\..\Modules\Archive\AlMotaheda.Modules.Archive\AlMotaheda.Modules.Archive.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="AlMotaheda.Api.Tests" />
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Access.Tests" />
   </ItemGroup>
 
 </Project>

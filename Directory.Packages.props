@@ -19,9 +19,29 @@
     <PackageVersion Include="Swashbuckle.AspNetCore.SwaggerUI" Version="9.0.1" />
   </ItemGroup>
 
+  <!--
+    Database access. EF Core packages move together: keep them on the same version.
+    Microsoft.Data.SqlClient is referenced directly only by the host's database health check.
+  -->
+  <ItemGroup Label="Data">
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.1.1" />
+  </ItemGroup>
+
+  <!--
+    Sign-in tokens. JwtBearer brings Microsoft.IdentityModel.* 8.0.1, which the Access module also uses
+    to create tokens. Don't pin Microsoft.IdentityModel.* separately: mixed versions of those packages
+    fail at runtime.
+  -->
+  <ItemGroup Label="Authentication">
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
+  </ItemGroup>
+
   <ItemGroup Label="Testing">
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.1" />
+    <PackageVersion Include="Testcontainers.MsSql" Version="4.6.0" />
   </ItemGroup>
 </Project>

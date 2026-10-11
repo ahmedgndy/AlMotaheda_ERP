@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Access module tests.
+    - Unit: business rules with no I/O (permission resolution, input rules, tokens, seed data).
+    - Api: the real host over HTTP, for behaviour that needs no database (401/403/429, validation, startup checks).
+    - Database: the real host against a real SQL Server in Docker (Testcontainers). Skipped when Docker isn't running.
+  -->
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Testcontainers.MsSql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Host\AlMotaheda.Api\AlMotaheda.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Access\AlMotaheda.Modules.Access\AlMotaheda.Modules.Access.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- One test host for every test project: the same composition as Program.cs. -->
+    <Compile Include="..\..\AlMotaheda.Api.Tests\TestApplication.cs" Link="TestApplication.cs" />
+  </ItemGroup>
+
+</Project>

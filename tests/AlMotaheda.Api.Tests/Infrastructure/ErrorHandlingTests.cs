@@ -29,6 +29,7 @@ public sealed class ErrorHandlingTests
         Assert.Equal("/test/throw", root.GetProperty("instance").GetString());
         // The bare 32-character trace id, exactly as it appears in the logs' TraceId field.
         Assert.Matches("^[0-9a-f]{32}$", root.GetProperty("traceId").GetString());
+        Assert.Equal("server_error", root.GetProperty("code").GetString());
         Assert.False(root.TryGetProperty("detail", out _));
     }
 
@@ -56,6 +57,7 @@ public sealed class ErrorHandlingTests
         using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(404, problem.RootElement.GetProperty("status").GetInt32());
         Assert.False(string.IsNullOrWhiteSpace(problem.RootElement.GetProperty("traceId").GetString()));
+        Assert.Equal("not_found", problem.RootElement.GetProperty("code").GetString());
     }
 
     [Theory]
@@ -75,6 +77,7 @@ public sealed class ErrorHandlingTests
         Assert.Equal(ProblemJson, response.Content.Headers.ContentType?.MediaType);
         using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(400, problem.RootElement.GetProperty("status").GetInt32());
+        Assert.Equal("validation_failed", problem.RootElement.GetProperty("code").GetString());
     }
 
     private static void MapThrowingEndpoint(WebApplication app) =>

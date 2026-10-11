@@ -1,6 +1,9 @@
+using AlMotaheda.Api.Infrastructure.HealthChecks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 
 namespace AlMotaheda.Api.Tests;
@@ -14,6 +17,16 @@ namespace AlMotaheda.Api.Tests;
 /// </remarks>
 internal sealed class TestApplication : IAsyncDisposable
 {
+    /// <summary>The token signing key every test host uses (48 random bytes, base64). Tests sign their own tokens with it.</summary>
+    public const string TestSigningKey = "5VCqt/dpsqpPVWrnXWbyFoaRj4yGrULMc4k6cP4DmmES84K65SQnMLaRgLsx4Nzn";
+
+    /// <summary>
+    /// The connection string used when a test doesn't supply a real database. Nothing listens there: tests that
+    /// use it must not reach the database. The database health check is removed for these tests.
+    /// </summary>
+    public const string NoDatabaseConnectionString =
+        "Server=127.0.0.1,9;Database=NoDatabase;User Id=test;Password=test;Connect Timeout=1;TrustServerCertificate=true";
+
     private readonly WebApplication _app;
 
     private TestApplication(WebApplication app)
@@ -60,6 +73,10 @@ internal sealed class TestApplication : IAsyncDisposable
             ["Logging:LogLevel:Default"] = "Warning",
             ["Logging:LogLevel:Microsoft"] = "Warning",
             ["Logging:LogLevel:Microsoft.AspNetCore.HttpLogging.HttpLoggingMiddleware"] = "Warning",
+
+            // Required settings, so every test host starts. Tests can override them.
+            ["ConnectionStrings:Erp"] = NoDatabaseConnectionString,
+            ["Access:Tokens:SigningKey"] = TestSigningKey,
         });
 
         if (configuration is not null)
@@ -67,7 +84,20 @@ internal sealed class TestApplication : IAsyncDisposable
             builder.Configuration.AddInMemoryCollection(configuration);
         }
 
+        var usesRealDatabase = builder.Configuration.GetConnectionString("Erp") != NoDatabaseConnectionString;
+
         builder.AddApiHost();
+
+        if (!usesRealDatabase)
+        {
+            builder.Services.Configure<HealthCheckServiceOptions>(options =>
+            {
+                foreach (var registration in options.Registrations.Where(r => r.Name == DatabaseHealthCheck.Name).ToList())
+                {
+                    options.Registrations.Remove(registration);
+                }
+            });
+        }
         configureBuilder?.Invoke(builder);
 
         var app = builder.Build();

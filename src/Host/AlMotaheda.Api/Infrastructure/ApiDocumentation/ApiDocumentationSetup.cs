@@ -13,6 +13,7 @@ internal static class ApiDocumentationSetup
     private const string EnabledSettingKey = "ApiDocumentation:Enabled";
     private const string DocumentName = "v1";
     private const string ApiTitle = "AlMotaheda ERP API";
+    private const string BearerSchemeId = "Bearer";
 
     public static IServiceCollection AddApiDocumentation(this IServiceCollection services)
     {
@@ -28,6 +29,22 @@ internal static class ApiDocumentationSetup
             // Vertical slices nest their models (CreateProject.Request, UploadDocument.Request, ...).
             // Default schema ids would all be "Request" and collide, so include the declaring type.
             options.CustomSchemaIds(CreateSchemaId);
+
+            // "Authorize" button: paste the accessToken returned by POST /api/auth/login.
+            options.AddSecurityDefinition(BearerSchemeId, new OpenApiSecurityScheme
+            {
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
+                BearerFormat = "JWT",
+                Description = "The accessToken from POST /api/auth/login. It expires after 15 minutes.",
+            });
+            options.AddSecurityRequirement(new OpenApiSecurityRequirement
+            {
+                [new OpenApiSecurityScheme
+                {
+                    Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = BearerSchemeId },
+                }] = [],
+            });
         });
 
         return services;

@@ -2,6 +2,8 @@ using AlMotaheda.Api.Infrastructure.ApiDocumentation;
 using AlMotaheda.Api.Infrastructure.ErrorHandling;
 using AlMotaheda.Api.Infrastructure.HealthChecks;
 using AlMotaheda.Api.Infrastructure.Logging;
+using AlMotaheda.Api.Infrastructure.RateLimiting;
+using AlMotaheda.Api.Infrastructure.Security;
 using AlMotaheda.BuildingBlocks.Modules;
 
 namespace AlMotaheda.Api;
@@ -23,7 +25,10 @@ internal static class ApiHost
         builder.Services.AddRequestLogging();
         builder.Services.AddErrorHandling();
         builder.Services.AddApiDocumentation();
-        builder.Services.AddHealthChecks();
+        builder.Services.AddSecurity(builder.Configuration);
+        builder.Services.AddRateLimiting(builder.Configuration);
+        builder.Services.AddHealthChecks()
+            .AddCheck<DatabaseHealthCheck>(DatabaseHealthCheck.Name, timeout: DatabaseHealthCheck.Timeout);
 
         builder.Services.AddModules(builder.Configuration, ModuleCatalog.CreateAll());
 
@@ -33,8 +38,11 @@ internal static class ApiHost
     public static WebApplication UseApiHost(this WebApplication app)
     {
         // Order matters:
-        // 1. Request logging is outermost, so it records the final status code of every request.
-        // 2. Error handling wraps all endpoints, so every failure becomes a ProblemDetails response.
+        // 1. The real client address is restored first, so everything after it sees it.
+        // 2. Request logging is outermost, so it records the final status code of every request.
+        // 3. Error handling wraps all endpoints, so every failure becomes a ProblemDetails response.
+        // 4. Authentication, then rate limiting, then authorization, just before the endpoints.
+        app.UseClientAddress();
         app.UseRequestLogging();
         app.UseErrorHandling();
 
@@ -43,8 +51,12 @@ internal static class ApiHost
             app.UseApiDocumentation();
         }
 
+        app.UseSecurity();
+
         app.MapHealthCheckEndpoints();
-        app.MapModules();
+
+        // Every module endpoint requires a signed-in user unless it explicitly allows anonymous access.
+        app.MapModules().RequireAuthorization();
 
         return app;
     }

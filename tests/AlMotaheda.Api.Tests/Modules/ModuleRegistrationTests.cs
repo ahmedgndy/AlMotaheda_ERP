@@ -17,7 +17,7 @@ public sealed class ModuleRegistrationTests
 
         var registered = app.Services.GetServices<IModule>().Select(module => module.Name);
 
-        Assert.Equal(new[] { "Projects", "Archive" }, registered);
+        Assert.Equal(new[] { "Access", "Projects", "Archive" }, registered);
     }
 
     [Fact]
@@ -30,6 +30,17 @@ public sealed class ModuleRegistrationTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(ProbeService.Message, await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Module_endpoints_require_a_signed_in_user_unless_they_allow_anonymous_access()
+    {
+        await using var app = await TestApplication.StartAsync(configureBuilder: builder =>
+            builder.Services.AddModules(builder.Configuration, [new ProbeModule()]));
+
+        var response = await app.Client.GetAsync("/api/probe/protected");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
@@ -52,8 +63,11 @@ public sealed class ModuleRegistrationTests
         public void RegisterServices(IServiceCollection services, IConfiguration configuration) =>
             services.AddSingleton<ProbeService>();
 
-        public void MapEndpoints(IEndpointRouteBuilder endpoints) =>
-            endpoints.MapGet("/probe", (ProbeService service) => Results.Text(service.GetMessage()));
+        public void MapEndpoints(IEndpointRouteBuilder endpoints)
+        {
+            endpoints.MapGet("/probe", (ProbeService service) => Results.Text(service.GetMessage())).AllowAnonymous();
+            endpoints.MapGet("/probe/protected", (ProbeService service) => Results.Text(service.GetMessage()));
+        }
     }
 
     private sealed class ProbeService
