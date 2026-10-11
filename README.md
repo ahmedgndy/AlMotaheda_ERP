@@ -10,7 +10,7 @@ No business features exist yet. They will be added one phase at a time.
 
 ## Technology
 
-- ASP.NET Core Web API on .NET 8
+- ASP.NET Core Web API on .NET 10 (long-term support until November 2028)
 - Modular monolith, with vertical slices inside each module
 - Built-in structured logging, ProblemDetails error responses, health checks, Swagger
 - xUnit tests, including architecture tests that enforce module boundaries
@@ -28,7 +28,7 @@ Then open:
 - Swagger UI: http://localhost:5180/swagger
 - Health: http://localhost:5180/health
 
-Requires .NET SDK 9.0.200 or newer (for the `.slnx` file) and the ASP.NET Core 8 runtime.
+Requires the .NET 10 SDK. Servers need the ASP.NET Core 10 runtime.
 
 ## Documentation
 

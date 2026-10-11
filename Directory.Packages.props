@@ -11,6 +11,8 @@
   <!--
     Only the Swashbuckle parts we use. The Swashbuckle.AspNetCore meta-package also adds a build step
     that starts the application after every build to export the OpenAPI file, which we don't need.
+    Stay on 9.0.x for now: Swashbuckle 10 moves to Microsoft.OpenApi 2.x, which changes the
+    namespaces used in ApiDocumentationSetup.cs.
   -->
   <ItemGroup Label="API documentation">
     <PackageVersion Include="Swashbuckle.AspNetCore.SwaggerGen" Version="9.0.1" />

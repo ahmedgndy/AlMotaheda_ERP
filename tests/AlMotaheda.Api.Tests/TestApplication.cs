@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 
 namespace AlMotaheda.Api.Tests;
 
@@ -44,6 +45,14 @@ internal sealed class TestApplication : IAsyncDisposable
 
         // Port 0 = the operating system picks a free port, so tests can run in parallel.
         builder.WebHost.UseUrls("http://127.0.0.1:0");
+
+        // .NET checks service lifetimes only in Development by default. Check them in every test,
+        // so a lifetime bug (for example, a singleton holding a scoped database context) fails here.
+        builder.Host.UseDefaultServiceProvider(options =>
+        {
+            options.ValidateScopes = true;
+            options.ValidateOnBuild = true;
+        });
 
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {

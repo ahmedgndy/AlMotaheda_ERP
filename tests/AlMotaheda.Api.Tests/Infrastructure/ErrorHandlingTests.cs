@@ -27,7 +27,8 @@ public sealed class ErrorHandlingTests
         var root = problem.RootElement;
         Assert.Equal(500, root.GetProperty("status").GetInt32());
         Assert.Equal("/test/throw", root.GetProperty("instance").GetString());
-        Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("traceId").GetString()));
+        // The bare 32-character trace id, exactly as it appears in the logs' TraceId field.
+        Assert.Matches("^[0-9a-f]{32}$", root.GetProperty("traceId").GetString());
         Assert.False(root.TryGetProperty("detail", out _));
     }
 

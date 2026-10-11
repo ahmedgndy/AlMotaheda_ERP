@@ -25,7 +25,7 @@ internal static class ApiHost
         builder.Services.AddApiDocumentation();
         builder.Services.AddHealthChecks();
 
-        builder.Services.AddModules(builder.Configuration, ModuleCatalog.All);
+        builder.Services.AddModules(builder.Configuration, ModuleCatalog.CreateAll());
 
         return builder;
     }

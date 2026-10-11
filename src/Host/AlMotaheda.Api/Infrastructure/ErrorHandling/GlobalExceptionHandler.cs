@@ -12,9 +12,12 @@ namespace AlMotaheda.Api.Infrastructure.ErrorHandling;
 /// feature itself. This handler is the safety net for everything unexpected.
 /// </para>
 /// <para>
-/// This is the only place that logs unhandled exceptions. The framework's own ExceptionHandlerMiddleware
-/// log is switched off in appsettings.json ("Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddleware": "None");
-/// otherwise every exception would be logged twice, and client errors would be logged as server errors.
+/// This is the only place that logs unhandled exceptions. Since .NET 10, the framework's
+/// ExceptionHandlerMiddleware no longer logs an exception that a handler has handled, so each one is
+/// logged once, here, and client errors are logged as warnings rather than server errors.
+/// </para>
+/// <para>
+/// Requests the client aborted never reach this handler: the middleware answers those itself.
 /// </para>
 /// </remarks>
 internal sealed class GlobalExceptionHandler(
@@ -22,23 +25,12 @@ internal sealed class GlobalExceptionHandler(
     IHostEnvironment environment,
     ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
 {
-    // Non-standard status code (used by nginx and others) meaning "client closed the request".
-    private const int ClientClosedRequest = 499;
-
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
         Exception exception,
         CancellationToken cancellationToken)
     {
         var request = httpContext.Request;
-
-        if (exception is OperationCanceledException && httpContext.RequestAborted.IsCancellationRequested)
-        {
-            // The client went away. Nobody is waiting for an answer and it is not a server fault.
-            logger.LogInformation("Request {Method} {Path} was cancelled by the client", request.Method, request.Path);
-            httpContext.Response.StatusCode = ClientClosedRequest;
-            return true;
-        }
 
         var statusCode = exception is BadHttpRequestException badRequest
             ? badRequest.StatusCode

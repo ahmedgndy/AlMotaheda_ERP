@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
@@ -42,6 +43,35 @@ public sealed class HealthCheckTests
     }
 
     [Fact]
+    public async Task Check_descriptions_are_hidden_outside_development()
+    {
+        // When a check throws, .NET copies the exception message into the check's description.
+        await using var app = await TestApplication.StartAsync(configureBuilder: AddThrowingCheck);
+
+        var response = await app.Client.GetAsync("/health");
+        var content = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.DoesNotContain("secret", content, StringComparison.OrdinalIgnoreCase);
+        using var body = JsonDocument.Parse(content);
+        var check = Assert.Single(body.RootElement.GetProperty("checks").EnumerateArray());
+        Assert.Equal("database", check.GetProperty("name").GetString());
+        Assert.False(check.TryGetProperty("description", out _));
+    }
+
+    [Fact]
+    public async Task Check_descriptions_are_shown_in_development()
+    {
+        await using var app = await TestApplication.StartAsync(environment: "Development", configureBuilder: AddThrowingCheck);
+
+        var response = await app.Client.GetAsync("/health");
+
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var check = Assert.Single(body.RootElement.GetProperty("checks").EnumerateArray());
+        Assert.Equal(SecretMessage, check.GetProperty("description").GetString());
+    }
+
+    [Fact]
     public async Task Responses_do_not_advertise_the_web_server()
     {
         await using var app = await TestApplication.StartAsync();
@@ -50,4 +80,10 @@ public sealed class HealthCheckTests
 
         Assert.False(response.Headers.Contains("Server"));
     }
+
+    private const string SecretMessage = "Server=prod-db;User=sa;Password=secret";
+
+    private static void AddThrowingCheck(WebApplicationBuilder builder) =>
+        builder.Services.AddHealthChecks()
+            .AddCheck("database", () => throw new InvalidOperationException(SecretMessage));
 }

@@ -13,7 +13,8 @@ namespace AlMotaheda.Api;
 /// </remarks>
 internal static class ModuleCatalog
 {
-    public static IReadOnlyList<IModule> All =>
+    /// <summary>Creates a new instance of every module. Called once at startup.</summary>
+    public static IReadOnlyList<IModule> CreateAll() =>
     [
         new ProjectsModule(),
         new ArchiveModule(),

@@ -16,11 +16,11 @@ internal static class ErrorHandlingSetup
 
             context.ProblemDetails.Instance ??= httpContext.Request.Path;
 
-            // Same value as the TraceId on every log entry of this request,
-            // so a user-reported error can be matched to its logs.
-            context.ProblemDetails.Extensions.TryAdd(
-                "traceId",
-                Activity.Current?.TraceId.ToString() ?? httpContext.TraceIdentifier);
+            // Same value as the TraceId on every log entry of this request, so a user-reported error
+            // can be matched to its logs. Always set (never just added), so the value keeps this format
+            // whatever the framework adds by default.
+            context.ProblemDetails.Extensions["traceId"] =
+                Activity.Current?.TraceId.ToString() ?? httpContext.TraceIdentifier;
         });
 
         services.AddExceptionHandler<GlobalExceptionHandler>();

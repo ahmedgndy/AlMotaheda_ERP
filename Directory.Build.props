@@ -4,7 +4,8 @@
     Keep project files small: only put project-specific settings in a .csproj.
   -->
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <!-- .NET 10 is the long-term support release, supported until November 2028. -->
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
 

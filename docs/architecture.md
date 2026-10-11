@@ -4,7 +4,7 @@ This document explains how the AlMotaheda ERP backend is organised, why, and the
 
 ## 1. Summary
 
-- **One deployable application.** A single ASP.NET Core Web API on .NET 8. It is a modular monolith, not microservices.
+- **One deployable application.** A single ASP.NET Core Web API on .NET 10 (long-term support until November 2028). It is a modular monolith, not microservices.
 - **Split into business modules.** Each module owns one business area. Each module is its own project, with explicit boundaries.
 - **Organised by feature.** Inside a module, code is grouped by use case (vertical slices), not by technical layer.
 - **Boundaries are enforced by tests**, not only by convention.
@@ -16,7 +16,7 @@ This document explains how the AlMotaheda ERP backend is organised, why, and the
 ```
 AlMotaheda_ERP/
 ├── AlMotahedaERP.slnx                  Solution file
-├── Directory.Build.props               Shared build settings (net8.0, nullable, implicit usings)
+├── Directory.Build.props               Shared build settings (net10.0, nullable, implicit usings)
 ├── Directory.Packages.props            Every NuGet version, declared once
 ├── .editorconfig                       Code style
 ├── docs/architecture.md                This document
@@ -77,10 +77,13 @@ A `.Contracts` project is created only when another module actually needs someth
 4. BuildingBlocks never references modules or the host, and holds no business logic.
 5. There are no circular references. This follows from rules 1 to 4.
 6. Every module the host references is listed in `ModuleCatalog`.
+7. Infrastructure vendors stay in the host. Modules use framework abstractions directly
+   (`ILogger`, `HybridCache`, `IHubContext`, `ActivitySource`, `Meter`). Vendor-specific setup
+   (Redis, telemetry exporters, SignalR backplanes, cloud SDKs) is configured only in the host.
 
-These rules are checked by `tests/AlMotaheda.Api.Tests/Architecture/ModuleBoundaryTests.cs`.
+Rules 1 to 6 are checked by `tests/AlMotaheda.Api.Tests/Architecture/ModuleBoundaryTests.cs`.
 The tests find module assemblies automatically, so a new module is checked without editing the tests.
-They were verified to fail when a rule is broken.
+They were verified to fail when a rule is broken. Rule 7 is checked in code review.
 
 **Data rule (from the database phase on):** each module owns its own tables.
 No module reads another module's tables. Modules exchange data only through contracts.
@@ -103,6 +106,10 @@ The integration tests call the same two methods. So the tests always run the pro
 3. **Status code pages**: empty error responses (404, 405, ...) become ProblemDetails responses.
 4. **Swagger**: only when enabled.
 5. **Endpoints**: health checks, then module endpoints under `/api`.
+
+Before step 1, .NET adds routing automatically. Health probes rely on that to skip request logging.
+If you ever call `app.UseRouting()` yourself (for example when adding authentication or CORS),
+call it before request logging, or probe requests will be logged again.
 
 ### The module contract
 
@@ -129,6 +136,8 @@ public interface IModule
 - Lifetimes: `Scoped` for anything that uses the current request or the database. `Singleton` only for stateless, thread-safe services.
 - Settings: bind a module's configuration section to an options class and call `ValidateOnStart()`.
   Then a bad setting stops the application at startup, not on the first request.
+- Lifetimes are checked in tests: `TestApplication` turns on `ValidateScopes` and `ValidateOnBuild`,
+  so a singleton that captures a scoped service (such as a database context) fails the tests.
 
 ## 6. Vertical slice conventions
 
@@ -229,8 +238,15 @@ public void MapEndpoints(IEndpointRouteBuilder endpoints)
 - Every request is logged once: method, path, status code, and duration.
   Headers, query strings, and bodies are never logged, because they can hold tokens, personal data, or file content.
 - Health probes are not logged, so they don't bury real traffic.
-- Every log entry carries a `TraceId`. Error responses return the same value as `traceId`,
+- In Production, every log entry written during a request carries a `TraceId` (the JSON logs include scopes).
+  Development logs are single-line text without it. Error responses return the same value as `traceId`,
   so a user's error report can be matched to its logs.
+- **A slow log output must never stall requests.** In Production, the console logger drops messages when its
+  queue is full (`QueueFullMode: DropWrite`) instead of making requests wait. In load tests, the default (`Wait`)
+  cut throughput from about 27,000 to about 600 requests per second when output was slow.
+  The trade-off: during a backlog, some log lines are lost.
+- Logging every request has a cost: about 40% of peak throughput on a trivial endpoint in load tests.
+  Once OpenTelemetry tracing exists, log only failed or slow requests in Production.
 - **Why not Serilog now?** The built-in logger already gives structured logs, with no extra package.
   All code logs through `ILogger<T>`, so Serilog (file or Seq sinks) or OpenTelemetry can be added later in the host only,
   once the hosting environment is known. No feature code would change.
@@ -250,8 +266,10 @@ Every error uses the RFC 9457 ProblemDetails format (`application/problem+json`)
 ```
 
 - `detail` (the exception message) appears only in Development. It can reveal internals.
+- `traceId` is the bare 32-character trace id, the same value as the logs' `TraceId` field.
 - Unhandled exceptions are logged exactly once, by `GlobalExceptionHandler`: with a stack trace for server errors (5xx),
-  as a short warning for client errors (4xx). The framework's own duplicate log is switched off in `appsettings.json`.
+  as a short warning for client errors (4xx). Since .NET 10, the framework's middleware doesn't log an exception
+  that a handler has handled, so there are no duplicates.
 
 ### Health checks
 
@@ -259,20 +277,50 @@ Every error uses the RFC 9457 ProblemDetails format (`application/problem+json`)
 - `GET /health`: runs every registered check and returns 503 if any check is unhealthy. Use it for readiness and monitoring.
   Database and file-storage checks will be added here as those parts are built.
 - Both endpoints are anonymous, and stay anonymous after authentication is added.
+- Check descriptions appear only in Development. When a check throws, .NET puts the exception message
+  in its description, which can reveal connection strings. Elsewhere, the response shows each check's name,
+  status and duration.
+- Register optional dependencies (a cache, for example) with `failureStatus: HealthStatus.Degraded`.
+  Degraded still returns 200, so their outage doesn't take servers out of the load balancer. Give every check a timeout.
 
 ### API documentation
 
 - Swagger UI is at `/swagger`. The OpenAPI JSON is at `/swagger/v1/swagger.json`.
 - It is on automatically in Development. In other environments, set `ApiDocumentation:Enabled` to `true`.
-- It uses Swashbuckle because .NET 8 has no built-in OpenAPI document generator (that arrived in .NET 9).
-  Only the generator and UI packages are referenced. The meta-package would add a build step that starts the app after every build.
+- It uses Swashbuckle 9.0.x. Only the generator and UI packages are referenced; the meta-package would add
+  a build step that starts the app after every build. .NET 10 also has a built-in OpenAPI generator
+  (`Microsoft.AspNetCore.OpenApi`), and switching to it is optional. Don't move to Swashbuckle 10 casually:
+  it uses Microsoft.OpenApi 2.x, which changes the namespaces used in `ApiDocumentationSetup.cs`.
+
+### Memory
+
+The app uses .NET's default server garbage collector. Since .NET 9, it runs in DATAS mode, which sizes the heap
+to the workload instead of growing it per CPU core. In load tests on .NET 8, classic Server GC kept about 400 MB
+after load; DATAS kept about 78 MB at the same throughput.
+
+### Caching (when it is added)
+
+No caching exists yet. When a feature shows a measured need, follow these rules:
+
+- **One cache API:** `HybridCache`, registered in the host with `AddHybridCache()`. Add Redis only as its
+  second level, once you run two or more servers.
+- **Keys:** `{module}:{entity}:{id}:v{n}`. Only the owning module reads, writes and invalidates its keys.
+  Bump the version suffix when the cached shape changes.
+- **Expiry:** every entry has an absolute expiry, and the local expiry is shorter than the shared one.
+- **Invalidation:** on every write, by key or by tag.
+- **Memory:** never cache file contents (photos, videos, PDFs) in memory.
+- **Authorization:** cache data, not access decisions. Run the project permission check on every request,
+  even when the data comes from cache. Keys for user- or project-specific data include that user or project.
+- **Consistency:** cache only data where a short delay is harmless.
+- **Failure:** the app must work, only slower, without the cache. A cache health check reports Degraded, not Unhealthy.
+- **Not for project data:** output caching (whole responses), because responses depend on the user and the project.
 
 ### Security defaults already in place
 
 - No `Server` response header.
 - No exception details outside Development.
 - No headers, query strings, or bodies in request logs.
-- No exception details in health responses.
+- No exception details or check descriptions in health responses outside Development.
 
 ## 8. Adding a new module
 
@@ -303,7 +351,8 @@ These are decided phase by phase, when the requirements are provided.
 | Authentication and users | Authentication phase | Likely a Users/Identity module. The `/api` group gets `RequireAuthorization()`, so endpoints are protected by default. |
 | Project-level authorization | After authentication | The Projects module answers "may user X access project Y?" through `Projects.Contracts`. |
 | Validation approach | First feature with input | Built-in validation with an endpoint filter, or FluentValidation. |
-| File storage | Archive upload phase | Local disk or cloud storage; size limits; file type checks. |
+| File storage | Archive upload phase | Local disk or cloud storage; size limits (Kestrel, IIS and multipart); file type checks. Shared storage once there are two or more servers. |
+| Observability | First feature | OpenTelemetry tracing and metrics, with an OTLP exporter that stays idle until configured. |
 | HTTPS, reverse proxy, CORS | When the hosting target is known | HTTPS redirection, HSTS, forwarded headers, and CORS for the frontend depend on where the API runs. |
 
 ## 11. Build, run, and test
@@ -317,9 +366,9 @@ dotnet run --project src/Host/AlMotaheda.Api --launch-profile http
 
 Requirements:
 
-- .NET SDK 9.0.200 or newer to use the `.slnx` solution file from the command line (any newer SDK works).
+- **.NET 10 SDK.** It builds the `net10.0` projects and reads the `.slnx` solution file.
   A recent Visual Studio, Rider, or VS Code with C# Dev Kit also opens it.
-- The projects target .NET 8, so running the app and the tests needs the **ASP.NET Core 8 runtime**.
+- Running the app needs the **ASP.NET Core 10 runtime**, which the SDK includes. Servers need it installed.
 
 About the integration tests: `TestApplication` starts the real host on a free local port, using the same `ApiHost`
 methods as `Program.cs`, and tests call it over real HTTP. This needs no extra test package.

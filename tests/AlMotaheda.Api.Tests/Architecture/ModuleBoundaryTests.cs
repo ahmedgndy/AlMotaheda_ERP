@@ -87,7 +87,7 @@ public sealed class ModuleBoundaryTests
     [Fact]
     public void Each_module_has_one_module_class_and_it_is_registered_in_the_catalog()
     {
-        var catalogTypes = ModuleCatalog.All.Select(module => module.GetType()).ToHashSet();
+        var catalogTypes = ModuleCatalog.CreateAll().Select(module => module.GetType()).ToHashSet();
 
         foreach (var module in ModuleAssemblies)
         {
