@@ -7,8 +7,9 @@ payment certificates, meeting minutes, site photos and videos, progress reports,
 
 - **Architecture foundation:** done. The solution structure, host, and infrastructure are in place.
 - **Login and users (Access module):** done on the backend. Sign-in, users, roles and permissions, stored in SQL Server.
-  The frontend screens are not connected yet.
-- Projects and Archive: not started. They will be added one phase at a time.
+- **Projects (Projects module):** done on the backend. Projects, their teams, and who may open which project.
+- The frontend screens are not connected yet.
+- Archive: not started. It will be added in the next phase.
 
 ## Technology
 
@@ -40,8 +41,12 @@ You need the .NET 10 SDK, a SQL Server you can reach, and Docker if you want to 
 
    ```bash
    dotnet ef migrations script --idempotent --project src/Modules/Access/AlMotaheda.Modules.Access -o access.sql
+   dotnet ef migrations script --idempotent --project src/Modules/Projects/AlMotaheda.Modules.Projects -o projects.sql
    dotnet ef database update --project src/Modules/Access/AlMotaheda.Modules.Access --connection "<the same connection string>"
+   dotnet ef database update --project src/Modules/Projects/AlMotaheda.Modules.Projects --connection "<the same connection string>"
    ```
+
+   Always Access first: the Projects tables point to `access.User`.
 
    Or, in development only, set `Database:ApplyMigrationsOnStartup` to `true` and let the API apply it at startup.
 
@@ -76,7 +81,10 @@ Docker Desktop settings.
 
 - Set `ConnectionStrings__Erp` and `Access__Tokens__SigningKey` as environment variables. Generate the key once
   with `openssl rand -base64 48` and keep it secret; changing it signs everyone out.
-- Apply migrations with the reviewed script or a migration bundle before starting a new version.
+- Apply migrations with the reviewed scripts or migration bundles before starting a new version: Access first,
+  then Projects.
+- `Projects__TimeZone` is the company time zone (default `Africa/Cairo`). The server needs time zone data; on a
+  minimal container image without it, install `tzdata` or set `UTC`.
 - Turn on `READ_COMMITTED_SNAPSHOT` for the database.
 - Behind a reverse proxy on another machine, list it in `ForwardedHeaders__KnownProxies__0`.
 - Serve the frontend and the API from the same site (for example `erp.example.com` and `erp.example.com/api`):
@@ -86,5 +94,5 @@ Docker Desktop settings.
 
 - [Backend architecture](docs/architecture.md): structure, dependency rules, and how to add modules and features
 - [Access module](src/Modules/Access/AlMotaheda.Modules.Access/README.md): sign-in, users, roles and permissions
-- [Projects module](src/Modules/Projects/AlMotaheda.Modules.Projects/README.md)
+- [Projects module](src/Modules/Projects/AlMotaheda.Modules.Projects/README.md): projects, teams and project-level access
 - [Archive module](src/Modules/Archive/AlMotaheda.Modules.Archive/README.md)

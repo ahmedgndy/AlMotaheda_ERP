@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Projects module tests.
+    - Unit: rules with no I/O (field validation, scope and responsibility rules, the table design).
+    - Api: the real host over HTTP without SQL Server. Security checks, validation, and every endpoint's SQL generated
+      against a stand-in database that answers with no rows (catches queries EF can't translate).
+    - Database: the real host against a real SQL Server in Docker (Testcontainers). Skipped when Docker isn't running.
+  -->
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Testcontainers.MsSql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Host\AlMotaheda.Api\AlMotaheda.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Projects\AlMotaheda.Modules.Projects\AlMotaheda.Modules.Projects.csproj" />
+    <!-- Users are created and signed in through the real Access endpoints, with the Access test helpers. -->
+    <ProjectReference Include="..\..\..\src\Modules\Access\AlMotaheda.Modules.Access\AlMotaheda.Modules.Access.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- One test host for every test project: the same composition as Program.cs. -->
+    <Compile Include="..\..\AlMotaheda.Api.Tests\TestApplication.cs" Link="Shared\TestApplication.cs" />
+    <!-- The Access test helpers: SQL Server in Docker, signing in, and test tokens. -->
+    <Compile Include="..\AlMotaheda.Modules.Access.Tests\Database\SqlServerFixture.cs" Link="Shared\SqlServerFixture.cs" />
+    <Compile Include="..\AlMotaheda.Modules.Access.Tests\Database\AccessApi.cs" Link="Shared\AccessApi.cs" />
+    <Compile Include="..\AlMotaheda.Modules.Access.Tests\TestTokens.cs" Link="Shared\TestTokens.cs" />
+  </ItemGroup>
+
+</Project>

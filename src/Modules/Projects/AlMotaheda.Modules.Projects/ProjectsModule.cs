@@ -1,26 +1,80 @@
 using AlMotaheda.BuildingBlocks.Modules;
+using AlMotaheda.Modules.Projects.Common;
+using AlMotaheda.Modules.Projects.Data;
+using AlMotaheda.Modules.Projects.Features.Members;
+using AlMotaheda.Modules.Projects.Features.Projects;
+using AlMotaheda.Modules.Projects.Security;
+using AlMotaheda.Modules.Projects.Startup;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace AlMotaheda.Modules.Projects;
 
 /// <summary>
-/// Entry point of the Projects module. This is the only public type in the module.
+/// Entry point of the Projects module: construction projects, who is on each project, and who may open which
+/// project. This is the only public type in the module.
 /// </summary>
+/// <remarks>
+/// It uses the Access module only through <c>AlMotaheda.Modules.Access.Contracts</c>: user names and roles
+/// (<c>IUserDirectory</c>) and the database check that a caller is still an active Executive (<c>IExecutiveCheck</c>).
+/// </remarks>
 public sealed class ProjectsModule : IModule
 {
     public string Name => "Projects";
 
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
-        // Feature services are registered here as vertical slices are added.
+        var connectionString = configuration.GetConnectionString(ProjectsDatabase.ConnectionStringName);
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                $"ConnectionStrings:{ProjectsDatabase.ConnectionStringName} is missing. Set it with user secrets in development "
+                + $"or the ConnectionStrings__{ProjectsDatabase.ConnectionStringName} environment variable on the server.");
+        }
+
+        services.AddDbContext<ProjectsDbContext>(options => options
+            .UseSqlServer(connectionString, ProjectsDatabase.Configure)
+            // Failures are logged once, by the host's exception handler; expected ones (a duplicate code) become 409s.
+            .ConfigureWarnings(warnings => warnings.Ignore(
+                CoreEventId.SaveChangesFailed,
+                CoreEventId.QueryIterationFailed,
+                RelationalEventId.CommandError,
+                RelationalEventId.ConnectionError)));
+
+        services.AddOptions<ProjectsOptions>().Bind(configuration.GetSection(ProjectsOptions.SectionName)).ValidateOnStart();
+        services.AddSingleton<IValidateOptions<ProjectsOptions>, ProjectsOptionsValidator>();
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<BusinessCalendar>();
+        services.AddSingleton<ProjectsLog>();
+        services.AddScoped<ProjectAccess>();
+        services.AddScoped<ExecutiveGate>();
+
+        services.AddHostedService<ProjectsStartup>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints)
     {
-        // Feature endpoints are mapped here as vertical slices are added. Example:
-        //   var projects = endpoints.MapGroup("/projects").WithTags(Name);
-        //   CreateProject.MapEndpoint(projects);
+        // Every projects endpoint needs a signed-in user, whatever the host adds.
+        var projects = endpoints.MapGroup("/projects").WithTags(Name).RequireAuthorization();
+
+        ListProjects.Map(projects);
+        GetProject.Map(projects);
+        CreateProject.Map(projects);
+        UpdateProject.Map(projects);
+
+        ListProjectMembers.Map(projects);
+        SetProjectManager.Map(projects);
+        AddProjectMember.Map(projects);
+        EndProjectMember.Map(projects);
+        ListUserProjects.Map(projects);
+        ListAssignableUsers.Map(projects);
     }
 }

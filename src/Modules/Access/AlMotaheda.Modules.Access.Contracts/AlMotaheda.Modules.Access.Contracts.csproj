@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    What other modules may use from the Access module: public interfaces and small records only.
+    No logic and no references, so any module can depend on it without depending on Access itself.
+    The Access module implements and registers these interfaces.
+  -->
+
+</Project>

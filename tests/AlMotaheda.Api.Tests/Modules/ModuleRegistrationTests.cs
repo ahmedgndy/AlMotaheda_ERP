@@ -17,6 +17,8 @@ public sealed class ModuleRegistrationTests
 
         var registered = app.Services.GetServices<IModule>().Select(module => module.Name);
 
+        // The order matters: each module's startup applies its migrations in this order, and the Projects tables
+        // point to access.User, so Access must come before Projects.
         Assert.Equal(new[] { "Access", "Projects", "Archive" }, registered);
     }
 

@@ -51,6 +51,18 @@ Writes that change an existing record take the `rowVersion` from your last read 
 `concurrency_conflict` if someone saved first. Disable and enable accept it but don't require it, so an emergency
 disable always goes through.
 
+## For other modules
+
+Other modules never reference this module. They use `AlMotaheda.Modules.Access.Contracts`, implemented here in the
+`Integration` folder:
+
+- `IUserDirectory`: users by id (names, job title, e-mail, phone, role, active or not), and the active users with
+  given roles. Always read from the database.
+- `IExecutiveCheck`: is this caller, right now, an active Executive with no pending password change, still signed in
+  with the same sign-in? The same rules as the user-management gate, without its lock. The Projects module calls it
+  before every change of project membership.
+- `AccessRoles`: the six role codes as they appear in the token.
+
 ## Tables (schema `access`)
 
 `Role`, `Permission`, `RolePermission`, `User`, `UserSignInState`, `UserPermissionOverride`, `RefreshToken`.

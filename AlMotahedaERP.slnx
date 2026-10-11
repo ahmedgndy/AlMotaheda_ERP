@@ -17,6 +17,7 @@
   </Folder>
   <Folder Name="/src/Modules/" />
   <Folder Name="/src/Modules/Access/">
+    <Project Path="src/Modules/Access/AlMotaheda.Modules.Access.Contracts/AlMotaheda.Modules.Access.Contracts.csproj" />
     <Project Path="src/Modules/Access/AlMotaheda.Modules.Access/AlMotaheda.Modules.Access.csproj" />
   </Folder>
   <Folder Name="/src/Modules/Archive/">
@@ -28,5 +29,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/AlMotaheda.Api.Tests/AlMotaheda.Api.Tests.csproj" />
     <Project Path="tests/Modules/AlMotaheda.Modules.Access.Tests/AlMotaheda.Modules.Access.Tests.csproj" />
+    <Project Path="tests/Modules/AlMotaheda.Modules.Projects.Tests/AlMotaheda.Modules.Projects.Tests.csproj" />
   </Folder>
 </Solution>

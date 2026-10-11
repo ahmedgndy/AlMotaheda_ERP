@@ -1,11 +1,13 @@
 using AlMotaheda.BuildingBlocks.Http;
 using AlMotaheda.BuildingBlocks.Modules;
 using AlMotaheda.Modules.Access.Common;
+using AlMotaheda.Modules.Access.Contracts;
 using AlMotaheda.Modules.Access.Data;
 using AlMotaheda.Modules.Access.Features.Auth;
 using AlMotaheda.Modules.Access.Features.Roles;
 using AlMotaheda.Modules.Access.Features.UserPermissions;
 using AlMotaheda.Modules.Access.Features.Users;
+using AlMotaheda.Modules.Access.Integration;
 using AlMotaheda.Modules.Access.Security;
 using AlMotaheda.Modules.Access.Startup;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -80,6 +82,10 @@ public sealed class AccessModule : IModule
         services.AddScoped<SessionFactory>();
         services.AddScoped<SignInAttempts>();
         services.AddScoped<UserManagementGate>();
+
+        // What other modules may ask the Access module (AlMotaheda.Modules.Access.Contracts).
+        services.AddScoped<IUserDirectory, UserDirectory>();
+        services.AddScoped<IExecutiveCheck, ExecutiveCheck>();
 
         services.AddHostedService<AccessStartup>();
     }

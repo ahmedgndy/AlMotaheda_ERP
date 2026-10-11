@@ -24,10 +24,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks\AlMotaheda.BuildingBlocks.csproj" />
+    <!-- The module implements its own contracts (Integration folder) for other modules to use. -->
+    <ProjectReference Include="..\AlMotaheda.Modules.Access.Contracts\AlMotaheda.Modules.Access.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="AlMotaheda.Modules.Access.Tests" />
+    <!-- The Projects tests sign in through the real Access endpoints and reuse the Access test helpers. -->
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Projects.Tests" />
   </ItemGroup>
 
 </Project>

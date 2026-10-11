@@ -9,8 +9,9 @@ This document explains how the AlMotaheda ERP backend is organised, why, and the
 - **Organised by feature.** Inside a module, code is grouped by use case (vertical slices), not by technical layer.
 - **Boundaries are enforced by tests**, not only by convention.
 
-**Current status:** the foundation, plus the first feature: sign-in, users, roles and permissions (the Access module),
-stored in SQL Server through EF Core. Projects and Archive are still empty shells.
+**Current status:** the foundation, sign-in, users, roles and permissions (the Access module), and projects with
+their teams and project-level access (the Projects module), all stored in SQL Server through EF Core.
+Archive is still an empty shell.
 
 ## 2. Solution layout
 
@@ -28,7 +29,8 @@ AlMotaheda_ERP/
 │   │   └── AlMotaheda.BuildingBlocks/  Technical code shared by modules (no business logic)
 │   └── Modules/
 │       ├── Access/
-│       │   └── AlMotaheda.Modules.Access/
+│       │   ├── AlMotaheda.Modules.Access/
+│       │   └── AlMotaheda.Modules.Access.Contracts/
 │       ├── Projects/
 │       │   └── AlMotaheda.Modules.Projects/
 │       └── Archive/
@@ -36,7 +38,8 @@ AlMotaheda_ERP/
 └── tests/
     ├── AlMotaheda.Api.Tests/           Host-level tests and architecture rules
     └── Modules/
-        └── AlMotaheda.Modules.Access.Tests/
+        ├── AlMotaheda.Modules.Access.Tests/
+        └── AlMotaheda.Modules.Projects.Tests/
 ```
 
 ## 3. What each project is for
@@ -46,10 +49,12 @@ AlMotaheda_ERP/
 | `AlMotaheda.Api` | The application that gets deployed. It wires up infrastructure (logging, errors, health checks, API docs) and plugs in the modules. No business logic. | BuildingBlocks, all modules |
 | `AlMotaheda.BuildingBlocks` | Technical, business-neutral code that every module needs: the `IModule` contract and module registration, the permission check (`RequirePermission`), the access-token claim names, and error responses with a `code` (`ApiProblem`). | .NET framework only |
 | `AlMotaheda.Modules.Access` | Sign-in, users, roles and permissions. Issues the access tokens. See its README. | BuildingBlocks, other modules' `.Contracts` |
-| `AlMotaheda.Modules.Projects` | Construction projects, and project-level access (who may open which project). | BuildingBlocks, other modules' `.Contracts` |
+| `AlMotaheda.Modules.Access.Contracts` | What other modules may ask Access: user names, roles and status (`IUserDirectory`), and "is this caller still an active Executive?" (`IExecutiveCheck`). Interfaces and records only. | Nothing |
+| `AlMotaheda.Modules.Projects` | Construction projects, their teams (`ProjectMember`), and project-level access: who may open which project. See its README. | BuildingBlocks, Access.Contracts |
 | `AlMotaheda.Modules.Archive` | The documents and media of each project: categories, upload, storage, search, download, preview. | BuildingBlocks, other modules' `.Contracts` |
 | `AlMotaheda.Api.Tests` | Tests the host pipeline over real HTTP, plus the architecture rules. | Api (and through it, everything) |
 | `AlMotaheda.Modules.Access.Tests` | The Access module's unit tests, API tests, and SQL Server tests (Testcontainers). | Api, Access |
+| `AlMotaheda.Modules.Projects.Tests` | The Projects module's unit tests, API tests (including every query's SQL translation without a database), and SQL Server tests. Reuses the Access test helpers. | Api, Projects, Access |
 
 **Why a project per module, not just a folder?** With separate projects, the compiler enforces the boundary.
 Anything marked `internal` in a module is invisible to every other module. Folders cannot do that.
@@ -347,22 +352,30 @@ No caching exists yet. When a feature shows a measured need, follow these rules:
 
 - **One SQL Server database, one schema per module.** The connection string is `ConnectionStrings:Erp`.
 - **Each module has its own `DbContext` and migrations**, with its own migration history table in its schema
-  (`access.__EFMigrationsHistory`), so modules' migrations never depend on each other.
+  (`access.__EFMigrationsHistory`, `projects.__EFMigrationsHistory`).
+- **Foreign keys between schemas** are allowed only towards the modules the ERD names as shared (Access, Projects,
+  Finance), and only for rows that are never deleted. Today there is one: `projects.ProjectMember.UserId` →
+  `access.User`. EF can't model a key into another module's context, so it is written by hand in the migration.
+  It makes the order matter: **apply the Access migrations before the Projects migrations.** At startup, modules
+  migrate in `ModuleCatalog` order (Access first; a host test checks it), and Projects stops with a clear message
+  if `access.User` is missing.
 - **Migrations are internal classes.** `dotnet ef` generates them as `public`; change them to `internal`,
   or the module-boundary test fails.
 - **Creating a migration** (from the repository root):
   `dotnet tool restore`, then
   `dotnet ef migrations add <Name> --project src/Modules/<Module>/AlMotaheda.Modules.<Module> --output-dir Data/Migrations`.
 - **Applying migrations:**
-  - Review the SQL first: `dotnet ef migrations script --idempotent --project src/Modules/Access/AlMotaheda.Modules.Access -o access.sql`.
+  - Review the SQL first, one script per module, and run them in this order:
+    `dotnet ef migrations script --idempotent --project src/Modules/Access/AlMotaheda.Modules.Access -o access.sql`, then
+    `dotnet ef migrations script --idempotent --project src/Modules/Projects/AlMotaheda.Modules.Projects -o projects.sql`.
   - On a server, run that script, or a migration bundle (`dotnet ef migrations bundle`), before the new version starts.
   - In development you can set `Database:ApplyMigrationsOnStartup` to `true`. It is `false` by default, so the
     application never changes a schema nobody reviewed.
 - **Turn on `READ_COMMITTED_SNAPSHOT`** on the database (`ALTER DATABASE AlMotahedaErp SET READ_COMMITTED_SNAPSHOT ON`).
   Readers then don't wait for writers, which removes most blocking between sign-ins and user changes.
   Azure SQL has it on by default; a self-hosted SQL Server doesn't.
-- EF Core's own error logs are switched off for the Access context: the host's exception handler logs each failure
-  once, and EF's "save failed" entry would copy duplicate key values (emails) into the logs.
+- EF Core's own error logs are switched off for each module's context: the host's exception handler logs each failure
+  once, and EF's "save failed" entry would copy duplicate key values (emails, project codes) into the logs.
 
 ### Authentication and authorization
 
@@ -382,7 +395,14 @@ The Access module issues the tokens; every module checks them through BuildingBl
 - **Freshness:** permissions in the token can be up to 15 minutes old. That is fine for reading and ordinary work.
   Anything that grants or removes access must re-check the caller in the database; the Access module does this
   for every user-management change.
-- **Project-level access** (which projects a user may open) belongs to the Projects module and is not built yet.
+- **Project-level access** (which projects a user may open) belongs to the Projects module:
+  - Executive and Accountant see every project. Everyone else sees only projects where they have an active
+    `ProjectMember` row. Membership is read from the database on every request, never from the token.
+  - A project outside the caller's scope answers 404, exactly like a project that doesn't exist.
+  - Membership is access, so only an Executive changes it, with the same database re-check as user management
+    (through `IExecutiveCheck` in `Access.Contracts`).
+  - Inside the module, `ProjectAccess` is the one place these rules live. When another module needs them
+    (Archive is next), they will be published in `AlMotaheda.Modules.Projects.Contracts`.
 
 ### Security defaults already in place
 
@@ -424,7 +444,7 @@ These are decided phase by phase, when the requirements are provided.
 |---|---|---|
 | Database and ORM | **Decided** (Access module) | SQL Server with EF Core 10: one DbContext per module, each in its own schema, with its own migrations. |
 | Authentication and users | **Decided** (Access module) | JWT access tokens (15 min) plus rotating refresh tokens in an HttpOnly cookie. The `/api` group requires a signed-in user. |
-| Project-level authorization | Projects feature | The Projects module answers "may user X access project Y?" through `Projects.Contracts`. The role's data scope (company, assigned projects, own records) plugs in there. |
+| Project-level authorization | **Decided** (Projects module) | Role scope (company or assigned) plus active `ProjectMember` rows, checked in SQL on every request. Other modules will ask through `Projects.Contracts`, created when Archive needs it. |
 | Validation approach | **Decided** (Access module) | Explicit validation in each slice, collecting every failing field, returned as a 400 with `errors` and a `code`. |
 | Audit log table | Next small feature | User and permission changes are written to structured security logs until then. |
 | File storage | Archive upload phase | Local disk or cloud storage; size limits (Kestrel, IIS and multipart); file type checks. Shared storage once there are two or more servers. |
@@ -454,7 +474,10 @@ methods as `Program.cs`, and tests call it over real HTTP. This needs no extra t
 It supplies a test signing key and a connection string that points nowhere, so tests that don't need a database
 never touch one.
 
-The SQL Server tests (`[DatabaseFact]`, in the Access test project) start SQL Server 2022 in Docker with Testcontainers,
+The Projects API tests also run every endpoint's queries through EF Core's SQL Server translation against a stand-in
+database that answers with no rows (`StandInDatabase`), so a query EF can't translate fails without SQL Server.
+
+The SQL Server tests (`[DatabaseFact]`, in the Access and Projects test projects) start SQL Server 2022 in Docker with Testcontainers,
 and give each test its own new database, created by the API's own startup migration. They need Docker running;
 without it they are reported as skipped, with the reason. On a Mac with Apple Silicon, turn on
 "Use Rosetta for x86_64/amd64 emulation" in Docker Desktop.

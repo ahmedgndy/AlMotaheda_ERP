@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Projects module. Allowed references: BuildingBlocks and other modules' *.Contracts projects only.
+    Projects module: construction projects, who is on each project, and who may open which project.
+    Allowed references: BuildingBlocks and other modules' *.Contracts projects only.
     Everything except ProjectsModule stays internal.
   -->
 
@@ -10,7 +11,23 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The module owns its tables, so it owns its EF Core context and migrations (schema "projects"). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <!-- Design-time only: lets `dotnet ef` create migrations for this module. Not shipped with the application. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks\AlMotaheda.BuildingBlocks.csproj" />
+    <!-- User names and roles, and the database check that the caller is still an active Executive. -->
+    <ProjectReference Include="..\..\Access\AlMotaheda.Modules.Access.Contracts\AlMotaheda.Modules.Access.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Projects.Tests" />
   </ItemGroup>
 
 </Project>

@@ -29,6 +29,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="AlMotaheda.Api.Tests" />
     <InternalsVisibleTo Include="AlMotaheda.Modules.Access.Tests" />
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Projects.Tests" />
   </ItemGroup>
 
 </Project>

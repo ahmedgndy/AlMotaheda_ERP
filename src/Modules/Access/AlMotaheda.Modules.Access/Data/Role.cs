@@ -1,3 +1,5 @@
+using AlMotaheda.Modules.Access.Contracts;
+
 namespace AlMotaheda.Modules.Access.Data;
 
 /// <summary>
@@ -22,13 +24,16 @@ internal sealed class Role
     public List<RolePermission> Permissions { get; } = [];
 }
 
-/// <summary>The role codes, as stored in <see cref="Role.Code"/> and sent in access tokens.</summary>
+/// <summary>
+/// The role codes, as stored in <see cref="Role.Code"/> and sent in access tokens. The values are published to
+/// other modules through <see cref="AccessRoles"/>, so both always agree.
+/// </summary>
 internal static class RoleCodes
 {
-    public const string Executive = "executive";
-    public const string Manager = "manager";
-    public const string Engineer = "engineer";
-    public const string OfficeAdmin = "office_admin";
-    public const string Accountant = "accountant";
-    public const string Staff = "staff";
+    public const string Executive = AccessRoles.Executive;
+    public const string Manager = AccessRoles.Manager;
+    public const string Engineer = AccessRoles.Engineer;
+    public const string OfficeAdmin = AccessRoles.OfficeAdmin;
+    public const string Accountant = AccessRoles.Accountant;
+    public const string Staff = AccessRoles.Staff;
 }
