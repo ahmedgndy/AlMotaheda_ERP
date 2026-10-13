@@ -41,6 +41,9 @@
   <ItemGroup>
     <!-- One test host for every test project: the same composition as Program.cs. -->
     <Compile Include="..\..\AlMotaheda.Api.Tests\TestApplication.cs" Link="Shared\TestApplication.cs" />
+    <!-- Runs the real queries of every module without SQL Server, and small helpers for calling the API. -->
+    <Compile Include="..\..\AlMotaheda.Api.Tests\Shared\StandInDatabase.cs" Link="Shared\StandInDatabase.cs" />
+    <Compile Include="..\..\AlMotaheda.Api.Tests\Shared\ApiCalls.cs" Link="Shared\ApiCalls.cs" />
     <!-- The Access test helpers: SQL Server in Docker, signing in, and test tokens. -->
     <Compile Include="..\AlMotaheda.Modules.Access.Tests\Database\SqlServerFixture.cs" Link="Shared\SqlServerFixture.cs" />
     <Compile Include="..\AlMotaheda.Modules.Access.Tests\Database\AccessApi.cs" Link="Shared\AccessApi.cs" />

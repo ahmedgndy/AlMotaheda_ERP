@@ -1,26 +1,60 @@
 using AlMotaheda.BuildingBlocks.Modules;
+using AlMotaheda.BuildingBlocks.Time;
+using AlMotaheda.Modules.Archive.Data;
+using AlMotaheda.Modules.Archive.Features;
+using AlMotaheda.Modules.Archive.Startup;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace AlMotaheda.Modules.Archive;
 
 /// <summary>
-/// Entry point of the Archive module. This is the only public type in the module.
+/// Entry point of the Archive module: the documents and media of each project: upload, storage, search, preview and download.
+/// This is the only public type in the module.
 /// </summary>
+/// <remarks>
+/// It uses the Projects module only through <c>AlMotaheda.Modules.Projects.Contracts</c> (which projects a caller may
+/// see, project items) and the Access module only through <c>AlMotaheda.Modules.Access.Contracts</c> (user names).
+/// </remarks>
 public sealed class ArchiveModule : IModule
 {
     public string Name => "Archive";
 
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
-        // Feature services are registered here as vertical slices are added.
+        var connectionString = configuration.GetConnectionString(ArchiveDatabase.ConnectionStringName);
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                $"ConnectionStrings:{ArchiveDatabase.ConnectionStringName} is missing. Set it with user secrets in development "
+                + $"or the ConnectionStrings__{ArchiveDatabase.ConnectionStringName} environment variable on the server.");
+        }
+
+        services.AddDbContext<ArchiveDbContext>(options => options
+            .UseSqlServer(connectionString, ArchiveDatabase.Configure)
+            // Failures are logged once, by the host's exception handler; expected ones (a duplicate key) become 409s.
+            .ConfigureWarnings(warnings => warnings.Ignore(
+                CoreEventId.SaveChangesFailed,
+                CoreEventId.QueryIterationFailed,
+                RelationalEventId.CommandError,
+                RelationalEventId.ConnectionError)));
+
+        services.AddCompanyClock();
+        ArchiveFeatures.AddServices(services);
+
+        services.AddHostedService<ArchiveStartup>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints)
     {
-        // Feature endpoints are mapped here as vertical slices are added. Example:
-        //   var documents = endpoints.MapGroup("/projects/{projectId:guid}/documents").WithTags(Name);
-        //   UploadDocument.MapEndpoint(documents);
+        // Every endpoint of this module needs a signed-in user, whatever the host adds.
+        var api = endpoints.MapGroup("").WithTags(Name).RequireAuthorization();
+
+        ArchiveFeatures.Map(api);
     }
 }

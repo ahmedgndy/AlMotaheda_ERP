@@ -23,12 +23,26 @@
   <Folder Name="/src/Modules/Archive/">
     <Project Path="src/Modules/Archive/AlMotaheda.Modules.Archive/AlMotaheda.Modules.Archive.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/Fleet/">
+    <Project Path="src/Modules/Fleet/AlMotaheda.Modules.Fleet/AlMotaheda.Modules.Fleet.csproj" />
+  </Folder>
   <Folder Name="/src/Modules/Projects/">
+    <Project Path="src/Modules/Projects/AlMotaheda.Modules.Projects.Contracts/AlMotaheda.Modules.Projects.Contracts.csproj" />
     <Project Path="src/Modules/Projects/AlMotaheda.Modules.Projects/AlMotaheda.Modules.Projects.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Subcontractors/">
+    <Project Path="src/Modules/Subcontractors/AlMotaheda.Modules.Subcontractors/AlMotaheda.Modules.Subcontractors.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Workforce/">
+    <Project Path="src/Modules/Workforce/AlMotaheda.Modules.Workforce/AlMotaheda.Modules.Workforce.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AlMotaheda.Api.Tests/AlMotaheda.Api.Tests.csproj" />
     <Project Path="tests/Modules/AlMotaheda.Modules.Access.Tests/AlMotaheda.Modules.Access.Tests.csproj" />
+    <Project Path="tests/Modules/AlMotaheda.Modules.Archive.Tests/AlMotaheda.Modules.Archive.Tests.csproj" />
+    <Project Path="tests/Modules/AlMotaheda.Modules.Fleet.Tests/AlMotaheda.Modules.Fleet.Tests.csproj" />
     <Project Path="tests/Modules/AlMotaheda.Modules.Projects.Tests/AlMotaheda.Modules.Projects.Tests.csproj" />
+    <Project Path="tests/Modules/AlMotaheda.Modules.Subcontractors.Tests/AlMotaheda.Modules.Subcontractors.Tests.csproj" />
+    <Project Path="tests/Modules/AlMotaheda.Modules.Workforce.Tests/AlMotaheda.Modules.Workforce.Tests.csproj" />
   </Folder>
 </Solution>

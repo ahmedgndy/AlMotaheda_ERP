@@ -23,6 +23,9 @@
     <ProjectReference Include="..\..\BuildingBlocks\AlMotaheda.BuildingBlocks\AlMotaheda.BuildingBlocks.csproj" />
     <ProjectReference Include="..\..\Modules\Access\AlMotaheda.Modules.Access\AlMotaheda.Modules.Access.csproj" />
     <ProjectReference Include="..\..\Modules\Projects\AlMotaheda.Modules.Projects\AlMotaheda.Modules.Projects.csproj" />
+    <ProjectReference Include="..\..\Modules\Workforce\AlMotaheda.Modules.Workforce\AlMotaheda.Modules.Workforce.csproj" />
+    <ProjectReference Include="..\..\Modules\Subcontractors\AlMotaheda.Modules.Subcontractors\AlMotaheda.Modules.Subcontractors.csproj" />
+    <ProjectReference Include="..\..\Modules\Fleet\AlMotaheda.Modules.Fleet\AlMotaheda.Modules.Fleet.csproj" />
     <ProjectReference Include="..\..\Modules\Archive\AlMotaheda.Modules.Archive\AlMotaheda.Modules.Archive.csproj" />
   </ItemGroup>
 
@@ -30,6 +33,10 @@
     <InternalsVisibleTo Include="AlMotaheda.Api.Tests" />
     <InternalsVisibleTo Include="AlMotaheda.Modules.Access.Tests" />
     <InternalsVisibleTo Include="AlMotaheda.Modules.Projects.Tests" />
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Workforce.Tests" />
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Subcontractors.Tests" />
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Fleet.Tests" />
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Archive.Tests" />
   </ItemGroup>
 
 </Project>

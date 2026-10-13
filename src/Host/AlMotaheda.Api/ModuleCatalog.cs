@@ -1,7 +1,10 @@
 using AlMotaheda.BuildingBlocks.Modules;
 using AlMotaheda.Modules.Access;
 using AlMotaheda.Modules.Archive;
+using AlMotaheda.Modules.Fleet;
 using AlMotaheda.Modules.Projects;
+using AlMotaheda.Modules.Subcontractors;
+using AlMotaheda.Modules.Workforce;
 
 namespace AlMotaheda.Api;
 
@@ -15,10 +18,17 @@ namespace AlMotaheda.Api;
 internal static class ModuleCatalog
 {
     /// <summary>Creates a new instance of every module. Called once at startup.</summary>
+    /// <remarks>
+    /// The order is the migration order: Access, then Projects, then the modules whose tables point to
+    /// <c>projects</c> tables.
+    /// </remarks>
     public static IReadOnlyList<IModule> CreateAll() =>
     [
         new AccessModule(),
         new ProjectsModule(),
+        new WorkforceModule(),
+        new SubcontractorsModule(),
+        new FleetModule(),
         new ArchiveModule(),
     ];
 }

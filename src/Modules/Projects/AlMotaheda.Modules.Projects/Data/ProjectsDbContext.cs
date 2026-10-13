@@ -7,7 +7,7 @@ namespace AlMotaheda.Modules.Projects.Data;
 /// The Projects module's tables, all in the <c>projects</c> schema. No other module reads them: other modules ask
 /// through contracts.
 /// </summary>
-internal sealed class ProjectsDbContext(DbContextOptions<ProjectsDbContext> options) : DbContext(options)
+internal sealed partial class ProjectsDbContext(DbContextOptions<ProjectsDbContext> options) : DbContext(options)
 {
     public const string Schema = "projects";
 
@@ -16,6 +16,14 @@ internal sealed class ProjectsDbContext(DbContextOptions<ProjectsDbContext> opti
 
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
+
+    // Shared by the workspace features. Each feature area adds its own tables in a partial file next to this one
+    // (ProjectsDbContext.<Area>.cs), so areas don't edit the same lines.
+    public DbSet<Supplier> Suppliers => Set<Supplier>();
+    public DbSet<ProjectItem> ProjectItems => Set<ProjectItem>();
+    public DbSet<CatalogItem> CatalogItems => Set<CatalogItem>();
+    public DbSet<ItemPrice> ItemPrices => Set<ItemPrice>();
+    public DbSet<ProjectExpense> ProjectExpenses => Set<ProjectExpense>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -33,6 +41,9 @@ internal sealed class ProjectsDbContext(DbContextOptions<ProjectsDbContext> opti
 
         // Codes and enum names are ASCII. Free text (names, addresses, notes) is configured per column as Unicode.
         configurationBuilder.Properties<string>().AreUnicode(false);
+
+        // Money is DECIMAL(18,2) unless a column says otherwise (quantities are configured as (18,3)).
+        configurationBuilder.Properties<decimal>().HavePrecision(18, 2);
     }
 
     private sealed class UtcDateTimeConverter() : ValueConverter<DateTime, DateTime>(

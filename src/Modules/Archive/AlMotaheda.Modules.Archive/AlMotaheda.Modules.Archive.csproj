@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Archive module. Allowed references: BuildingBlocks and other modules' *.Contracts projects only.
+    Archive module: the documents and media of each project: upload, storage, search, preview and download.
+    Allowed references: BuildingBlocks and other modules' *.Contracts projects only.
     Everything except ArchiveModule stays internal.
   -->
 
@@ -10,7 +11,25 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The module owns its tables, so it owns its EF Core context and migrations (schema "docs"). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <!-- Design-time only: lets `dotnet ef` create migrations for this module. Not shipped with the application. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks\AlMotaheda.BuildingBlocks.csproj" />
+    <!-- User names and roles. -->
+    <ProjectReference Include="..\..\Access\AlMotaheda.Modules.Access.Contracts\AlMotaheda.Modules.Access.Contracts.csproj" />
+    <!-- Which projects a caller may see, project items, and the cost figures this module reports to the project screens. -->
+    <ProjectReference Include="..\..\Projects\AlMotaheda.Modules.Projects.Contracts\AlMotaheda.Modules.Projects.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Archive.Tests" />
   </ItemGroup>
 
 </Project>

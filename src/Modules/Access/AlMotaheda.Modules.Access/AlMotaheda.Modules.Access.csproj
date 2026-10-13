@@ -32,6 +32,10 @@
     <InternalsVisibleTo Include="AlMotaheda.Modules.Access.Tests" />
     <!-- The Projects tests sign in through the real Access endpoints and reuse the Access test helpers. -->
     <InternalsVisibleTo Include="AlMotaheda.Modules.Projects.Tests" />
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Workforce.Tests" />
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Subcontractors.Tests" />
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Fleet.Tests" />
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Archive.Tests" />
   </ItemGroup>
 
 </Project>

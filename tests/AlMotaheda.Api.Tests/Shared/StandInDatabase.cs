@@ -1,14 +1,13 @@
 using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
-using AlMotaheda.Modules.Access.Data;
-using AlMotaheda.Modules.Projects.Data;
+using System.Reflection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace AlMotaheda.Modules.Projects.Tests.Api;
+namespace AlMotaheda.Api.Tests;
 
 /// <summary>
 /// Lets the real API run its EF Core queries without SQL Server. Every query is translated to SQL exactly as in
@@ -16,11 +15,16 @@ namespace AlMotaheda.Modules.Projects.Tests.Api;
 /// counts answer 0). A query EF can't translate fails here, and tests can check the SQL each endpoint sends.
 /// </summary>
 /// <remarks>
-/// Only for reads. Nothing here can commit a transaction, so tests stop before any save (for example at a
-/// refused Executive check, or at a project that "doesn't exist").
+/// <para>It covers every module's <see cref="DbContext"/> registered in the host, found from the service
+/// collection, so a new module is covered without editing this class.</para>
+/// <para>Only for reads. Nothing here can commit a transaction, so tests stop before any save (for example at a
+/// refused Executive check, or at a project that "doesn't exist").</para>
 /// </remarks>
 internal sealed class StandInDatabase
 {
+    private static readonly MethodInfo ConfigureDbContextMethod = typeof(StandInDatabase)
+        .GetMethod(nameof(ConfigureDbContext), BindingFlags.NonPublic | BindingFlags.Static)!;
+
     public ConcurrentQueue<string> Commands { get; } = new();
 
     public void AddTo(WebApplicationBuilder builder)
@@ -28,9 +32,22 @@ internal sealed class StandInDatabase
         var connections = new NeverOpen();
         var commands = new NoRows(Commands);
 
-        builder.Services.ConfigureDbContext<ProjectsDbContext>(options => options.AddInterceptors(connections, commands));
-        builder.Services.ConfigureDbContext<AccessDbContext>(options => options.AddInterceptors(connections, commands));
+        var contextTypes = builder.Services
+            .Select(descriptor => descriptor.ServiceType)
+            .Where(type => type.IsGenericType && type.GetGenericTypeDefinition() == typeof(DbContextOptions<>))
+            .Select(type => type.GetGenericArguments()[0])
+            .Distinct()
+            .ToList();
+
+        foreach (var contextType in contextTypes)
+        {
+            ConfigureDbContextMethod.MakeGenericMethod(contextType).Invoke(null, [builder.Services, connections, commands]);
+        }
     }
+
+    private static void ConfigureDbContext<TContext>(IServiceCollection services, NeverOpen connections, NoRows commands)
+        where TContext : DbContext =>
+        services.ConfigureDbContext<TContext>(options => options.AddInterceptors(connections, commands));
 
     private sealed class NeverOpen : DbConnectionInterceptor
     {

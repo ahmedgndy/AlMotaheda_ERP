@@ -24,10 +24,17 @@
     <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks\AlMotaheda.BuildingBlocks.csproj" />
     <!-- User names and roles, and the database check that the caller is still an active Executive. -->
     <ProjectReference Include="..\..\Access\AlMotaheda.Modules.Access.Contracts\AlMotaheda.Modules.Access.Contracts.csproj" />
+    <!-- The module implements its own contracts (Integration folder) and consumes the cost figures other modules report through them. -->
+    <ProjectReference Include="..\AlMotaheda.Modules.Projects.Contracts\AlMotaheda.Modules.Projects.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="AlMotaheda.Modules.Projects.Tests" />
+    <!-- The other modules' database tests create projects and items through the Projects test helpers. -->
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Workforce.Tests" />
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Subcontractors.Tests" />
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Fleet.Tests" />
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Archive.Tests" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    What other modules may use from the Projects module, and what they must tell it: public interfaces, records
+    and shared code lists only. No logic that touches data, and no references, so any module can depend on it
+    without depending on Projects itself.
+
+    Two directions:
+    - "Ask Projects": IProjectAccess, IProjectItems, ISupplierDirectory. Projects implements them.
+    - "Tell Projects your figures": ILaborItemCosts, ISubcontractItemCosts, IProjectCostSource. The module that
+      owns the records implements them, so Projects never reads another module's tables.
+  -->
+
+</Project>

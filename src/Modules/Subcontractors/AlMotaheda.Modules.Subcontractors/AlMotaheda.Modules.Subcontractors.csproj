@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Subcontractors module: subcontractor companies, their contract on each project, contract items, measured work, manpower sheets and payments.
+    Allowed references: BuildingBlocks and other modules' *.Contracts projects only.
+    Everything except SubcontractorsModule stays internal.
+  -->
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The module owns its tables, so it owns its EF Core context and migrations (schema "sub"). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <!-- Design-time only: lets `dotnet ef` create migrations for this module. Not shipped with the application. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks\AlMotaheda.BuildingBlocks.csproj" />
+    <!-- User names and roles. -->
+    <ProjectReference Include="..\..\Access\AlMotaheda.Modules.Access.Contracts\AlMotaheda.Modules.Access.Contracts.csproj" />
+    <!-- Which projects a caller may see, project items, and the cost figures this module reports to the project screens. -->
+    <ProjectReference Include="..\..\Projects\AlMotaheda.Modules.Projects.Contracts\AlMotaheda.Modules.Projects.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Subcontractors.Tests" />
+  </ItemGroup>
+
+</Project>

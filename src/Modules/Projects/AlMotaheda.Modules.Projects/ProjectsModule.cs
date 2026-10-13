@@ -1,8 +1,12 @@
 using AlMotaheda.BuildingBlocks.Modules;
+using AlMotaheda.BuildingBlocks.Time;
 using AlMotaheda.Modules.Projects.Common;
+using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Projects.Data;
+using AlMotaheda.Modules.Projects.Features;
 using AlMotaheda.Modules.Projects.Features.Members;
 using AlMotaheda.Modules.Projects.Features.Projects;
+using AlMotaheda.Modules.Projects.Integration;
 using AlMotaheda.Modules.Projects.Security;
 using AlMotaheda.Modules.Projects.Startup;
 using Microsoft.AspNetCore.Builder;
@@ -22,8 +26,10 @@ namespace AlMotaheda.Modules.Projects;
 /// project. This is the only public type in the module.
 /// </summary>
 /// <remarks>
-/// It uses the Access module only through <c>AlMotaheda.Modules.Access.Contracts</c>: user names and roles
-/// (<c>IUserDirectory</c>) and the database check that a caller is still an active Executive (<c>IExecutiveCheck</c>).
+/// <para>It uses the Access module only through <c>AlMotaheda.Modules.Access.Contracts</c>: user names and roles
+/// (<c>IUserDirectory</c>) and the database check that a caller is still an active Executive (<c>IExecutiveCheck</c>).</para>
+/// <para>Other modules use it only through <c>AlMotaheda.Modules.Projects.Contracts</c>. Labor and subcontract
+/// figures on the project items screens come back the same way, from the modules that own those records.</para>
 /// </remarks>
 public sealed class ProjectsModule : IModule
 {
@@ -57,6 +63,16 @@ public sealed class ProjectsModule : IModule
         services.AddScoped<ProjectAccess>();
         services.AddScoped<ExecutiveGate>();
 
+        // The project workspace: shared pieces first, then each feature area's own services.
+        services.AddCompanyClock();
+        services.AddScoped<WorkspaceAccess>();
+        services.AddScoped<IProjectAccess, ProjectAccessContract>();
+        services.AddScoped<IProjectItems, ProjectItemsContract>();
+        services.AddScoped<ISupplierDirectory, SupplierDirectoryContract>();
+        CoreFeatures.AddServices(services);
+        PlanningFeatures.AddServices(services);
+        ReportingFeatures.AddServices(services);
+
         services.AddHostedService<ProjectsStartup>();
     }
 
@@ -76,5 +92,11 @@ public sealed class ProjectsModule : IModule
         EndProjectMember.Map(projects);
         ListUserProjects.Map(projects);
         ListAssignableUsers.Map(projects);
+
+        // The project workspace. Company-wide routes (such as /suppliers) hang off the shared /api group.
+        var api = endpoints.MapGroup("").WithTags(Name).RequireAuthorization();
+        CoreFeatures.Map(api, projects);
+        PlanningFeatures.Map(api, projects);
+        ReportingFeatures.Map(projects);
     }
 }
