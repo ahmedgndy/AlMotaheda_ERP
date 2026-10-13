@@ -83,6 +83,7 @@ A document of a project the caller can't see answers 404 on every endpoint, incl
 
 - Type detection for every allowed type, and refusal of an executable renamed to `.pdf`.
 - Size limits per kind; file name cleaning (path traversal names).
-- Upload, list, download round trip against a temporary folder with the database stood in
-  (the bytes and the hash match; a failed save leaves no file).
+- `LocalDiskFileStore` against a temporary folder: save, open, delete; the hash and the size are right; a file
+  that is too large is removed.
+- Upload, list, download round trip, and "a failed save leaves no file" (SQL Server test).
 - 401, 403, and 404 for an invisible project on list, metadata **and** content.
