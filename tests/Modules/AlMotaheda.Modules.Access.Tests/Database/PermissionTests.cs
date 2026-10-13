@@ -106,7 +106,7 @@ public sealed class PermissionTests(SqlServerFixture database)
         var listAsManager = await api.SendAsync(HttpMethod.Get, "/api/users", refreshed);
 
         Assert.Equal(HttpStatusCode.OK, customise.StatusCode);
-        Assert.Equal(["accounts", "projects"], view.GetProperty("overriddenModules").EnumerateArray().Select(module => module.GetString()));
+        Assert.Equal(["projects", "accounts"], view.GetProperty("overriddenModules").EnumerateArray().Select(module => module.GetString()));
         Assert.Equal(["View"], Actions(view, "accounts"));
         Assert.False(view.GetProperty("permissions").TryGetProperty("projects", out _));
         Assert.True(view.GetProperty("permissions").TryGetProperty("reports", out _));
