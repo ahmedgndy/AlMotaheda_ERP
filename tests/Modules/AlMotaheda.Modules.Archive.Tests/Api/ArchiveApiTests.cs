@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
 using AlMotaheda.Api.Tests;
 using AlMotaheda.Modules.Access.Tests;
@@ -428,7 +429,23 @@ public sealed class ArchiveApiTests : IDisposable
         var token = TestTokens.Create(role: Executive, permissions: [("projects", "VCEAF")]);
         var huge = new string('x', 31 * 1024 * 1024);
 
-        var response = await Send(app.App.Client, "PUT", "/api/projects/1/documents/2", token, JsonContent.Create(new { title = huge }));
+        // The server refuses the body as soon as it sees its size, then closes the connection. If the client is still
+        // sending 31 MB at that moment, it gets "broken pipe" instead of the answer (about 1 run in 3 on a slow machine).
+        // So the body has a known Content-Length and the request asks "Expect: 100-continue": the client waits for the
+        // server's go-ahead before sending the body, and the server answers 413 instead, so the body is never sent.
+        // The long wait stops the client from giving up on the go-ahead and sending the body anyway.
+        using var client = new HttpClient(new SocketsHttpHandler { Expect100ContinueTimeout = TimeSpan.FromSeconds(30) })
+        {
+            BaseAddress = app.App.Client.BaseAddress,
+        };
+        using var request = new HttpRequestMessage(HttpMethod.Put, "/api/projects/1/documents/2")
+        {
+            Content = new StringContent(JsonSerializer.Serialize(new { title = huge }), Encoding.UTF8, "application/json"),
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.ExpectContinue = true;
+
+        var response = await client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
     }
