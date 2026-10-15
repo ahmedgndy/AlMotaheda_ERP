@@ -201,6 +201,23 @@ public sealed class EquipmentFlowTests(SqlServerFixture database)
         });
         Assert.True(history[0].VoidedAt <= history[1].VoidedAt);
 
+        // The same history through the API, newest void first; another project's id finds nothing (404).
+        var historyPath = $"/api/projects/{cast.ProjectA}/equipment-costs/{approvedRental.Id()}/voided-payments";
+        var apiHistoryResponse = await api.SendAsync(HttpMethod.Get, historyPath, cast.Accountant);
+        await EnsureStatus(apiHistoryResponse, HttpStatusCode.OK);
+        var apiHistory = (await Json(apiHistoryResponse)).EnumerateArray().ToList();
+        Assert.Equal([history[1].Id, history[0].Id], apiHistory.Select(row => row.GetProperty("id").GetInt32()));
+        Assert.All(apiHistory, row =>
+        {
+            Assert.Equal("2026-02-05", row.GetProperty("paidOn").GetString());
+            Assert.Equal("TRF-2201", row.GetProperty("reference").GetString());
+            Assert.Equal("Paid from the wrong account", row.GetProperty("reason").GetString());
+            Assert.True(row.GetProperty("voidedBy").GetProperty("userId").GetInt32() > 0);
+        });
+        var fromOtherProject = await api.SendAsync(
+            HttpMethod.Get, $"/api/projects/{cast.ProjectB}/equipment-costs/{approvedRental.Id()}/voided-payments", cast.Executive);
+        Assert.Equal(HttpStatusCode.NotFound, fromOtherProject.StatusCode);
+
         // The equipment group as the Projects module sees it: approved only; the returned repair is in no total.
         var figures = await api.WithServicesAsync(services => services.GetServices<IProjectCostSource>()
             .Single(source => source.Group == CostGroups.Equipment)

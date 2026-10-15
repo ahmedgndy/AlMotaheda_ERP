@@ -233,35 +233,67 @@ public sealed class DocumentArchiveTests(SqlServerFixture database)
     }
 
     [DatabaseFact]
-    public async Task Links_point_a_document_to_other_records_and_filter_the_list()
+    public async Task Links_point_a_document_to_records_of_its_own_project_and_filter_the_list()
     {
         await using var api = await ArchiveApi.StartAsync(database);
         var executive = await api.SignInExecutiveAsync();
         var (manager, managerSession) = await api.CreateSignedInUserAsync(executive, "manager");
         var projectId = await api.CreateProjectAsync(executive, "ARC-004", manager);
+        var otherProjectId = await api.CreateProjectAsync(executive, "ARC-004B", manager);
+
+        // Real records: two daily reports here (one per author), one on the other project.
+        var report = await api.CreateDailyReportAsync(managerSession, projectId);
+        var secondReport = await api.CreateDailyReportAsync(executive, projectId);
+        var otherReport = await api.CreateDailyReportAsync(managerSession, otherProjectId);
 
         var receipt = await api.UploadAsync(managerSession, projectId, "receipt.jpg", SampleFiles.Jpeg(), new()
         {
             ["title"] = "Cement receipt",
             ["category"] = "Receipt",
-            ["entityType"] = "expense",
-            ["entityId"] = "5",
+            ["entityType"] = "dailyreport",
+            ["entityId"] = report.ToString(System.Globalization.CultureInfo.InvariantCulture),
         });
         await api.UploadAsync(managerSession, projectId, "other.pdf", SampleFiles.Pdf());
         var path = $"/api/projects/{projectId}/documents/{receipt.GetProperty("id").GetInt32()}/links";
 
-        Assert.Equal("Expense:5", Links(receipt).Single());
-        Assert.Equal(1, (await api.ListAsync(managerSession, projectId, "&entityType=Expense&entityId=5")).GetProperty("totalCount").GetInt32());
+        Assert.Equal($"DailyReport:{report}", Links(receipt).Single());
+        Assert.Equal(1, (await api.ListAsync(managerSession, projectId, $"&entityType=DailyReport&entityId={report}")).GetProperty("totalCount").GetInt32());
 
         var replaced = await api.SendAsync(HttpMethod.Put, path, managerSession, new
         {
-            links = new[] { new { entityType = "Expense", entityId = 5 }, new { entityType = "DailyReport", entityId = 3 } },
+            links = new[] { new { entityType = "DailyReport", entityId = report }, new { entityType = "DailyReport", entityId = secondReport } },
             rowVersion = receipt.GetProperty("rowVersion").GetString(),
         });
         await EnsureStatus(replaced, HttpStatusCode.OK);
         var afterReplace = await Json(replaced);
-        Assert.Equal(["DailyReport:3", "Expense:5"], Links(afterReplace).Order());
-        Assert.Equal(1, (await api.ListAsync(managerSession, projectId, "&entityType=DailyReport&entityId=3")).GetProperty("totalCount").GetInt32());
+        Assert.Equal(new[] { $"DailyReport:{report}", $"DailyReport:{secondReport}" }.Order(), Links(afterReplace).Order());
+
+        // A record of another project, or one that doesn't exist, is refused per link and changes nothing.
+        var crossProject = await api.SendAsync(HttpMethod.Put, path, managerSession, new
+        {
+            links = new object[]
+            {
+                new { entityType = "DailyReport", entityId = report },
+                new { entityType = "DailyReport", entityId = otherReport },
+                new { entityType = "Expense", entityId = 999_999 },
+            },
+            rowVersion = afterReplace.GetProperty("rowVersion").GetString(),
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, crossProject.StatusCode);
+        Assert.Equal(["links[1].entityId", "links[2].entityId"], (await AlMotaheda.Api.Tests.ApiCalls.ErrorFields(crossProject)).Order());
+        Assert.Equal(2, await api.QueryAsync(db => db.DocumentLinks.CountAsync()));
+
+        var uploadsBefore = api.StoredFiles.Count;
+        var crossUpload = await api.PostUploadAsync(managerSession, projectId, "stolen.pdf", SampleFiles.Pdf(), new()
+        {
+            ["title"] = "Other site report",
+            ["category"] = "ProgressReport",
+            ["entityType"] = "DailyReport",
+            ["entityId"] = otherReport.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, crossUpload.StatusCode);
+        Assert.Equal(["entityId"], (await AlMotaheda.Api.Tests.ApiCalls.ErrorFields(crossUpload)).Order());
+        Assert.Equal(uploadsBefore, api.StoredFiles.Count);
 
         // The old rowVersion no longer works: the document row guards its links.
         var stale = await api.SendAsync(HttpMethod.Put, path, managerSession, new

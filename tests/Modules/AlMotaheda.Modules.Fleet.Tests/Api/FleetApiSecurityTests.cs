@@ -38,6 +38,7 @@ public sealed class FleetApiSecurityTests
         { "POST", "/api/projects/1/equipment-costs/2/reject", "equipment:A" },
         { "POST", "/api/projects/1/equipment-costs/2/payment", "payments:C" },
         { "POST", "/api/projects/1/equipment-costs/2/payment/void", "payments:A" },
+        { "GET", "/api/projects/1/equipment-costs/2/voided-payments", "equipment:V" },
         { "GET", "/api/projects/1/equipment-summary", "equipment:F" },
     };
 

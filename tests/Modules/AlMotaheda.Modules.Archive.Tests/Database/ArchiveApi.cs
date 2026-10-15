@@ -62,6 +62,18 @@ internal sealed class ArchiveApi : IAsyncDisposable
     public Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, Session session, object? body = null) =>
         Access.SendAsync(method, path, session, body);
 
+    /// <summary>
+    /// Files a daily report for today (UTC date, never ahead of the company's date) and returns its id: a real
+    /// record of the project for document links. One report per author, project and day.
+    /// </summary>
+    public async Task<int> CreateDailyReportAsync(Session author, int projectId)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        var response = await Access.SendAsync(HttpMethod.Post, $"/api/projects/{projectId}/daily-reports", author, new { reportDate = today, issues = "Site visit" });
+        await AccessApi.EnsureStatus(response, HttpStatusCode.Created);
+        return (await AccessApi.Json(response)).GetProperty("id").GetInt32();
+    }
+
     /// <summary>Posts an upload form; <paramref name="fields"/> replaces the default title and category.</summary>
     public Task<HttpResponseMessage> PostUploadAsync(
         Session session, int projectId, string fileName, byte[] bytes, Dictionary<string, string>? fields = null)
