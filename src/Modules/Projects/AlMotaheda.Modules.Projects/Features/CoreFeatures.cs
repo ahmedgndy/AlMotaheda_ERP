@@ -30,6 +30,7 @@ internal static class CoreFeatures
         UpdateSupplier.Map(api);
 
         ListProjectItems.Map(projects);
+        ListProjectItemOptions.Map(projects);
         GetUnallocatedItems.Map(projects);
         GetProjectItem.Map(projects);
         CreateProjectItem.Map(projects);

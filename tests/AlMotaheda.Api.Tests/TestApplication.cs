@@ -79,6 +79,12 @@ internal sealed class TestApplication : IAsyncDisposable
             ["Access:Tokens:SigningKey"] = TestSigningKey,
             // The Archive module checks its storage folder at startup and requires one in Production.
             ["Archive:Storage:RootPath"] = Path.Combine(Path.GetTempPath(), "almotaheda-api-tests", "archive"),
+
+            // A "Development" test host also reads the developer's user-secrets. Keep the developer's local settings
+            // (migrate on start, first-Executive bootstrap) out of the tests; tests that need them set them again.
+            ["Database:ApplyMigrationsOnStartup"] = "false",
+            ["Access:Bootstrap:Email"] = null,
+            ["Access:Bootstrap:Password"] = null,
         });
 
         if (configuration is not null)

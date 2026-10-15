@@ -1,6 +1,7 @@
 using AlMotaheda.BuildingBlocks.Authorization;
 using AlMotaheda.BuildingBlocks.Http;
 using AlMotaheda.BuildingBlocks.Time;
+using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Workforce.Common;
 using AlMotaheda.Modules.Workforce.Data;
 using AlMotaheda.Modules.Workforce.Data.Configurations;
@@ -46,6 +47,7 @@ internal static class RecordWorkerPayment
         Request request,
         HttpContext httpContext,
         WorkforceDbContext db,
+        IProjectAccess access,
         CompanyClock clock,
         WorkforceLog log,
         CancellationToken cancellationToken)
@@ -82,8 +84,10 @@ internal static class RecordWorkerPayment
             return WorkforceProblems.Validation(errors);
         }
 
+        var sent = new PaymentContent(paymentDate!.Value, amount!.Value, method);
+
         // A retried request: answer with the payment it already made.
-        if (await FindRepeatAsync(db, workerId, idempotencyKey, cancellationToken) is { } repeat)
+        if (await FindRepeatAsync(db, access, httpContext.User, workerId, idempotencyKey, sent, cancellationToken) is { } repeat)
         {
             return repeat;
         }
@@ -100,12 +104,22 @@ internal static class RecordWorkerPayment
             return WorkforceProblems.TryAgainLater();
         }
 
+        // Checked again under the lock: a concurrent retry with the same key may have committed while this request
+        // waited, and its payment must be the answer (not an over-payment error for pay already settled).
+        if (await FindRepeatAsync(db, access, httpContext.User, workerId, idempotencyKey, sent, cancellationToken) is { } committed)
+        {
+            return committed;
+        }
+
         var payable = await WorkerPaymentQueries.PayableLines(db, workerId).ToListAsync(cancellationToken);
         var paidParts = await WorkerPaymentQueries.PaidParts(db, workerId).ToListAsync(cancellationToken);
-        var plan = PaymentFifo.Plan(amount!.Value, PaymentFifo.Settle(payable, paidParts));
+        var plan = PaymentFifo.Plan(amount.Value, PaymentFifo.Settle(payable, paidParts));
         if (!plan.Fits)
         {
-            return WorkforceProblems.PaysTooMuch(plan.Outstanding);
+            // The outstanding pay is named only when every project it comes from is visible to the caller.
+            var payableProjects = payable.Select(line => line.ProjectId).Distinct().ToList();
+            var visible = await ProjectVisibility.AmongAsync(access, httpContext.User, payableProjects, cancellationToken);
+            return WorkforceProblems.PaysTooMuch(visible.Count == payableProjects.Count ? plan.Outstanding : null);
         }
 
         var payment = new WorkerPayment
@@ -132,25 +146,29 @@ internal static class RecordWorkerPayment
             // The same form was sent twice at the same moment: the other request won. Answer with its payment.
             await transaction.RollbackAsync(cancellationToken);
             db.ChangeTracker.Clear();
-            return await FindRepeatAsync(db, workerId, idempotencyKey, cancellationToken) ?? WorkforceProblems.KeyUsedElsewhere();
+            return await FindRepeatAsync(db, access, httpContext.User, workerId, idempotencyKey, sent, cancellationToken) ?? WorkforceProblems.KeyUsedElsewhere();
         }
 
         await transaction.CommitAsync(cancellationToken);
         log.PaymentRecorded(caller.UserId, workerId, payment.Id, payment.Allocations.Count);
 
-        var view = await WorkerPaymentQueries.One(db, payment.Id).SingleAsync(cancellationToken);
-        return TypedResults.Created($"/api/workers/{workerId}/payments/{payment.Id}", WorkerPaymentView.From(view));
+        var view = await WorkerPaymentVisibility.ViewForAsync(db, access, httpContext.User, payment.Id, cancellationToken);
+        return TypedResults.Created($"/api/workers/{workerId}/payments/{payment.Id}", view);
     }
 
+    private sealed record PaymentContent(DateOnly PaymentDate, decimal Amount, WorkerPaymentMethod Method);
+
     /// <summary>
-    /// The answer for a key that was used before: the first payment (200) when it is for this worker, 409 when the
-    /// key was used for another worker; <c>null</c> when the key is new.
+    /// The answer for a key that was used before: the first payment (200) when it is for this worker and asks for the
+    /// same payment; 409 <c>idempotency_key_reused</c> when the key was used for another worker or for a different
+    /// payment (amount, date or method); <c>null</c> when the key is new.
     /// </summary>
     private static async Task<Results<Created<WorkerPaymentView>, Ok<WorkerPaymentView>, ValidationProblem, ProblemHttpResult>?> FindRepeatAsync(
-        WorkforceDbContext db, int workerId, Guid idempotencyKey, CancellationToken cancellationToken)
+        WorkforceDbContext db, IProjectAccess access, System.Security.Claims.ClaimsPrincipal caller, int workerId, Guid idempotencyKey,
+        PaymentContent sent, CancellationToken cancellationToken)
     {
         var existing = await WorkerPaymentQueries.ByKey(db, idempotencyKey)
-            .Select(payment => new { payment.Id, payment.WorkerId })
+            .Select(payment => new { payment.Id, payment.WorkerId, payment.PaymentDate, payment.Amount, payment.Method })
             .SingleOrDefaultAsync(cancellationToken);
 
         if (existing is null)
@@ -158,12 +176,14 @@ internal static class RecordWorkerPayment
             return null;
         }
 
-        if (existing.WorkerId != workerId)
+        if (existing.WorkerId != workerId
+            || existing.PaymentDate != sent.PaymentDate
+            || existing.Amount != sent.Amount
+            || existing.Method != sent.Method)
         {
             return WorkforceProblems.KeyUsedElsewhere();
         }
 
-        var view = await WorkerPaymentQueries.One(db, existing.Id).SingleAsync(cancellationToken);
-        return TypedResults.Ok(WorkerPaymentView.From(view));
+        return TypedResults.Ok(await WorkerPaymentVisibility.ViewForAsync(db, access, caller, existing.Id, cancellationToken));
     }
 }

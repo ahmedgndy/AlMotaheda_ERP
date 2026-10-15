@@ -59,7 +59,7 @@ public sealed class SupplierPaymentTests(SqlServerFixture database)
     }
 
     [DatabaseFact]
-    public async Task The_same_idempotency_key_returns_the_first_payment_and_records_nothing()
+    public async Task The_same_idempotency_key_returns_the_first_payment_and_a_different_payment_with_it_is_refused()
     {
         await using var api = await ProjectsApi.StartAsync(database);
         var cast = await api.CastAsync("PROJ-A");
@@ -73,11 +73,16 @@ public sealed class SupplierPaymentTests(SqlServerFixture database)
         var created = await Json(first);
         Assert.Equal($"/api/projects/{cast.ProjectId}/supplier-payments/{created.Id()}", first.Headers.Location?.OriginalString);
 
-        // The retry is answered with the same payment, even with a different amount on the form.
-        var retry = await api.PayAsync(cast.Accountant, cast.ProjectId, PaymentBody(cemex, 700m, [(invoice.Id(), 700m)], key));
+        // The same form sent again is answered with the same payment.
+        var retry = await api.PayAsync(cast.Accountant, cast.ProjectId, PaymentBody(cemex, 300m, [(invoice.Id(), 300m)], key));
         await EnsureStatus(retry, HttpStatusCode.OK);
         Assert.Equal(created.Id(), (await Json(retry)).Id());
         Assert.Equal(300m, (await Json(retry)).Money("amount"));
+
+        // A different payment sent with the same key is a client bug: refused, never answered with the old payment.
+        var different = await api.PayAsync(cast.Accountant, cast.ProjectId, PaymentBody(cemex, 700m, [(invoice.Id(), 700m)], key));
+        Assert.Equal(HttpStatusCode.Conflict, different.StatusCode);
+        Assert.Equal("idempotency_key_reused", await CodeOf(different));
 
         // The same key on another project is a client bug, not a retry.
         var otherProject = await api.PayAsync(cast.Accountant, projectB, PaymentBody(cemex, 1m, [(invoice.Id(), 1m)], key));

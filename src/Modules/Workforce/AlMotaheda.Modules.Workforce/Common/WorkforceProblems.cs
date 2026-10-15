@@ -76,8 +76,11 @@ internal static class WorkforceProblems
     public static ProblemHttpResult NetBelowZero(int workerId) =>
         Conflict(NegativeNet, $"The deductions of worker {workerId} are more than the day's pay. The net pay can't be below zero.");
 
-    public static ProblemHttpResult PaysTooMuch(decimal outstanding) =>
-        Conflict(OverPayment, $"The payment is more than the worker's approved unpaid pay ({outstanding:0.00}).");
+    /// <param name="outstanding">The unpaid pay to name, or <c>null</c> when part of it is on projects the caller can't see.</param>
+    public static ProblemHttpResult PaysTooMuch(decimal? outstanding) =>
+        Conflict(OverPayment, outstanding is { } shown
+            ? $"The payment is more than the worker's approved unpaid pay ({shown:0.00})."
+            : "The payment is more than the worker's approved unpaid pay.");
 
     public static ProblemHttpResult KeyUsedElsewhere() =>
         Conflict(IdempotencyKeyReused, "This idempotency key was already used for a different payment. Make a new key for a new payment.");

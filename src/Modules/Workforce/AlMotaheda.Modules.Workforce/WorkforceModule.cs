@@ -55,6 +55,7 @@ public sealed class WorkforceModule : IModule
         services.AddSingleton<WorkforceLog>();
         services.AddScoped<ILaborItemCosts, LaborItemCosts>();
         services.AddScoped<IProjectCostSource, LaborCostSource>();
+        services.AddScoped<IWorkInboxSource, WorkforceInboxSource>();
         services.AddScoped<IProjectRecordOwnership, WorkforceRecordOwnership>();
         WorkforceFeatures.AddServices(services);
 

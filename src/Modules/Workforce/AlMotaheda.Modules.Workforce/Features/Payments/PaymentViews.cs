@@ -1,5 +1,7 @@
+using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Workforce.Common;
 using AlMotaheda.Modules.Workforce.Data;
+using AlMotaheda.Modules.Workforce.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace AlMotaheda.Modules.Workforce.Features.Payments;
@@ -186,4 +188,17 @@ internal static class WorkerPaymentQueries
                     allocation.Amount))
                 .ToList(),
         });
+}
+
+/// <summary>Builds a payment view for the caller, leaving out the parts on projects the caller can't see.</summary>
+internal static class WorkerPaymentVisibility
+{
+    public static async Task<WorkerPaymentView> ViewForAsync(
+        WorkforceDbContext db, IProjectAccess access, System.Security.Claims.ClaimsPrincipal caller, int paymentId, CancellationToken cancellationToken)
+    {
+        var row = await WorkerPaymentQueries.One(db, paymentId).SingleAsync(cancellationToken);
+        var projectIds = row.Allocations.Select(allocation => allocation.ProjectId).Distinct().ToList();
+        var visible = await ProjectVisibility.AmongAsync(access, caller, projectIds, cancellationToken);
+        return WorkerPaymentView.From(row, visible.Count == projectIds.Count ? null : visible);
+    }
 }

@@ -154,6 +154,11 @@ public sealed class LaborFlowTests(SqlServerFixture database)
         Assert.Equal(HttpStatusCode.OK, again.StatusCode);
         Assert.Equal(payment.Id(), (await Json(again)).Id());
 
+        // A different amount with the same key is refused instead of being answered with the first payment.
+        var different = await api.PayAsync(cast.Accountant, worker, 300m, key);
+        Assert.Equal(HttpStatusCode.Conflict, different.StatusCode);
+        Assert.Equal("idempotency_key_reused", await CodeOf(different));
+
         var account = await api.AccountAsync(cast.Accountant, worker);
         Assert.Equal(1_002m, account.Money("approvedPay"));
         Assert.Equal(600m, account.Money("paid"));

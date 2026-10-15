@@ -113,13 +113,15 @@ internal static class RecordSupplierPayment
             return ProjectProblems.CompletedProject();
         }
 
+        var supplierId = request.SupplierId!.Value;
+        var sent = new PaymentContent(supplierId, paymentDate!.Value, amount!.Value, method, lines!.Select(line => (line.ExpenseId, line.Amount)).ToList());
+
         // A retried request: answer with the payment it already made.
-        if (await FindRepeatAsync(db, projectId, idempotencyKey, cancellationToken) is { } repeat)
+        if (await FindRepeatAsync(db, projectId, idempotencyKey, sent, cancellationToken) is { } repeat)
         {
             return repeat;
         }
 
-        var supplierId = request.SupplierId!.Value;
         if (!await db.Suppliers.AnyAsync(supplier => supplier.Id == supplierId, cancellationToken))
         {
             errors.Add("supplierId", "The supplier was not found.");
@@ -131,6 +133,13 @@ internal static class RecordSupplierPayment
         if (!await ProjectLock.TryAcquireAsync(db, projectId, cancellationToken))
         {
             return ProjectProblems.TryAgainLater();
+        }
+
+        // Checked again under the lock: a concurrent retry with the same key may have committed while this request
+        // waited, and its payment must be the answer (not an over-allocation error for money already settled).
+        if (await FindRepeatAsync(db, projectId, idempotencyKey, sent, cancellationToken) is { } committed)
+        {
+            return committed;
         }
 
         var allocations = lines!;
@@ -190,7 +199,7 @@ internal static class RecordSupplierPayment
         {
             // The same form was sent twice at the same moment: the other request won. Answer with its payment.
             await transaction.RollbackAsync(cancellationToken);
-            return await FindRepeatAsync(db, projectId, idempotencyKey, cancellationToken) ?? CoreProblems.KeyUsedElsewhere();
+            return await FindRepeatAsync(db, projectId, idempotencyKey, sent, cancellationToken) ?? CoreProblems.KeyUsedElsewhere();
         }
 
         await transaction.CommitAsync(cancellationToken);
@@ -200,15 +209,28 @@ internal static class RecordSupplierPayment
         return TypedResults.Created($"/api/projects/{projectId}/supplier-payments/{payment.Id}", SupplierPaymentView.From(view));
     }
 
+    /// <summary>What a payment request asks for, to tell a retry from a different payment sent with the same key.</summary>
+    private sealed record PaymentContent(int SupplierId, DateOnly PaymentDate, decimal Amount, PaymentMethod Method, IReadOnlyList<(int ExpenseId, decimal Amount)> Allocations);
+
     /// <summary>
-    /// The answer for a key that was used before: the first payment (200) when it is on this project, 409 when the
-    /// key was used on another project; <c>null</c> when the key is new.
+    /// The answer for a key that was used before: the first payment (200) when it is on this project and asks for the
+    /// same payment; 409 <c>idempotency_key_reused</c> when the key was used on another project or for a different
+    /// payment (another supplier, amount, date, method or split); <c>null</c> when the key is new.
     /// </summary>
     private static async Task<Results<Created<SupplierPaymentView>, Ok<SupplierPaymentView>, ValidationProblem, ProblemHttpResult>?> FindRepeatAsync(
-        ProjectsDbContext db, int projectId, Guid idempotencyKey, CancellationToken cancellationToken)
+        ProjectsDbContext db, int projectId, Guid idempotencyKey, PaymentContent sent, CancellationToken cancellationToken)
     {
         var existing = await PaymentQueries.ByKey(db, idempotencyKey)
-            .Select(payment => new { payment.Id, payment.ProjectId })
+            .Select(payment => new
+            {
+                payment.Id,
+                payment.ProjectId,
+                payment.SupplierId,
+                payment.PaymentDate,
+                payment.Amount,
+                payment.Method,
+                Allocations = payment.Allocations.Select(line => new { line.ExpenseId, line.Amount }).ToList(),
+            })
             .SingleOrDefaultAsync(cancellationToken);
 
         if (existing is null)
@@ -216,7 +238,14 @@ internal static class RecordSupplierPayment
             return null;
         }
 
-        if (existing.ProjectId != projectId)
+        var sameSplit = existing.Allocations.Count == sent.Allocations.Count
+            && existing.Allocations.All(line => sent.Allocations.Any(other => other.ExpenseId == line.ExpenseId && other.Amount == line.Amount));
+        if (existing.ProjectId != projectId
+            || existing.SupplierId != sent.SupplierId
+            || existing.PaymentDate != sent.PaymentDate
+            || existing.Amount != sent.Amount
+            || existing.Method != sent.Method
+            || !sameSplit)
         {
             return CoreProblems.KeyUsedElsewhere();
         }

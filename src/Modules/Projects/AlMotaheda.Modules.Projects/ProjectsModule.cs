@@ -4,6 +4,7 @@ using AlMotaheda.Modules.Projects.Common;
 using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Projects.Data;
 using AlMotaheda.Modules.Projects.Features;
+using AlMotaheda.Modules.Projects.Features.Inbox;
 using AlMotaheda.Modules.Projects.Features.Members;
 using AlMotaheda.Modules.Projects.Features.Projects;
 using AlMotaheda.Modules.Projects.Integration;
@@ -73,6 +74,7 @@ public sealed class ProjectsModule : IModule
         CoreFeatures.AddServices(services);
         PlanningFeatures.AddServices(services);
         ReportingFeatures.AddServices(services);
+        services.AddScoped<IWorkInboxSource, ProjectsInboxSource>();
 
         services.AddHostedService<ProjectsStartup>();
     }
@@ -99,5 +101,6 @@ public sealed class ProjectsModule : IModule
         CoreFeatures.Map(api, projects);
         PlanningFeatures.Map(api, projects);
         ReportingFeatures.Map(projects);
+        GetWorkInbox.Map(api);
     }
 }

@@ -160,6 +160,13 @@ internal static class RecordMeasurement
             return SubcontractorsProblems.Validation(errors);
         }
 
+        // quantity × unit price can exceed what an amount column holds; refuse it as a validation error, never a 500.
+        if (amount > NumberInput.MaxMoney)
+        {
+            errors.Add(percent is null ? "quantity" : "percentOfLine", $"The measured amount must be at most {NumberInput.MaxMoney:0.00}.");
+            return SubcontractorsProblems.Validation(errors);
+        }
+
         var measured = await db.ProgressMeasurements
             .Where(measurement => measurement.ContractItemId == contractItemId && measurement.Status != WorkStatus.Rejected)
             .SumAsync(measurement => measurement.Quantity, cancellationToken);

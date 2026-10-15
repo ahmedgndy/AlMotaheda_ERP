@@ -106,8 +106,10 @@ internal static class RecordSubPayment
             return SubcontractorsProblems.CompletedProject();
         }
 
+        var sent = new PaymentContent(paymentDate!.Value, amount!.Value, method, purpose);
+
         // A retried request: answer with the payment it already made.
-        if (await FindRepeatAsync(db, details, projectId, contractId, idempotencyKey, cancellationToken) is { } repeat)
+        if (await FindRepeatAsync(db, details, projectId, contractId, idempotencyKey, sent, cancellationToken) is { } repeat)
         {
             return repeat;
         }
@@ -128,11 +130,18 @@ internal static class RecordSubPayment
             return SubcontractorsProblems.TryAgainLater();
         }
 
+        // Checked again under the lock: a concurrent retry with the same key may have committed while this request
+        // waited, and its payment must be the answer (not an over-value error for money already recorded).
+        if (await FindRepeatAsync(db, details, projectId, contractId, idempotencyKey, sent, cancellationToken) is { } committed)
+        {
+            return committed;
+        }
+
         var paid = await db.SubPayments
             .Where(payment => payment.ContractId == contractId && payment.VoidedAt == null)
             .SumAsync(payment => payment.Amount, cancellationToken);
 
-        if (!WorkRules.FitsContractValue(contractValue.Value, paid, amount!.Value))
+        if (!WorkRules.FitsContractValue(contractValue.Value, paid, amount.Value))
         {
             return SubcontractorsProblems.OverValue(Math.Max(0, contractValue.Value - paid));
         }
@@ -141,7 +150,7 @@ internal static class RecordSubPayment
         var payment = new SubPayment
         {
             ContractId = contractId,
-            PaymentDate = paymentDate!.Value,
+            PaymentDate = paymentDate.Value,
             Amount = amount.Value,
             Method = method,
             Purpose = purpose,
@@ -162,7 +171,7 @@ internal static class RecordSubPayment
             // The same form was sent twice at the same moment: the other request won. Answer with its payment.
             await transaction.RollbackAsync(cancellationToken);
             db.ChangeTracker.Clear();
-            return await FindRepeatAsync(db, details, projectId, contractId, idempotencyKey, cancellationToken)
+            return await FindRepeatAsync(db, details, projectId, contractId, idempotencyKey, sent, cancellationToken)
                 ?? SubcontractorsProblems.KeyUsedElsewhere();
         }
 
@@ -177,15 +186,19 @@ internal static class RecordSubPayment
         return TypedResults.Created($"/api/projects/{projectId}/subcontract-payments/{payment.Id}", view!);
     }
 
+    private sealed record PaymentContent(DateOnly PaymentDate, decimal Amount, SubPaymentMethod Method, SubPaymentPurpose Purpose);
+
     /// <summary>
-    /// The answer for a key that was used before: the first payment (200) when it is on this contract, 409 when the
-    /// key was used on another contract; <c>null</c> when the key is new.
+    /// The answer for a key that was used before: the first payment (200) when it is on this contract and asks for the
+    /// same payment; 409 when the key was used on another contract or for a different payment (amount, date, method or
+    /// purpose); <c>null</c> when the key is new.
     /// </summary>
     private static async Task<Results<Created<SubPaymentView>, Ok<SubPaymentView>, ValidationProblem, ProblemHttpResult>?> FindRepeatAsync(
-        SubcontractorsDbContext db, ContractDetails details, int projectId, int contractId, Guid idempotencyKey, CancellationToken cancellationToken)
+        SubcontractorsDbContext db, ContractDetails details, int projectId, int contractId, Guid idempotencyKey, PaymentContent sent,
+        CancellationToken cancellationToken)
     {
         var existing = await ContractQueries.ByKey(db, idempotencyKey)
-            .Select(payment => new { payment.Id, payment.ContractId, payment.Contract.ProjectId })
+            .Select(payment => new { payment.Id, payment.ContractId, payment.Contract.ProjectId, payment.PaymentDate, payment.Amount, payment.Method, payment.Purpose })
             .SingleOrDefaultAsync(cancellationToken);
 
         if (existing is null)
@@ -193,7 +206,9 @@ internal static class RecordSubPayment
             return null;
         }
 
-        if (existing.ContractId != contractId || existing.ProjectId != projectId)
+        if (existing.ContractId != contractId || existing.ProjectId != projectId
+            || existing.PaymentDate != sent.PaymentDate || existing.Amount != sent.Amount
+            || existing.Method != sent.Method || existing.Purpose != sent.Purpose)
         {
             return SubcontractorsProblems.KeyUsedElsewhere();
         }

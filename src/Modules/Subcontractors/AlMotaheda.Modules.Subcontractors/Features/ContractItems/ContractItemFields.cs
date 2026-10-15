@@ -47,6 +47,12 @@ internal sealed record ContractItemFields(
         var description = Input.OptionalText(request.Description, ContractItemConfiguration.DescriptionMaxLength, errors, "description", "The description");
         var notes = Input.OptionalText(request.Notes, ContractItemConfiguration.NotesMaxLength, errors, "notes", "Notes");
 
+        // The line total (quantity × unit price) must fit an amount column too, or its measurements could not be saved.
+        if (quantity is { } q && unitPrice is { } p && q * p > NumberInput.MaxMoney)
+        {
+            errors.Add("quantity", $"The line total (quantity × unit price) must be at most {NumberInput.MaxMoney:0.00}.");
+        }
+
         return errors.HasErrors
             ? null
             : new ContractItemFields(name!, workType, unit, quantity!.Value, unitPrice!.Value, description, notes);

@@ -1,6 +1,7 @@
 using AlMotaheda.BuildingBlocks.Authorization;
 using AlMotaheda.BuildingBlocks.Http;
 using AlMotaheda.BuildingBlocks.Time;
+using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Workforce.Common;
 using AlMotaheda.Modules.Workforce.Data;
 using AlMotaheda.Modules.Workforce.Data.Configurations;
@@ -33,6 +34,7 @@ internal static class VoidWorkerPayment
         Request request,
         HttpContext httpContext,
         WorkforceDbContext db,
+        IProjectAccess access,
         CompanyClock clock,
         WorkforceLog log,
         CancellationToken cancellationToken)
@@ -55,6 +57,18 @@ internal static class VoidWorkerPayment
             .Select(payment => (int?)payment.WorkerId)
             .SingleOrDefaultAsync(cancellationToken);
         if (workerId is null)
+        {
+            return WorkforceProblems.PaymentNotFound();
+        }
+
+        // Only someone who can see every project the payment settled may void it; to others it does not exist.
+        var paidProjects = await db.WorkerPaymentAllocations.AsNoTracking()
+            .Where(allocation => allocation.PaymentId == paymentId)
+            .Select(allocation => allocation.Line.Sheet.ProjectId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        var visible = await ProjectVisibility.AmongAsync(access, httpContext.User, paidProjects, cancellationToken);
+        if (visible.Count != paidProjects.Count)
         {
             return WorkforceProblems.PaymentNotFound();
         }
@@ -90,7 +104,6 @@ internal static class VoidWorkerPayment
         await transaction.CommitAsync(cancellationToken);
         log.PaymentVoided(caller.UserId, payment.WorkerId, payment.Id);
 
-        var view = await WorkerPaymentQueries.One(db, payment.Id).SingleAsync(cancellationToken);
-        return TypedResults.Ok(WorkerPaymentView.From(view));
+        return TypedResults.Ok(await WorkerPaymentVisibility.ViewForAsync(db, access, httpContext.User, payment.Id, cancellationToken));
     }
 }
