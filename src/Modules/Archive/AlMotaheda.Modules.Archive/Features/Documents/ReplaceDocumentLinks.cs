@@ -40,6 +40,7 @@ internal static class ReplaceDocumentLinks
         HttpContext httpContext,
         ArchiveDbContext db,
         IProjectAccess access,
+        IEnumerable<IProjectRecordOwnership> owners,
         IUserDirectory users,
         ArchiveLog log,
         CancellationToken cancellationToken)
@@ -84,6 +85,27 @@ internal static class ReplaceDocumentLinks
         {
             log.ActionRefused(caller.UserId, nameof(ReplaceDocumentLinks), "not the uploader and no projects Edit");
             return ApiProblem.ForbiddenResult("Only the person who uploaded this document, or someone with projects Edit, can change its links.");
+        }
+
+        // A new link must point to a record of this project; the owning module says which ids are here. Links the
+        // document already has were checked when they were added and are kept as they are.
+        var added = links
+            .Select((link, index) => (Link: link, Index: index))
+            .Where(candidate => !document.Links.Exists(link => link.EntityType == candidate.Link.Type && link.EntityId == candidate.Link.Id))
+            .ToList();
+        foreach (var group in added.GroupBy(candidate => candidate.Link.Type))
+        {
+            var here = await RecordOwnership.FindAsync(
+                owners, projectId, group.Key.ToString(), group.Select(candidate => candidate.Link.Id).ToList(), cancellationToken);
+            foreach (var missing in group.Where(candidate => !here.Contains(candidate.Link.Id)))
+            {
+                errors.Add($"links[{missing.Index}].entityId", "This record was not found on this project.");
+            }
+        }
+
+        if (errors.HasErrors)
+        {
+            return ArchiveProblems.Validation(errors);
         }
 
         // Keep the links that stay, so an unchanged link is never deleted and inserted again.

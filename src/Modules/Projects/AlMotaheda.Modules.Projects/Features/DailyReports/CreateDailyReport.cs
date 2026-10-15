@@ -48,6 +48,7 @@ internal static class CreateDailyReport
         HttpContext httpContext,
         ProjectsDbContext db,
         IProjectAccess access,
+        IEnumerable<IProjectRecordOwnership> owners,
         IUserDirectory users,
         CompanyClock clock,
         ProjectsLog log,
@@ -82,7 +83,7 @@ internal static class CreateDailyReport
             return ProjectProblems.CompletedProject();
         }
 
-        await fields!.CheckReferencesAsync(db, projectId, itemsAlreadyNamed: [], errors, cancellationToken);
+        await fields!.CheckReferencesAsync(db, owners, projectId, itemsAlreadyNamed: [], errors, cancellationToken);
         if (errors.HasErrors)
         {
             return ProjectProblems.Validation(errors);

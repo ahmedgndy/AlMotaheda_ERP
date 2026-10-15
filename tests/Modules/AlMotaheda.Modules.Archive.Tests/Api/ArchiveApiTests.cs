@@ -10,6 +10,7 @@ using AlMotaheda.Modules.Archive.Tests.Unit;
 using AlMotaheda.Modules.Projects.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using static AlMotaheda.Api.Tests.ApiCalls;
 
 namespace AlMotaheda.Modules.Archive.Tests.Api;
@@ -256,6 +257,47 @@ public sealed class ArchiveApiTests : IDisposable
         Assert.Equal("validation_failed", await CodeOf(response));
         Assert.Equal(["category", "documentDate", "entityId", "title"], (await ErrorFields(response)).Order());
         Assert.Empty(_storage.Files());
+    }
+
+    [Fact]
+    public async Task A_link_to_a_record_of_another_project_is_refused_and_the_stored_file_is_removed()
+    {
+        var owners = new NothingOnTheProject();
+        await using var app = await StartAsync(new VisibleProject(), owners: owners);
+
+        var response = await UploadAsync(app, ("receipt.pdf", SampleFiles.Pdf()), new()
+        {
+            ["title"] = "Cement receipt",
+            ["category"] = "Receipt",
+            ["entityType"] = "Expense",
+            ["entityId"] = "5",
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("validation_failed", await CodeOf(response));
+        Assert.Equal(["entityId"], await ErrorFields(response));
+        Assert.Equal(new[] { (1, "Expense", 5) }, owners.Asked);
+        Assert.Empty(_storage.Files());
+        Assert.DoesNotContain(app.Database.Commands, command => command.Contains("INSERT", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Replacing_links_with_a_record_of_another_project_is_refused_per_link()
+    {
+        var owners = new NothingOnTheProject();
+        await using var app = await StartAsync(new VisibleProject(), owners: owners);
+        var token = TestTokens.Create(role: Executive, permissions: [("projects", "VCEAF")]);
+
+        var response = await Send(app.App.Client, "PUT", "/api/projects/1/documents/2/links", token, JsonContent.Create(new
+        {
+            links = new object[] { new { entityType = "DailyReport", entityId = 9 } },
+            rowVersion = RowVersion,
+        }));
+
+        // The stand-in database has no document 2, so the scope rules answer first; the ownership check never runs
+        // on a document that isn't there.
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty(owners.Asked);
     }
 
     [Fact]
@@ -516,7 +558,8 @@ public sealed class ArchiveApiTests : IDisposable
         return client.SendAsync(request);
     }
 
-    private async Task<TestHost> StartAsync(IProjectAccess? access = null, Dictionary<string, string?>? settings = null, IFileStore? store = null)
+    private async Task<TestHost> StartAsync(
+        IProjectAccess? access = null, Dictionary<string, string?>? settings = null, IFileStore? store = null, IProjectRecordOwnership? owners = null)
     {
         var configuration = new Dictionary<string, string?> { ["Archive:Storage:RootPath"] = _storage.Path };
         foreach (var (key, value) in settings ?? [])
@@ -537,6 +580,12 @@ public sealed class ArchiveApiTests : IDisposable
             {
                 builder.Services.AddSingleton<IFileStore>(store);
             }
+
+            if (owners is not null)
+            {
+                builder.Services.RemoveAll<IProjectRecordOwnership>();
+                builder.Services.AddSingleton(owners);
+            }
         });
 
         return new TestHost(app, database);
@@ -553,6 +602,29 @@ public sealed class ArchiveApiTests : IDisposable
         public Task<ProjectAccessInfo?> FindVisibleAsync(ClaimsPrincipal caller, int projectId, CancellationToken cancellationToken) =>
             Task.FromResult<ProjectAccessInfo?>(new ProjectAccessInfo(
                 projectId, "P-1", "مشروع", "Project", IsCompleted, ProjectResponsibilities.ProjectManager, Executive));
+    }
+
+    /// <summary>Says no record of any kind is on any project, and remembers what it was asked.</summary>
+    private sealed class NothingOnTheProject : IProjectRecordOwnership
+    {
+        public List<(int ProjectId, string Kind, int Id)> Asked { get; } = [];
+
+        public IReadOnlyCollection<string> Kinds { get; } =
+        [
+            ProjectRecordKinds.Expense, ProjectRecordKinds.SupplierPayment, ProjectRecordKinds.DailyReport, ProjectRecordKinds.ReportRequest,
+            ProjectRecordKinds.Budget, ProjectRecordKinds.LaborSheet, ProjectRecordKinds.SubContract, ProjectRecordKinds.SubPayment,
+            ProjectRecordKinds.Equipment, ProjectRecordKinds.EquipmentCost,
+        ];
+
+        public Task<IReadOnlySet<int>> FindOnProjectAsync(int projectId, string kind, IReadOnlyCollection<int> ids, CancellationToken cancellationToken)
+        {
+            lock (Asked)
+            {
+                Asked.AddRange(ids.Select(id => (projectId, kind, id)));
+            }
+
+            return Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
+        }
     }
 
     /// <summary>A store whose disk is full or gone.</summary>

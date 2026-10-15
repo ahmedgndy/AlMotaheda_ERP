@@ -103,10 +103,16 @@ internal sealed record DailyReportFields(
 
     /// <summary>
     /// Project items must be on this project and active, except an item the report already named (it stays
-    /// linked). A report request must be on this project.
+    /// linked). A report request, a subcontract and a machine must be on this project too: the client's ids are
+    /// never trusted, so a report can't point to another project's records.
     /// </summary>
     public async Task CheckReferencesAsync(
-        ProjectsDbContext db, int projectId, IReadOnlyCollection<int> itemsAlreadyNamed, ValidationErrors errors, CancellationToken cancellationToken)
+        ProjectsDbContext db,
+        IEnumerable<IProjectRecordOwnership> owners,
+        int projectId,
+        IReadOnlyCollection<int> itemsAlreadyNamed,
+        ValidationErrors errors,
+        CancellationToken cancellationToken)
     {
         var itemIds = Lines.Where(line => line.ProjectItemId is not null).Select(line => line.ProjectItemId!.Value).Distinct().ToList();
         if (itemIds.Count > 0)
@@ -138,6 +144,27 @@ internal sealed record DailyReportFields(
             && !await db.ReportRequests.AsNoTracking().AnyAsync(candidate => candidate.Id == requestId && candidate.ProjectId == projectId, cancellationToken))
         {
             errors.Add("reportRequestId", "This report request was not found on this project.");
+        }
+
+        // Subcontracts belong to the Subcontractors module and machines to Fleet: each owner says which ids are here.
+        var contractIds = Lines.Where(line => line.SubContractId is not null).Select(line => line.SubContractId!.Value).Distinct().ToList();
+        var contractsHere = await RecordOwnership.FindAsync(owners, projectId, ProjectRecordKinds.SubContract, contractIds, cancellationToken);
+        for (var index = 0; index < Lines.Count; index++)
+        {
+            if (Lines[index].SubContractId is { } contractId && !contractsHere.Contains(contractId))
+            {
+                errors.Add($"lines[{index}].subContractId", "This subcontract was not found on this project.");
+            }
+        }
+
+        var equipmentIds = Equipment.Where(row => row.EquipmentId is not null).Select(row => row.EquipmentId!.Value).Distinct().ToList();
+        var equipmentHere = await RecordOwnership.FindAsync(owners, projectId, ProjectRecordKinds.Equipment, equipmentIds, cancellationToken);
+        for (var index = 0; index < Equipment.Count; index++)
+        {
+            if (Equipment[index].EquipmentId is { } equipmentId && !equipmentHere.Contains(equipmentId))
+            {
+                errors.Add($"equipment[{index}].equipmentId", "This machine has never been assigned to this project.");
+            }
         }
     }
 

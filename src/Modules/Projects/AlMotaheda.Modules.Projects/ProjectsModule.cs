@@ -69,6 +69,7 @@ public sealed class ProjectsModule : IModule
         services.AddScoped<IProjectAccess, ProjectAccessContract>();
         services.AddScoped<IProjectItems, ProjectItemsContract>();
         services.AddScoped<ISupplierDirectory, SupplierDirectoryContract>();
+        services.AddScoped<IProjectRecordOwnership, ProjectRecordOwnership>();
         CoreFeatures.AddServices(services);
         PlanningFeatures.AddServices(services);
         ReportingFeatures.AddServices(services);

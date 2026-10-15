@@ -48,6 +48,7 @@ internal static class UpdateDailyReport
         HttpContext httpContext,
         ProjectsDbContext db,
         IProjectAccess access,
+        IEnumerable<IProjectRecordOwnership> owners,
         IUserDirectory users,
         CompanyClock clock,
         ProjectsLog log,
@@ -98,7 +99,7 @@ internal static class UpdateDailyReport
         }
 
         var namedItems = report.Lines.Where(line => line.ProjectItemId is not null).Select(line => line.ProjectItemId!.Value).ToHashSet();
-        await fields!.CheckReferencesAsync(db, projectId, namedItems, errors, cancellationToken);
+        await fields!.CheckReferencesAsync(db, owners, projectId, namedItems, errors, cancellationToken);
         if (errors.HasErrors)
         {
             return ProjectProblems.Validation(errors);

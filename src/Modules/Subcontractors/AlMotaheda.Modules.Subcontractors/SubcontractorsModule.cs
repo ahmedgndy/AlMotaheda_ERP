@@ -49,6 +49,7 @@ public sealed class SubcontractorsModule : IModule
         services.AddCompanyClock();
         services.AddScoped<ISubcontractItemCosts, SubcontractItemCosts>();
         services.AddScoped<IProjectCostSource, SubcontractCostSource>();
+        services.AddScoped<IProjectRecordOwnership, SubcontractRecordOwnership>();
         SubcontractorsFeatures.AddServices(services);
 
         services.AddHostedService<SubcontractorsStartup>();

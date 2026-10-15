@@ -44,6 +44,7 @@ internal static class UploadDocument
         HttpContext httpContext,
         ArchiveDbContext db,
         IProjectAccess access,
+        IEnumerable<IProjectRecordOwnership> owners,
         IUserDirectory users,
         IFileStore store,
         IOptions<ArchiveLimitsOptions> limits,
@@ -140,6 +141,14 @@ internal static class UploadDocument
 
             if (errors.HasErrors)
             {
+                return ArchiveProblems.Validation(errors);
+            }
+
+            // The linked record must be on this project: the owning module says so, not the client.
+            if (link is { } wanted
+                && !(await RecordOwnership.FindAsync(owners, projectId, wanted.Type.ToString(), [wanted.Id], cancellationToken)).Contains(wanted.Id))
+            {
+                errors.Add("entityId", "This record was not found on this project.");
                 return ArchiveProblems.Validation(errors);
             }
 

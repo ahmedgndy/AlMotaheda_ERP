@@ -43,6 +43,7 @@ internal static class FleetFeatures
         RejectEquipmentCost.Map(api);
         RecordEquipmentCostPayment.Map(api);
         VoidEquipmentCostPayment.Map(api);
+        ListVoidedEquipmentPayments.Map(api);
         GetEquipmentSummary.Map(api);
     }
 }

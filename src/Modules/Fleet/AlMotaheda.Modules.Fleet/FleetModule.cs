@@ -48,6 +48,7 @@ public sealed class FleetModule : IModule
 
         services.AddCompanyClock();
         services.AddScoped<IProjectCostSource, EquipmentCostSource>();
+        services.AddScoped<IProjectRecordOwnership, FleetRecordOwnership>();
         FleetFeatures.AddServices(services);
 
         services.AddHostedService<FleetStartup>();
