@@ -31,7 +31,13 @@ public sealed class ExpenseWorkflowTests(SqlServerFixture database)
         Assert.Equal(cast.Engineer.UserId, recorded.GetProperty("recorder").GetProperty("userId").GetInt32());
         Assert.Equal("Cemex", recorded.GetProperty("supplierNameEn").GetString());
 
-        var own = await api.ReviewAsync(cast.Engineer, cast.ProjectId, recorded, "approve");
+        // The engineer has no projects Approve, so the permission check refuses first.
+        var engineer = await api.ReviewAsync(cast.Engineer, cast.ProjectId, recorded, "approve");
+        Assert.Equal(HttpStatusCode.Forbidden, engineer.StatusCode);
+
+        // Someone who may approve still can't approve a record they recorded themselves.
+        var executiveOwn = await api.RecordAsync(cast.Executive, cast.ProjectId, SupplyBody(supplier, 1m, 10m, "Credit"));
+        var own = await api.ReviewAsync(cast.Executive, cast.ProjectId, executiveOwn, "approve");
         Assert.Equal(HttpStatusCode.Conflict, own.StatusCode);
         Assert.Equal("own_record", await CodeOf(own));
 
@@ -56,7 +62,8 @@ public sealed class ExpenseWorkflowTests(SqlServerFixture database)
         Assert.Equal(14_309.38m, summary.Money("suppliesRecognized"));
         Assert.Equal(0m, summary.Money("expensesRecognized"));
         Assert.Equal(14_309.38m, summary.Money("outstanding"));
-        Assert.Equal(0, summary.GetProperty("pendingReviewCount").GetInt32());
+        // Only the Executive's own record is still waiting for someone else.
+        Assert.Equal(1, summary.GetProperty("pendingReviewCount").GetInt32());
     }
 
     [DatabaseFact]

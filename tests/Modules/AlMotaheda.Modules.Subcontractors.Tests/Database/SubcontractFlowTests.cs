@@ -430,7 +430,7 @@ public sealed class SubcontractFlowTests(SqlServerFixture database)
     }
 
     [DatabaseFact]
-    public async Task The_same_idempotency_key_returns_the_first_payment_and_records_nothing()
+    public async Task The_same_idempotency_key_returns_the_first_payment_and_a_different_payment_with_it_is_refused()
     {
         await using var api = await ProjectsApi.StartAsync(database);
         var cast = await api.CastAsync();
@@ -445,10 +445,16 @@ public sealed class SubcontractFlowTests(SqlServerFixture database)
         var created = await Json(first);
         Assert.Equal($"/api/projects/{cast.ProjectId}/subcontract-payments/{created.Id()}", first.Headers.Location?.OriginalString);
 
-        var retry = await api.PayAsync(cast.Accountant, cast.ProjectId, contractId, SubcontractsApi.PaymentBody(7_000m, key: key));
+        // A retry of the same payment (a lost response) gets the first payment back.
+        var retry = await api.PayAsync(cast.Accountant, cast.ProjectId, contractId, SubcontractsApi.PaymentBody(3_000m, key: key));
         await EnsureStatus(retry, HttpStatusCode.OK);
         Assert.Equal(created.Id(), (await Json(retry)).Id());
         Assert.Equal(3_000m, (await Json(retry)).Money("amount"));
+
+        // A different payment sent with the same key is refused, so it can't be lost silently.
+        var different = await api.PayAsync(cast.Accountant, cast.ProjectId, contractId, SubcontractsApi.PaymentBody(7_000m, key: key));
+        Assert.Equal(HttpStatusCode.Conflict, different.StatusCode);
+        Assert.Equal("idempotency_key_reused", await CodeOf(different));
 
         var elsewhere = await api.PayAsync(cast.Accountant, cast.ProjectId, otherContract, SubcontractsApi.PaymentBody(1m, key: key));
         Assert.Equal("idempotency_key_reused", await CodeOf(elsewhere));
