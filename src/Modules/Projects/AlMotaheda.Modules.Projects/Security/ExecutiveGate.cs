@@ -41,7 +41,5 @@ internal static class ProjectPolicies
     /// </summary>
     public static TBuilder RequireExecutive<TBuilder>(this TBuilder builder)
         where TBuilder : IEndpointConventionBuilder =>
-        builder.RequireAuthorization(PermissionAuthorization.SignedInPolicy()
-            .RequireClaim(AccessClaims.Role, AccessRoles.Executive)
-            .Build());
+        builder.RequireRole(AccessRoles.Executive);
 }

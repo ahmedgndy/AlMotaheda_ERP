@@ -27,7 +27,6 @@ namespace AlMotaheda.Modules.Access.Security;
 internal sealed class UserManagementGate(AccessDbContext db, TimeProvider time, SecurityLog log)
 {
     private const string LockName = "AlMotaheda.Access.UserManagement";
-    private const int LockTimeoutMilliseconds = 10_000;
 
     /// <summary>
     /// Starts the transaction and returns it, or returns the refusal to send back
@@ -86,23 +85,8 @@ internal sealed class UserManagementGate(AccessDbContext db, TimeProvider time, 
         }
     }
 
-    private async Task<bool> TryAcquireLockAsync(CancellationToken cancellationToken)
-    {
-        // sp_getapplock returns 0 or 1 when granted, and a negative number on timeout or deadlock.
-        var result = await db.Database
-            .SqlQuery<int>($"""
-                DECLARE @result int;
-                EXEC @result = sp_getapplock
-                    @Resource = {LockName},
-                    @LockMode = 'Exclusive',
-                    @LockOwner = 'Transaction',
-                    @LockTimeout = {LockTimeoutMilliseconds};
-                SELECT @result AS [Value];
-                """)
-            .ToListAsync(cancellationToken);
-
-        return result.Count == 1 && result[0] >= 0;
-    }
+    private Task<bool> TryAcquireLockAsync(CancellationToken cancellationToken) =>
+        SqlAppLock.TryAcquireAsync(db, LockName, cancellationToken);
 }
 
 internal sealed record GateResult(UserManagementScope? Scope, ProblemHttpResult? Refusal)

@@ -24,11 +24,9 @@ internal sealed class AccessStartup(
     IOptions<AccessBootstrapOptions> bootstrapOptions,
     ILogger<AccessStartup> logger) : IHostedService
 {
-    public const string ApplyMigrationsSetting = "Database:ApplyMigrationsOnStartup";
-
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        var applyMigrations = configuration.GetValue<bool>(ApplyMigrationsSetting);
+        var applyMigrations = configuration.GetValue<bool>(ModuleMigrations.ApplyMigrationsSetting);
         var bootstrap = bootstrapOptions.Value;
 
         if (!applyMigrations && !bootstrap.IsConfigured)
@@ -41,12 +39,8 @@ internal sealed class AccessStartup(
 
         if (applyMigrations)
         {
-            var pending = (await db.Database.GetPendingMigrationsAsync(cancellationToken)).ToList();
-            if (pending.Count > 0)
-            {
-                await db.Database.MigrateAsync(cancellationToken);
-                logger.LogInformation("Applied {Count} Access migration(s): {Migrations}", pending.Count, string.Join(", ", pending));
-            }
+            // Access is first in ModuleCatalog: its tables point to no other module.
+            await ModuleMigrations.ApplyAsync(db, "Access", [], "", logger, cancellationToken);
         }
 
         if (bootstrap.IsConfigured)

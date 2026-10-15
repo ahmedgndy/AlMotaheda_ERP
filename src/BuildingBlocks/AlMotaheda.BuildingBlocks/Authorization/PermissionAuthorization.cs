@@ -45,6 +45,25 @@ public static class PermissionAuthorization
     }
 
     /// <summary>
+    /// Only users whose token carries the role <paramref name="roleCode"/> may call the endpoint. This is the fast
+    /// first check; handlers that grant or remove access, or move money, re-check the caller in the database,
+    /// because a token can be up to 15 minutes old.
+    /// </summary>
+    /// <remarks>
+    /// A role check, not a grantable permission: used where no permission a user can be given should be enough
+    /// (user management, project membership, company settings).
+    /// </remarks>
+    public static TBuilder RequireRole<TBuilder>(this TBuilder builder, string roleCode)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(roleCode);
+
+        return builder.RequireAuthorization(SignedInPolicy()
+            .RequireClaim(AccessClaims.Role, roleCode)
+            .Build());
+    }
+
+    /// <summary>
     /// The start of every endpoint-specific policy: a signed-in user with no pending password change.
     /// </summary>
     /// <remarks>

@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace AlMotaheda.Modules.Access.Data;
 
@@ -27,19 +26,6 @@ internal sealed class AccessDbContext(DbContextOptions<AccessDbContext> options)
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AccessDbContext).Assembly);
     }
 
-    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
-    {
-        // Every time is stored as UTC DATETIME2(3) (millisecond precision) and read back marked as UTC,
-        // so the API always returns times with a trailing "Z".
-        configurationBuilder.Properties<DateTime>()
-            .HaveColumnType("datetime2(3)")
-            .HaveConversion<UtcDateTimeConverter>();
-
-        // Codes and enum names are ASCII. Free text (names, emails) is configured per column as Unicode.
-        configurationBuilder.Properties<string>().AreUnicode(false);
-    }
-
-    private sealed class UtcDateTimeConverter() : ValueConverter<DateTime, DateTime>(
-        value => value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : value,
-        value => DateTime.SpecifyKind(value, DateTimeKind.Utc));
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
+        StorageConventions.Apply(configurationBuilder);
 }

@@ -9,9 +9,9 @@ This document explains how the AlMotaheda ERP backend is organised, why, and the
 - **Organised by feature.** Inside a module, code is grouped by use case (vertical slices), not by technical layer.
 - **Boundaries are enforced by tests**, not only by convention.
 
-**Current status:** the foundation, sign-in, users, roles and permissions (the Access module), and projects with
-their teams and project-level access (the Projects module), all stored in SQL Server through EF Core.
-Archive is still an empty shell.
+**Current status:** six modules in production code (Access, Projects, Workforce, Subcontractors, Fleet, Archive),
+all stored in SQL Server through EF Core. The modernization plan (Finance, HR, Procurement, Reporting, Platform)
+is in `docs/modernization/`.
 
 ## 2. Solution layout
 
@@ -26,7 +26,8 @@ AlMotaheda_ERP/
 │   ├── Host/
 │   │   └── AlMotaheda.Api/             The deployable application (composition root)
 │   ├── BuildingBlocks/
-│   │   └── AlMotaheda.BuildingBlocks/  Technical code shared by modules (no business logic)
+│   │   ├── AlMotaheda.BuildingBlocks/       Technical code shared by modules (no business logic)
+│   │   └── AlMotaheda.BuildingBlocks.Data/  SQL Server helpers shared by modules that own tables
 │   └── Modules/
 │       ├── Access/
 │       │   ├── AlMotaheda.Modules.Access/
@@ -47,7 +48,8 @@ AlMotaheda_ERP/
 | Project | Purpose | May reference |
 |---|---|---|
 | `AlMotaheda.Api` | The application that gets deployed. It wires up infrastructure (logging, errors, health checks, API docs) and plugs in the modules. No business logic. | BuildingBlocks, all modules |
-| `AlMotaheda.BuildingBlocks` | Technical, business-neutral code that every module needs: the `IModule` contract and module registration, the permission check (`RequirePermission`), the access-token claim names, and error responses with a `code` (`ApiProblem`). | .NET framework only |
+| `AlMotaheda.BuildingBlocks` | Technical, business-neutral code that every module needs: the `IModule` contract and module registration, the permission and role checks (`RequirePermission`, `RequireRole`), the access-token claim names, error responses with a `code` (`ApiProblem`), and the shared input rules (`ValidationErrors`, `Input`, `NumberInput`, `Paging`, `RowVersions`). | .NET framework only (no EF Core; a test checks it) |
+| `AlMotaheda.BuildingBlocks.Data` | SQL Server helpers for modules that own tables: application locks (`SqlAppLock`), constraint-failure checks (`SqlViolations`), CHECK lists (`SqlList`), the shared column types (`StorageConventions`), and applying a module's migrations at startup (`ModuleMigrations`). | EF Core SQL Server only |
 | `AlMotaheda.Modules.Access` | Sign-in, users, roles and permissions. Issues the access tokens. See its README. | BuildingBlocks, other modules' `.Contracts` |
 | `AlMotaheda.Modules.Access.Contracts` | What other modules may ask Access: user names, roles and status (`IUserDirectory`), and "is this caller still an active Executive?" (`IExecutiveCheck`). Interfaces and records only. | Nothing |
 | `AlMotaheda.Modules.Projects` | Construction projects, their teams (`ProjectMember`), and project-level access: who may open which project. See its README. | BuildingBlocks, Access.Contracts |
@@ -86,7 +88,7 @@ A `.Contracts` project is created only when another module actually needs someth
    If Archive needs something from Projects, Projects publishes a small `AlMotaheda.Modules.Projects.Contracts`
    project (public interfaces and DTOs only), and Archive references that.
 3. Inside a module, everything is `internal` except the module class itself.
-4. BuildingBlocks never references modules or the host, and holds no business logic.
+4. BuildingBlocks (both projects) never references modules or the host, and holds no business logic.
 5. There are no circular references. This follows from rules 1 to 4.
 6. Every module the host references is listed in `ModuleCatalog`.
 7. Infrastructure vendors stay in the host. Modules use framework abstractions directly
@@ -419,7 +421,9 @@ The Access module issues the tokens; every module checks them through BuildingBl
 ## 8. Adding a new module
 
 1. Create `src/Modules/<Name>/AlMotaheda.Modules.<Name>/`. Copy an existing module's `.csproj`
-   (framework reference + BuildingBlocks reference only).
+   (framework reference, BuildingBlocks and BuildingBlocks.Data references, the two global `Using` items, and EF Core
+   if the module owns tables). Its `DbContext.ConfigureConventions` calls `StorageConventions.Apply`, and its startup
+   class calls `ModuleMigrations.ApplyAsync`.
 2. Add `public sealed class <Name>Module : IModule`. Keep everything else `internal`.
 3. Reference the project from `AlMotaheda.Api.csproj`, and add `new <Name>Module()` to `ModuleCatalog`.
 4. Add the project to `AlMotahedaERP.slnx` (your IDE, or `dotnet sln AlMotahedaERP.slnx add <path>`).

@@ -121,9 +121,3 @@ internal sealed class ProjectMemberConfiguration : IEntityTypeConfiguration<Proj
             .IncludeProperties(member => new { member.ProjectId, member.Responsibility });
     }
 }
-
-/// <summary>Writes a list of names as an SQL <c>IN (...)</c> list for check constraints.</summary>
-internal static class SqlList
-{
-    public static string Of(IEnumerable<string> values) => string.Join(", ", values.Select(value => $"'{value}'"));
-}

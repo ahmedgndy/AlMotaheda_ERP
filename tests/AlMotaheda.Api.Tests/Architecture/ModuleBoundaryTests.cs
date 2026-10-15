@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.Loader;
+using AlMotaheda.BuildingBlocks.Data;
 using AlMotaheda.BuildingBlocks.Modules;
 
 namespace AlMotaheda.Api.Tests.Architecture;
@@ -55,17 +56,35 @@ public sealed class ModuleBoundaryTests
             "Modules must not reference the API host. Violations: " + string.Join(", ", violations));
     }
 
-    [Fact]
-    public void BuildingBlocks_does_not_depend_on_modules_or_the_api_host()
+    public static TheoryData<string> BuildingBlockAssemblies => new()
     {
-        var buildingBlocks = typeof(IModule).Assembly;
+        typeof(IModule).Assembly.GetName().Name!,
+        typeof(SqlAppLock).Assembly.GetName().Name!,
+    };
+
+    [Theory]
+    [MemberData(nameof(BuildingBlockAssemblies))]
+    public void BuildingBlocks_do_not_depend_on_modules_or_the_api_host(string assemblyName)
+    {
+        var buildingBlocks = AssemblyLoadContext.Default.LoadFromAssemblyName(new AssemblyName(assemblyName));
 
         var violations = ReferencedNames(buildingBlocks)
             .Where(name => name.StartsWith(ModulePrefix, StringComparison.Ordinal) || name == HostAssemblyName)
             .ToList();
 
         Assert.True(violations.Count == 0,
-            "BuildingBlocks must stay independent of modules and the host. Violations: " + string.Join(", ", violations));
+            $"{assemblyName} must stay independent of modules and the host. Violations: " + string.Join(", ", violations));
+    }
+
+    [Fact]
+    public void BuildingBlocks_core_does_not_depend_on_ef_core()
+    {
+        // EF Core helpers live in AlMotaheda.BuildingBlocks.Data, so the core building blocks stay database-free.
+        var violations = ReferencedNames(typeof(IModule).Assembly)
+            .Where(name => name.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(violations.Count == 0, "AlMotaheda.BuildingBlocks must not use EF Core. Violations: " + string.Join(", ", violations));
     }
 
     [Fact]

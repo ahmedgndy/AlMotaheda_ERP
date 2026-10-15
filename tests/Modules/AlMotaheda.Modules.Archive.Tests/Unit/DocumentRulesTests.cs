@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using AlMotaheda.BuildingBlocks.Authorization;
+using AlMotaheda.BuildingBlocks.Validation;
 using AlMotaheda.Modules.Archive.Common;
 using AlMotaheda.Modules.Archive.Data;
 using AlMotaheda.Modules.Archive.Features.Documents;

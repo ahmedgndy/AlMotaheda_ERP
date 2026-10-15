@@ -73,7 +73,4 @@ internal sealed class WorkerAssignment
     public int? EndedBy { get; set; }
 
     public byte[] RowVersion { get; set; } = [];
-
-    /// <summary>True when the worker is on the project on <paramref name="date"/>.</summary>
-    public bool Covers(DateOnly date) => StartDate <= date && (EndDate is null || EndDate >= date);
 }

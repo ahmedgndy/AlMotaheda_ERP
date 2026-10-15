@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks\AlMotaheda.BuildingBlocks.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks.Data\AlMotaheda.BuildingBlocks.Data.csproj" />
     <!-- User names and roles. -->
     <ProjectReference Include="..\..\Access\AlMotaheda.Modules.Access.Contracts\AlMotaheda.Modules.Access.Contracts.csproj" />
     <!-- Which projects a caller may see, project items, and the cost figures this module reports to the project screens. -->
@@ -30,6 +31,13 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="AlMotaheda.Modules.Workforce.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Shared input rules (ValidationErrors, Input, NumberInput, Paging, RowVersions) and SQL Server helpers
+         (SqlAppLock, SqlViolations, SqlList, ModuleMigrations), used by most slices. -->
+    <Using Include="AlMotaheda.BuildingBlocks.Validation" />
+    <Using Include="AlMotaheda.BuildingBlocks.Data" />
   </ItemGroup>
 
 </Project>

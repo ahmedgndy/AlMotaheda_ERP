@@ -3,27 +3,6 @@ using System.Text.RegularExpressions;
 
 namespace AlMotaheda.Modules.Access.Common;
 
-/// <summary>Collects field errors for a 400 response. Field names match the JSON property names.</summary>
-internal sealed class ValidationErrors
-{
-    private readonly Dictionary<string, List<string>> _errors = new(StringComparer.Ordinal);
-
-    public bool HasErrors => _errors.Count > 0;
-
-    public void Add(string field, string message)
-    {
-        if (!_errors.TryGetValue(field, out var messages))
-        {
-            _errors[field] = messages = [];
-        }
-
-        messages.Add(message);
-    }
-
-    public IDictionary<string, string[]> ToDictionary() =>
-        _errors.ToDictionary(entry => entry.Key, entry => entry.Value.ToArray(), StringComparer.Ordinal);
-}
-
 /// <summary>
 /// The rules for user fields, shared by every slice that accepts them. The server is the authority:
 /// the frontend may check the same rules for convenience, but these always run.

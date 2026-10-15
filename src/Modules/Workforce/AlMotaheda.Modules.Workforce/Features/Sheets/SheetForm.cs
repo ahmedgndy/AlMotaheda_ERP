@@ -175,7 +175,7 @@ internal static class SheetForm
             return null;
         }
 
-        var before = errors.Count;
+        var before = errors.FieldCount;
 
         if (line.WorkerId is null or < 1)
         {
@@ -219,7 +219,7 @@ internal static class SheetForm
         var adjustments = ValidateAdjustments(line.Adjustments, $"{field}.adjustments", errors);
         var allocations = ValidatePortions(line.Allocations, $"{field}.allocations", errors);
 
-        if (errors.Count != before || adjustments is null || allocations is null)
+        if (errors.FieldCount != before || adjustments is null || allocations is null)
         {
             return null;
         }
@@ -241,7 +241,7 @@ internal static class SheetForm
         }
 
         var clean = new List<AdjustmentForm>(adjustments.Count);
-        var before = errors.Count;
+        var before = errors.FieldCount;
 
         for (var index = 0; index < adjustments.Count; index++)
         {
@@ -279,6 +279,6 @@ internal static class SheetForm
             }
         }
 
-        return errors.Count == before ? clean : null;
+        return errors.FieldCount == before ? clean : null;
     }
 }

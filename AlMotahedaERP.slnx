@@ -10,6 +10,7 @@
   </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/BuildingBlocks/">
+    <Project Path="src/BuildingBlocks/AlMotaheda.BuildingBlocks.Data/AlMotaheda.BuildingBlocks.Data.csproj" />
     <Project Path="src/BuildingBlocks/AlMotaheda.BuildingBlocks/AlMotaheda.BuildingBlocks.csproj" />
   </Folder>
   <Folder Name="/src/Host/">

@@ -17,7 +17,5 @@ internal static class ExecutiveOnly
 {
     public static TBuilder RequireExecutive<TBuilder>(this TBuilder builder)
         where TBuilder : IEndpointConventionBuilder =>
-        builder.RequireAuthorization(PermissionAuthorization.SignedInPolicy()
-            .RequireClaim(AccessClaims.Role, RoleCodes.Executive)
-            .Build());
+        builder.RequireRole(RoleCodes.Executive);
 }

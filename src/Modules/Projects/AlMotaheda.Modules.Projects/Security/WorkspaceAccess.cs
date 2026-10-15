@@ -55,10 +55,4 @@ internal sealed record WorkspaceProject(
     public bool WritesBlocked => IsCompleted && !Caller.IsExecutive;
 
     public bool CallerIsManager => Responsibility == MemberResponsibility.ProjectManager;
-
-    /// <summary>
-    /// True when the caller may change the project's structure (its items, its budget draft): projects Edit, and an
-    /// Executive or this project's manager. The same rule as editing the project itself (decision D3).
-    /// </summary>
-    public bool CallerManagesProject => Caller.Can(PermissionAction.Edit) && (Caller.IsExecutive || CallerIsManager);
 }
