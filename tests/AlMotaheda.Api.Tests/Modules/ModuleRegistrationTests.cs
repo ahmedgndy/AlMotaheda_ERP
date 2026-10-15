@@ -1,5 +1,7 @@
 using System.Net;
+using System.Reflection;
 using AlMotaheda.BuildingBlocks.Modules;
+using AlMotaheda.Modules.Projects.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -20,6 +22,25 @@ public sealed class ModuleRegistrationTests
         // The order matters: each module's startup applies its migrations in this order. The Projects tables point
         // to access.User, and the other modules' tables point to projects tables, so: Access, Projects, the rest.
         Assert.Equal(new[] { "Access", "Projects", "Workforce", "Subcontractors", "Fleet", "Archive" }, registered);
+    }
+
+    [Fact]
+    public async Task Every_project_record_kind_is_answered_by_exactly_one_module()
+    {
+        // A document link or a daily report row is only stored after the owning module confirms the record is on the
+        // project. A kind nobody owns would be refused everywhere; a kind owned twice would be ambiguous.
+        var database = new StandInDatabase();
+        await using var app = await TestApplication.StartAsync(configureBuilder: database.AddTo);
+        using var scope = app.Services.CreateScope();
+
+        var owned = scope.ServiceProvider.GetServices<IProjectRecordOwnership>().SelectMany(owner => owner.Kinds).ToList();
+        var kinds = typeof(ProjectRecordKinds).GetFields(BindingFlags.Public | BindingFlags.Static)
+            .Where(field => field.IsLiteral)
+            .Select(field => (string)field.GetRawConstantValue()!)
+            .ToList();
+
+        Assert.Equal(10, kinds.Count);
+        Assert.Equal(kinds.Order(StringComparer.Ordinal), owned.Order(StringComparer.Ordinal));
     }
 
     [Fact]

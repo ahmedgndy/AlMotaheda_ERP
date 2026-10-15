@@ -76,6 +76,7 @@ in `docs/project-workspace/05-fleet.md`; the shared rules are in `00-overview.md
 | `POST /api/projects/{pid}/equipment-costs/{id}/reject` | equipment Approve. `{ note, rowVersion }` |
 | `POST /api/projects/{pid}/equipment-costs/{id}/payment` | payments Create. `{ paidOn, method, reference?, rowVersion }` |
 | `POST /api/projects/{pid}/equipment-costs/{id}/payment/void` | payments Approve. `{ reason, rowVersion }` |
+| `GET /api/projects/{pid}/equipment-costs/{id}/voided-payments` | equipment View, and See money or the recorder (else 404). Every voided payment, newest first |
 | `GET /api/projects/{pid}/equipment-summary` | equipment See money |
 
 Cost form: `equipmentId`, `costDate`, `type`, `channel`, and for fuel `liters` and `pricePerLiter`; for other types
@@ -132,8 +133,6 @@ project's lock (`AppLock`). The filtered unique indexes are the last guard: a lo
 - One payment per credit cost, for the full amount (F2). No partial payments, no idempotency key: the `rowVersion`
   makes a retried request harmless (409 `already_paid` or `concurrency_conflict`).
 - Custody fund balances are not tracked (overview 3.3).
-- The history of voided payments (`VoidedEquipmentCostPayment`) is kept in the table but not returned by the API
-  yet; the cost views show the last void only (`lastVoidedPayment`).
 - Until the platform AuditLog table exists, the audit trail is the structured log (`FleetLog`, event ids 5001 to
   5999), by id only.
 

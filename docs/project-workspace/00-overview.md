@@ -206,6 +206,16 @@ public sealed record ProjectCostFigures(
     decimal Committed);   // signed but not executed; 0 when the source has no such idea
 ```
 
+```csharp
+// Implemented by every module that owns records others may point to (Projects, Workforce, Subcontractors, Fleet).
+// Used by Archive (document links) and by Projects (a daily report's subcontract and machine).
+public interface IProjectRecordOwnership
+{
+    IReadOnlyCollection<string> Kinds { get; }   // ProjectRecordKinds.*
+    Task<IReadOnlySet<int>> FindOnProjectAsync(int projectId, string kind, IReadOnlyCollection<int> ids, CancellationToken ct);
+}
+```
+
 The contracts project also holds the shared code lists `MeasurementUnits`, `WorkTypes`, `CostGroups`,
 `ProjectResponsibilities` and `PaymentStates` (string constants with an `All` list and `IsKnown`), and the two
 line records `LaborItemLine` and `SubcontractItemLine`. Read the source for their fields.

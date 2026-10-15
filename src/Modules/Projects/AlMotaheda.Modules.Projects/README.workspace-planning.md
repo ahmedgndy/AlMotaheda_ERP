@@ -81,7 +81,7 @@ the caller's scope answers 404 everywhere, the same as a project that doesn't ex
 | `POST /api/projects/{pid}/price-changes/{priceId}/reject` | catalog Approve + Executive. `{ note }` |
 | `GET /api/projects/{pid}/daily-reports` | site View. `status`, `from`, `to`, `authorUserId`, paging |
 | `GET /api/projects/{pid}/daily-reports/{id}` | site View |
-| `POST /api/projects/{pid}/daily-reports` | site Create. 409 `report_exists` |
+| `POST /api/projects/{pid}/daily-reports` | site Create. 409 `report_exists`. A line's `subContractId` and an equipment row's `equipmentId` must be on this project (asked from Subcontractors and Fleet through `IProjectRecordOwnership`; a machine counts when it has ever been assigned here), else 400 on that field |
 | `PUT /api/projects/{pid}/daily-reports/{id}` | site Create, the author. `rowVersion`. It becomes Submitted again |
 | `POST /api/projects/{pid}/daily-reports/{id}/review` | site Approve, Executive or manager. `{ note?, rowVersion }` |
 | `POST /api/projects/{pid}/daily-reports/{id}/return` | site Approve, Executive or manager. `{ note, rowVersion }` |

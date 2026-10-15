@@ -10,7 +10,9 @@ progress reports, contracts, drawings, invoices, receipts and official papers. T
   `multipart/form-data` upload). One document is one file.
 - **Organise** each document with a category, a title, an optional description and document date, and optional
   links to records of other modules (an expense, a daily report, a subcontract, ...). A link only points to the
-  record; it never copies it.
+  record; it never copies it. The record must be on the same project: the module that owns it is asked
+  (`IProjectRecordOwnership`), and a record of another project, or one that doesn't exist, answers 400 on that
+  link's `entityId`. Links a document already has are kept as they are when the list is replaced.
 - **Find** documents by category, kind, text (title, description, file name), upload date, uploader or linked record.
 - **Download** any document; **preview** PDF, images and video in the browser. Video can seek (range requests).
 - **Edit** the metadata and the links; **delete** (soft: the row is hidden, the file is kept).
@@ -127,8 +129,6 @@ nginx, `client_max_body_size`. Kestrel needs nothing: the endpoint raises its ow
 
 ## Known limits (accepted)
 
-- The record a link points to is not checked: it lives in another module and no contract answers "does expense 5
-  exist on this project?" yet. Links are checked for shape only (known type, positive id).
 - A document's file can't be replaced; delete it and upload again. Deleted files stay on the disk (soft delete);
   there is no purge job yet.
 - There is no virus scan. The type check, `nosniff` and the `sandbox` policy stop a file from running in the
