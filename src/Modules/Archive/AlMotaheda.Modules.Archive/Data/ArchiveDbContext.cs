@@ -14,6 +14,10 @@ internal sealed class ArchiveDbContext(DbContextOptions<ArchiveDbContext> option
     /// <summary>The module keeps its own migration history, so each module's migrations stay independent.</summary>
     public const string MigrationsHistoryTable = "__EFMigrationsHistory";
 
+    public DbSet<Document> Documents => Set<Document>();
+
+    public DbSet<DocumentLink> DocumentLinks => Set<DocumentLink>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(Schema);

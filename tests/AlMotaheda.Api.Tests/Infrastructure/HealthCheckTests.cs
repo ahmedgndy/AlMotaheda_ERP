@@ -36,8 +36,8 @@ public sealed class HealthCheckTests
         Assert.Equal(HttpStatusCode.ServiceUnavailable, readiness.StatusCode);
         using var body = JsonDocument.Parse(await readiness.Content.ReadAsStringAsync());
         Assert.Equal("Unhealthy", body.RootElement.GetProperty("status").GetString());
-        var check = Assert.Single(body.RootElement.GetProperty("checks").EnumerateArray());
-        Assert.Equal("failing-dependency", check.GetProperty("name").GetString());
+        var check = Assert.Single(
+            body.RootElement.GetProperty("checks").EnumerateArray(), entry => entry.GetProperty("name").GetString() == "failing-dependency");
 
         Assert.Equal(HttpStatusCode.OK, liveness.StatusCode);
     }
@@ -54,8 +54,8 @@ public sealed class HealthCheckTests
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.DoesNotContain("secret", content, StringComparison.OrdinalIgnoreCase);
         using var body = JsonDocument.Parse(content);
-        var check = Assert.Single(body.RootElement.GetProperty("checks").EnumerateArray());
-        Assert.Equal("database", check.GetProperty("name").GetString());
+        var check = Assert.Single(
+            body.RootElement.GetProperty("checks").EnumerateArray(), entry => entry.GetProperty("name").GetString() == "database");
         Assert.False(check.TryGetProperty("description", out _));
     }
 
@@ -67,7 +67,8 @@ public sealed class HealthCheckTests
         var response = await app.Client.GetAsync("/health");
 
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        var check = Assert.Single(body.RootElement.GetProperty("checks").EnumerateArray());
+        var check = Assert.Single(
+            body.RootElement.GetProperty("checks").EnumerateArray(), entry => entry.GetProperty("name").GetString() == "database");
         Assert.Equal(SecretMessage, check.GetProperty("description").GetString());
     }
 

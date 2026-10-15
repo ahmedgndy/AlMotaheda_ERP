@@ -44,6 +44,23 @@ public sealed class ExpenseRulesTests
     }
 
     [Fact]
+    public void Fuel_and_equipment_suppliers_are_refused_because_their_costs_belong_in_site_equipment()
+    {
+        Assert.Equal(
+            [SupplierKind.Equipment, SupplierKind.Fuel],
+            Enum.GetValues<SupplierKind>().Where(ExpenseRules.IsEquipmentSupplier));
+
+        Assert.True(new ExpenseReferences(null, null, SupplierKind.Fuel).IsEquipmentCost);
+        Assert.True(new ExpenseReferences(null, null, SupplierKind.Equipment).IsEquipmentCost);
+        Assert.False(new ExpenseReferences(null, null, SupplierKind.Materials).IsEquipmentCost);
+        Assert.False(new ExpenseReferences(null, null).IsEquipmentCost);
+
+        var problem = CoreProblems.UseEquipmentCosts();
+        Assert.Equal(409, problem.StatusCode);
+        Assert.Equal("use_equipment_costs", problem.ProblemDetails.Extensions["code"]);
+    }
+
+    [Fact]
     public void Allocations_must_name_each_record_once_with_positive_amounts_that_add_up_to_the_payment()
     {
         var errors = new ValidationErrors();

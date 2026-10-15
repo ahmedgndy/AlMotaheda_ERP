@@ -15,6 +15,8 @@ internal static class CoreProblems
     public const string ItemHasRecords = "item_has_records";
     public const string OverAllocation = "over_allocation";
     public const string PaymentAlreadyVoided = "payment_already_voided";
+    public const string EquipmentCostsElsewhere = "use_equipment_costs";
+    public const string ItemGone = "item_removed";
 
     public static ProblemHttpResult SupplierNotFound() => WorkspaceProblems.NotFound("supplier");
 
@@ -61,4 +63,18 @@ internal static class CoreProblems
 
     public static ProblemHttpResult AlreadyVoided() =>
         ApiProblem.Create(StatusCodes.Status409Conflict, PaymentAlreadyVoided, "This payment is already voided.");
+
+    /// <summary>Equipment costs live in Fleet only, so the same fuel or rental is never counted twice (decision F3).</summary>
+    public static ProblemHttpResult UseEquipmentCosts() =>
+        ApiProblem.Create(
+            StatusCodes.Status409Conflict,
+            EquipmentCostsElsewhere,
+            "Equipment fuel, rental and maintenance are recorded in Site equipment, not as a project expense.");
+
+    /// <summary>The project item was deleted by someone else between our check and our save.</summary>
+    public static ProblemHttpResult ItemRemoved() =>
+        ApiProblem.Create(
+            StatusCodes.Status409Conflict,
+            ItemGone,
+            "The project item was removed while you were saving. Reload the items and try again.");
 }

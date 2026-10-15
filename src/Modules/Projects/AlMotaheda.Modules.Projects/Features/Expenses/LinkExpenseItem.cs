@@ -127,6 +127,11 @@ internal static class LinkExpenseItem
         {
             return ApiProblem.ConcurrencyConflictResult();
         }
+        catch (DbUpdateException exception) when (request.ItemId is not null && SqlViolations.IsReferenceOrCheck(exception))
+        {
+            // The item was deleted by someone else after our check: a lost race is a 409, never a 500.
+            return CoreProblems.ItemRemoved();
+        }
 
         log.ExpenseLinked(caller.UserId, projectId, expense.Id, expense.ProjectItemId, previousItemId);
 

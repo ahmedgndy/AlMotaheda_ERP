@@ -21,6 +21,9 @@ internal sealed class ValidationErrors
 
     public bool Has(string field) => _errors.ContainsKey(field);
 
+    /// <summary>How many fields have errors. Lets a form check "did this part add an error?".</summary>
+    public int Count => _errors.Count;
+
     public IDictionary<string, string[]> ToDictionary() =>
         _errors.ToDictionary(entry => entry.Key, entry => entry.Value.ToArray(), StringComparer.Ordinal);
 }

@@ -219,8 +219,12 @@ internal sealed record ExpenseFields(
 /// <summary>What the database said about the ids on the form.</summary>
 /// <param name="ItemStatus">The project item's status when one was named and found; <c>null</c> otherwise.</param>
 /// <param name="CatalogPrice">The approved catalog price on the record's date, when a catalog item was named.</param>
-internal sealed record ExpenseReferences(ProjectItemStatus? ItemStatus, decimal? CatalogPrice)
+/// <param name="SupplierKind">The supplier's kind when one was named and found; <c>null</c> otherwise.</param>
+internal sealed record ExpenseReferences(ProjectItemStatus? ItemStatus, decimal? CatalogPrice, SupplierKind? SupplierKind = null)
 {
+    /// <summary>The supplier sells fuel or equipment: such costs belong in Site equipment (409 <c>use_equipment_costs</c>).</summary>
+    public bool IsEquipmentCost => SupplierKind is { } kind && ExpenseRules.IsEquipmentSupplier(kind);
+
     /// <summary>
     /// Checks that the supplier exists and is active, and that the catalog item and the project item belong to
     /// this project, reporting each problem on its own field. The item's status is returned, not judged: an
@@ -229,20 +233,25 @@ internal sealed record ExpenseReferences(ProjectItemStatus? ItemStatus, decimal?
     public static async Task<ExpenseReferences> ResolveAsync(
         ProjectsDbContext db, int projectId, ExpenseFields fields, ValidationErrors errors, CancellationToken cancellationToken)
     {
+        SupplierKind? supplierKind = null;
         if (fields.SupplierId is { } supplierId)
         {
-            var status = await db.Suppliers.AsNoTracking()
-                .Where(supplier => supplier.Id == supplierId)
-                .Select(supplier => (SupplierStatus?)supplier.Status)
+            var supplier = await db.Suppliers.AsNoTracking()
+                .Where(candidate => candidate.Id == supplierId)
+                .Select(candidate => new { candidate.Status, candidate.Kind })
                 .FirstOrDefaultAsync(cancellationToken);
 
-            if (status is null)
+            if (supplier is null)
             {
                 errors.Add("supplierId", "The supplier was not found.");
             }
-            else if (status != SupplierStatus.Active)
+            else if (supplier.Status != SupplierStatus.Active)
             {
                 errors.Add("supplierId", "This supplier is inactive and can't be chosen for new records.");
+            }
+            else
+            {
+                supplierKind = supplier.Kind;
             }
         }
 
@@ -276,6 +285,6 @@ internal sealed record ExpenseReferences(ProjectItemStatus? ItemStatus, decimal?
             }
         }
 
-        return new ExpenseReferences(itemStatus, catalogPrice);
+        return new ExpenseReferences(itemStatus, catalogPrice, supplierKind);
     }
 }

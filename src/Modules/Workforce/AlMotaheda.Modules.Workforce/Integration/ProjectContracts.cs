@@ -1,24 +1,32 @@
 using AlMotaheda.Modules.Projects.Contracts;
+using AlMotaheda.Modules.Workforce.Data;
+using AlMotaheda.Modules.Workforce.Features.Ledger;
+using Microsoft.EntityFrameworkCore;
 
 namespace AlMotaheda.Modules.Workforce.Integration;
 
-/// <summary>Placeholder until the labor features exist: no labor on any item.</summary>
-internal sealed class LaborItemCosts : ILaborItemCosts
+/// <summary>
+/// The Workforce answer to <see cref="ILaborItemCosts"/>: approved internal labor by project item, for the Projects
+/// items screens. Only approved, non-void lines count; a line's part on one item never shows on another item or in
+/// "not linked".
+/// </summary>
+internal sealed class LaborItemCosts(LaborLedgerSource source, WorkforceDbContext db) : ILaborItemCosts
 {
-    public Task<IReadOnlyList<ItemCostTotal>> TotalsByItemAsync(int projectId, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<ItemCostTotal>>([]);
+    public async Task<IReadOnlyList<ItemCostTotal>> TotalsByItemAsync(int projectId, CancellationToken cancellationToken) =>
+        (await source.LoadAsync(projectId, null, null, withDeductionReasons: false, cancellationToken)).Totals;
 
-    public Task<IReadOnlyList<LaborItemLine>> LinesAsync(int projectId, int? itemId, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<LaborItemLine>>([]);
+    public async Task<IReadOnlyList<LaborItemLine>> LinesAsync(int projectId, int? itemId, CancellationToken cancellationToken) =>
+        (await source.LoadAsync(projectId, null, null, withDeductionReasons: true, cancellationToken)).LinesOf(itemId);
 
-    public Task<bool> HasLinksAsync(int projectId, int itemId, CancellationToken cancellationToken) => Task.FromResult(false);
+    public Task<bool> HasLinksAsync(int projectId, int itemId, CancellationToken cancellationToken) =>
+        LaborQueries.LinksToItem(db, projectId, itemId).AnyAsync(cancellationToken);
 }
 
-/// <summary>Placeholder until the labor features exist: no labor cost.</summary>
-internal sealed class LaborCostSource : IProjectCostSource
+/// <summary>The Workforce answer to <see cref="IProjectCostSource"/> (group Labor), for the overview and the reports.</summary>
+internal sealed class LaborCostSource(LaborLedgerSource source) : IProjectCostSource
 {
     public string Group => CostGroups.Labor;
 
     public Task<ProjectCostFigures> SummarizeAsync(int projectId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken) =>
-        Task.FromResult(ProjectCostFigures.Empty);
+        source.SummarizeAsync(projectId, from, to, cancellationToken);
 }

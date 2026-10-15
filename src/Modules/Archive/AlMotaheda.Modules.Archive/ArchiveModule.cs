@@ -18,8 +18,10 @@ namespace AlMotaheda.Modules.Archive;
 /// This is the only public type in the module.
 /// </summary>
 /// <remarks>
-/// It uses the Projects module only through <c>AlMotaheda.Modules.Projects.Contracts</c> (which projects a caller may
-/// see, project items) and the Access module only through <c>AlMotaheda.Modules.Access.Contracts</c> (user names).
+/// <para>It uses the Projects module only through <c>AlMotaheda.Modules.Projects.Contracts</c> (which projects a caller
+/// may see) and the Access module only through <c>AlMotaheda.Modules.Access.Contracts</c> (uploader names).</para>
+/// <para>It registers its own <c>archive-storage</c> health check and checks its storage folder at startup, so the
+/// host needs no Archive-specific code.</para>
 /// </remarks>
 public sealed class ArchiveModule : IModule
 {
@@ -45,7 +47,7 @@ public sealed class ArchiveModule : IModule
                 RelationalEventId.ConnectionError)));
 
         services.AddCompanyClock();
-        ArchiveFeatures.AddServices(services);
+        ArchiveFeatures.AddServices(services, configuration);
 
         services.AddHostedService<ArchiveStartup>();
     }

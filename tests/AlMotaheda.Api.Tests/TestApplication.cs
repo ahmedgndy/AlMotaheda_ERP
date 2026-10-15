@@ -77,6 +77,8 @@ internal sealed class TestApplication : IAsyncDisposable
             // Required settings, so every test host starts. Tests can override them.
             ["ConnectionStrings:Erp"] = NoDatabaseConnectionString,
             ["Access:Tokens:SigningKey"] = TestSigningKey,
+            // The Archive module checks its storage folder at startup and requires one in Production.
+            ["Archive:Storage:RootPath"] = Path.Combine(Path.GetTempPath(), "almotaheda-api-tests", "archive"),
         });
 
         if (configuration is not null)

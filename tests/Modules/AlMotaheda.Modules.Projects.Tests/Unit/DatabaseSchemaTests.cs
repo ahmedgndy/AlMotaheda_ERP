@@ -19,7 +19,7 @@ public sealed class DatabaseSchemaTests
         using var db = CreateContext();
 
         Assert.False(db.Database.HasPendingModelChanges(), "The model changed without a migration. Run dotnet ef migrations add.");
-        Assert.Equal(["InitialProjects"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
+        Assert.Equal(["InitialProjects", "ProjectWorkspace"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
     }
 
     [Fact]
@@ -81,6 +81,20 @@ public sealed class DatabaseSchemaTests
         Assert.Contains(
             "ALTER TABLE [projects].[ProjectMember] ADD CONSTRAINT [FK_ProjectMember_User_UserId] FOREIGN KEY ([UserId]) REFERENCES [access].[User] ([Id])",
             script);
+        Assert.Contains(
+            "ALTER TABLE [projects].[DailyReport] ADD CONSTRAINT [FK_DailyReport_User_AuthorUserId] FOREIGN KEY ([AuthorUserId]) REFERENCES [access].[User] ([Id])",
+            script);
+        Assert.Contains(
+            "ALTER TABLE [projects].[ReportRequest] ADD CONSTRAINT [FK_ReportRequest_User_RequesterUserId] FOREIGN KEY ([RequesterUserId]) REFERENCES [access].[User] ([Id])",
+            script);
+        Assert.Contains(
+            "ALTER TABLE [projects].[ReportRequest] ADD CONSTRAINT [FK_ReportRequest_User_RecipientUserId] FOREIGN KEY ([RecipientUserId]) REFERENCES [access].[User] ([Id])",
+            script);
+        // The workspace tables come after the first migration, so the order of the two is part of the contract.
+        Assert.True(
+            script.IndexOf("[projects].[ProjectMember]", StringComparison.Ordinal)
+            < script.IndexOf("CREATE TABLE [projects].[ProjectItem]", StringComparison.Ordinal));
+        Assert.DoesNotContain("ON DELETE CASCADE", script);
         Assert.Contains("[projects].[__EFMigrationsHistory]", script);
     }
 

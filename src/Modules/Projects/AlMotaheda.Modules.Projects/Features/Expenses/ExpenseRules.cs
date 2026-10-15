@@ -46,6 +46,12 @@ internal static class ExpenseRules
     }
 
     /// <summary>
+    /// Fuel, rental, maintenance and repair of equipment are recorded only in Site equipment (Fleet), so a supply or
+    /// expense from a fuel or equipment supplier is refused: the same cost would otherwise count twice (decision F3).
+    /// </summary>
+    public static bool IsEquipmentSupplier(SupplierKind kind) => kind is SupplierKind.Fuel or SupplierKind.Equipment;
+
+    /// <summary>
     /// The link to a project item can change in any status except Rejected: a rejected record is final and is
     /// never a cost, so moving it between items would mean nothing.
     /// </summary>

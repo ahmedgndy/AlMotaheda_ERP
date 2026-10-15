@@ -1,24 +1,176 @@
 using AlMotaheda.Modules.Projects.Contracts;
+using AlMotaheda.Modules.Subcontractors.Data;
+using AlMotaheda.Modules.Subcontractors.Features.Accounts;
+using Microsoft.EntityFrameworkCore;
 
 namespace AlMotaheda.Modules.Subcontractors.Integration;
 
-/// <summary>Placeholder until the subcontract features exist: no subcontract work on any item.</summary>
-internal sealed class SubcontractItemCosts : ISubcontractItemCosts
+/// <summary>
+/// The Subcontractors module's answer to <see cref="ISubcontractItemCosts"/>: approved subcontract work per project
+/// item, for the Projects items screens. Projects never reads this module's tables.
+/// </summary>
+/// <remarks>
+/// A measurement counts on the project item of its contract item; a manpower sheet on its own project item. Only
+/// approved work is included, and the contract value never is.
+/// </remarks>
+internal sealed class SubcontractItemCosts(SubcontractorsDbContext db) : ISubcontractItemCosts
 {
-    public Task<IReadOnlyList<ItemCostTotal>> TotalsByItemAsync(int projectId, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<ItemCostTotal>>([]);
+    public async Task<IReadOnlyList<ItemCostTotal>> TotalsByItemAsync(int projectId, CancellationToken cancellationToken)
+    {
+        var work = await ItemCostQueries.ApprovedWork(db, projectId, itemFilter: false, itemId: null).ToListAsync(cancellationToken);
+        return SubcontractFigures.ItemTotals(work.Select(row => row.Work));
+    }
 
-    public Task<IReadOnlyList<SubcontractItemLine>> LinesAsync(int projectId, int? itemId, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<SubcontractItemLine>>([]);
+    public async Task<IReadOnlyList<SubcontractItemLine>> LinesAsync(int projectId, int? itemId, CancellationToken cancellationToken)
+    {
+        var rows = await ItemCostQueries.ApprovedWork(db, projectId, itemFilter: true, itemId).ToListAsync(cancellationToken);
 
-    public Task<bool> HasLinksAsync(int projectId, int itemId, CancellationToken cancellationToken) => Task.FromResult(false);
+        return rows
+            .OrderByDescending(row => row.Date)
+            .ThenBy(row => row.Kind)
+            .ThenByDescending(row => row.Id)
+            .Select(row => row.ToLine())
+            .ToList();
+    }
+
+    public async Task<bool> HasLinksAsync(int projectId, int itemId, CancellationToken cancellationToken) =>
+        await db.ContractItems.AnyAsync(item => item.ProjectItemId == itemId && item.Contract.ProjectId == projectId, cancellationToken)
+        || await db.ManpowerSheets.AnyAsync(sheet => sheet.ProjectItemId == itemId && sheet.Contract.ProjectId == projectId, cancellationToken);
 }
 
-/// <summary>Placeholder until the subcontract features exist: no subcontract cost.</summary>
-internal sealed class SubcontractCostSource : IProjectCostSource
+/// <summary>
+/// The Subcontractors cost group for the overview and the reports. Recognized = approved work; committed = the
+/// remaining value of the contracts that are not completed.
+/// </summary>
+internal sealed class SubcontractCostSource(SubcontractorsDbContext db) : IProjectCostSource
 {
     public string Group => CostGroups.Subcontractors;
 
-    public Task<ProjectCostFigures> SummarizeAsync(int projectId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken) =>
-        Task.FromResult(ProjectCostFigures.Empty);
+    public async Task<ProjectCostFigures> SummarizeAsync(int projectId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken)
+    {
+        var contracts = await WorkQueries.Contracts(db, projectId).ToListAsync(cancellationToken);
+        if (contracts.Count == 0)
+        {
+            return ProjectCostFigures.Empty;
+        }
+
+        var work = await WorkQueries.LoadWorkAsync(db, projectId, contractId: null, cancellationToken);
+        return SubcontractFigures.CostFigures(contracts, work, from, to);
+    }
+}
+
+/// <summary>One piece of approved work with the names the items screens show.</summary>
+internal sealed class ItemWorkRow
+{
+    public WorkKind Kind { get; init; }
+    public int Id { get; init; }
+    public int ContractId { get; init; }
+    public string? ContractNo { get; init; }
+    public int SubcontractorId { get; init; }
+    public string SubcontractorNameAr { get; init; } = "";
+    public string SubcontractorNameEn { get; init; } = "";
+    public SubcontractorSpecialty Specialty { get; init; }
+    public int? ContractItemId { get; init; }
+    public int? ProjectItemId { get; init; }
+    public string Description { get; init; } = "";
+    public DateOnly Date { get; init; }
+    public decimal Quantity { get; init; }
+    public string Unit { get; init; } = "";
+    public decimal UnitPrice { get; init; }
+    public decimal Amount { get; init; }
+    public decimal Allocated { get; init; }
+
+    public WorkRow Work => new(Kind, Id, ContractId, SubcontractorId, ContractItemId, ProjectItemId, Date, Amount, WorkStatus.Approved, Allocated);
+
+    public SubcontractItemLine ToLine() => new(
+        Kind.ToString(),
+        Id,
+        ContractId,
+        ContractNo,
+        SubcontractorId,
+        SubcontractorNameAr,
+        SubcontractorNameEn,
+        Specialty.ToString(),
+        ContractItemId,
+        Description,
+        Date,
+        Quantity,
+        Unit,
+        UnitPrice,
+        Amount,
+        Allocated,
+        Amount - Allocated,
+        PaymentStates.Of(Amount, Allocated));
+}
+
+/// <summary>The queries behind the items contracts, as <see cref="IQueryable{T}"/> so tests can prove they translate.</summary>
+internal static class ItemCostQueries
+{
+    /// <summary>
+    /// The approved measurements and manpower sheets of a project. With <paramref name="itemFilter"/>, only those on
+    /// <paramref name="itemId"/>, or those not linked yet when it is <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    /// A manpower sheet's quantity is in worker-days (workers × days) at its daily rate; its description is its
+    /// work type, which the client shows in its own language.
+    /// </remarks>
+    public static IQueryable<ItemWorkRow> ApprovedWork(SubcontractorsDbContext db, int projectId, bool itemFilter, int? itemId)
+    {
+        var measurements = db.ProgressMeasurements.AsNoTracking()
+            .Where(measurement => measurement.ContractItem.Contract.ProjectId == projectId && measurement.Status == WorkStatus.Approved);
+        var sheets = db.ManpowerSheets.AsNoTracking()
+            .Where(sheet => sheet.Contract.ProjectId == projectId && sheet.Status == WorkStatus.Approved);
+
+        if (itemFilter)
+        {
+            measurements = measurements.Where(measurement => measurement.ContractItem.ProjectItemId == itemId);
+            sheets = sheets.Where(sheet => sheet.ProjectItemId == itemId);
+        }
+
+        return measurements
+            .Select(measurement => new ItemWorkRow
+            {
+                Kind = WorkKind.Measurement,
+                Id = measurement.Id,
+                ContractId = measurement.ContractItem.ContractId,
+                ContractNo = measurement.ContractItem.Contract.ContractNo,
+                SubcontractorId = measurement.ContractItem.Contract.SubcontractorId,
+                SubcontractorNameAr = measurement.ContractItem.Contract.Subcontractor.NameAr,
+                SubcontractorNameEn = measurement.ContractItem.Contract.Subcontractor.NameEn,
+                Specialty = measurement.ContractItem.Contract.Subcontractor.Specialty,
+                ContractItemId = measurement.ContractItemId,
+                ProjectItemId = measurement.ContractItem.ProjectItemId,
+                Description = measurement.ContractItem.Name,
+                Date = measurement.MeasuredOn,
+                Quantity = measurement.Quantity,
+                Unit = measurement.ContractItem.Unit,
+                UnitPrice = measurement.UnitPrice,
+                Amount = measurement.Amount,
+                Allocated = db.SubPaymentAllocations
+                    .Where(allocation => allocation.MeasurementId == measurement.Id && allocation.Payment.VoidedAt == null)
+                    .Sum(allocation => allocation.Amount),
+            })
+            .Concat(sheets.Select(sheet => new ItemWorkRow
+            {
+                Kind = WorkKind.Manpower,
+                Id = sheet.Id,
+                ContractId = sheet.ContractId,
+                ContractNo = sheet.Contract.ContractNo,
+                SubcontractorId = sheet.Contract.SubcontractorId,
+                SubcontractorNameAr = sheet.Contract.Subcontractor.NameAr,
+                SubcontractorNameEn = sheet.Contract.Subcontractor.NameEn,
+                Specialty = sheet.Contract.Subcontractor.Specialty,
+                ContractItemId = null,
+                ProjectItemId = sheet.ProjectItemId,
+                Description = sheet.WorkType,
+                Date = sheet.ToDate,
+                Quantity = sheet.Workers * sheet.Days,
+                Unit = MeasurementUnits.Day,
+                UnitPrice = sheet.DailyRate,
+                Amount = sheet.Amount,
+                Allocated = db.SubPaymentAllocations
+                    .Where(allocation => allocation.ManpowerSheetId == sheet.Id && allocation.Payment.VoidedAt == null)
+                    .Sum(allocation => allocation.Amount),
+            }));
+    }
 }

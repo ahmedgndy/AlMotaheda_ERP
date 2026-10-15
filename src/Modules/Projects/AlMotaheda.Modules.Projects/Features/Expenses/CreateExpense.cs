@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.EntityFrameworkCore;
 
 namespace AlMotaheda.Modules.Projects.Features.Expenses;
 
@@ -87,6 +88,11 @@ internal static class CreateExpense
             return ProjectProblems.Validation(errors);
         }
 
+        if (references.IsEquipmentCost)
+        {
+            return CoreProblems.UseEquipmentCosts();
+        }
+
         if (references.ItemStatus is ProjectItemStatus.Inactive)
         {
             return WorkspaceProblems.InactiveItem();
@@ -111,7 +117,16 @@ internal static class CreateExpense
         }
 
         db.ProjectExpenses.Add(expense);
-        await db.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (expense.ProjectItemId is not null && SqlViolations.IsReferenceOrCheck(exception))
+        {
+            // The item was deleted by someone else after our check: a lost race is a 409, never a 500.
+            return CoreProblems.ItemRemoved();
+        }
         log.ExpenseRecorded(caller.UserId, projectId, expense.Id, expense.Kind.ToString(), expense.Channel.ToString());
 
         var view = await ExpenseView.LoadAsync(db, users, projectId, expense.Id, cancellationToken);

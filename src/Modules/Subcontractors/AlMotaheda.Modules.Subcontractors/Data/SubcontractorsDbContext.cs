@@ -14,6 +14,14 @@ internal sealed class SubcontractorsDbContext(DbContextOptions<SubcontractorsDbC
     /// <summary>The module keeps its own migration history, so each module's migrations stay independent.</summary>
     public const string MigrationsHistoryTable = "__EFMigrationsHistory";
 
+    public DbSet<Subcontractor> Subcontractors => Set<Subcontractor>();
+    public DbSet<SubContract> SubContracts => Set<SubContract>();
+    public DbSet<ContractItem> ContractItems => Set<ContractItem>();
+    public DbSet<ProgressMeasurement> ProgressMeasurements => Set<ProgressMeasurement>();
+    public DbSet<ManpowerSheet> ManpowerSheets => Set<ManpowerSheet>();
+    public DbSet<SubPayment> SubPayments => Set<SubPayment>();
+    public DbSet<SubPaymentAllocation> SubPaymentAllocations => Set<SubPaymentAllocation>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(Schema);

@@ -9,6 +9,9 @@ internal sealed class ValidationErrors
 
     public bool HasErrors => _errors.Count > 0;
 
+    /// <summary>How many fields have errors; lets a nested form tell whether it added any.</summary>
+    public int FieldCount => _errors.Count;
+
     public void Add(string field, string message)
     {
         if (!_errors.TryGetValue(field, out var messages))
@@ -96,6 +99,40 @@ internal static class Input
 
         result = default;
         return false;
+    }
+
+    /// <summary>
+    /// An optional enum filter or field: <c>null</c> when empty, otherwise one of the names (any letter case), and
+    /// a field error listing the names when it is none of them.
+    /// </summary>
+    public static TEnum? OptionalName<TEnum>(string? value, ValidationErrors errors, string field)
+        where TEnum : struct, Enum
+    {
+        if (Clean(value) is not { } text)
+        {
+            return null;
+        }
+
+        if (TryParseName<TEnum>(text, out var parsed))
+        {
+            return parsed;
+        }
+
+        errors.Add(field, $"{field} must be one of: {string.Join(", ", Enum.GetNames<TEnum>())}.");
+        return null;
+    }
+
+    /// <summary>A required enum field: one of the names (any letter case).</summary>
+    public static TEnum? RequiredName<TEnum>(string? value, ValidationErrors errors, string field)
+        where TEnum : struct, Enum
+    {
+        if (TryParseName<TEnum>(value, out var parsed))
+        {
+            return parsed;
+        }
+
+        errors.Add(field, $"{field} must be one of: {string.Join(", ", Enum.GetNames<TEnum>())}.");
+        return null;
     }
 
     private static DateOnly? ParseDate(string text, ValidationErrors errors, string field, string label)

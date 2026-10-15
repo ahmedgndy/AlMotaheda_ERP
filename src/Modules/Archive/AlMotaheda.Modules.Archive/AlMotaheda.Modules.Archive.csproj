@@ -22,9 +22,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks\AlMotaheda.BuildingBlocks.csproj" />
-    <!-- User names and roles. -->
+    <!-- Uploader names (IUserDirectory). -->
     <ProjectReference Include="..\..\Access\AlMotaheda.Modules.Access.Contracts\AlMotaheda.Modules.Access.Contracts.csproj" />
-    <!-- Which projects a caller may see, project items, and the cost figures this module reports to the project screens. -->
+    <!-- Which projects a caller may see (IProjectAccess). -->
     <ProjectReference Include="..\..\Projects\AlMotaheda.Modules.Projects.Contracts\AlMotaheda.Modules.Projects.Contracts.csproj" />
   </ItemGroup>
 

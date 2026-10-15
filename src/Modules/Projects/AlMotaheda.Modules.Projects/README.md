@@ -3,11 +3,18 @@
 Construction projects, who is on each project, and who may open which project. The decisions behind it are in the
 "Project Domain Analysis" document (decisions D1 to D17); this module applies its recommendations.
 
+The Project Workspace adds two more parts to this module. Each has its own page:
+
+- [Part 1: suppliers, project items ("بنود"), expenses and supplies, supplier payments](README.workspace-core.md)
+- [Part 2: budgets, items and prices, daily site reports, report requests, overview and reports](README.workspace-planning.md)
+
+The design of the whole workspace is in `docs/project-workspace/`.
+
 ## What it does
 
 - **Projects:** list (search, status filter, paging, counters), view, create, edit. Projects are never deleted;
-  a finished project is set to Completed. No money is stored in this version: no budget, contract value or
-  opening figures (D1). The client is text (D7).
+  a finished project is set to Completed. The `Project` table itself holds no money: budgets, costs and
+  payments live in their own tables (decision G1 replaces D1). The client is text (D7).
 - **Team (membership):** one table, `ProjectMember`, replaces the prototype's four lists (`managerId`,
   `engineerIds`, `team` and the user's `projects`). Each row is one person on one project in one responsibility:
   - **ProjectManager:** exactly one active per project. An Executive or a Manager.

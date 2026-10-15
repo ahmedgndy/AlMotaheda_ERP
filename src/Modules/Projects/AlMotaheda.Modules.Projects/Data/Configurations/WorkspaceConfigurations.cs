@@ -82,6 +82,7 @@ internal sealed class CatalogItemConfiguration : IEntityTypeConfiguration<Catalo
 {
     /// <summary>Catalog item names are unique within a project. A lost race is answered with 409 <c>catalog_item_exists</c>.</summary>
     public const string NameIndex = "UX_CatalogItem_NameEn";
+    public const string NameArIndex = "UX_CatalogItem_NameAr";
 
     public const int NameMaxLength = 200;
 
@@ -104,6 +105,7 @@ internal sealed class CatalogItemConfiguration : IEntityTypeConfiguration<Catalo
         builder.Property(item => item.RowVersion).IsRowVersion();
 
         builder.HasIndex(item => new { item.ProjectId, item.NameEn }).IsUnique().HasDatabaseName(NameIndex);
+        builder.HasIndex(item => new { item.ProjectId, item.NameAr }).IsUnique().HasDatabaseName(NameArIndex);
 
         builder.HasOne(item => item.Project)
             .WithMany()

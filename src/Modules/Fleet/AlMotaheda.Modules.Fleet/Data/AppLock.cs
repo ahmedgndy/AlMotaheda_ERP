@@ -17,6 +17,9 @@ internal static class AppLock
     /// <summary>The lock name for the records of one project in this module.</summary>
     public static string Project(int projectId) => $"AlMotaheda.Fleet.Project.{projectId}";
 
+    /// <summary>The lock name for one machine: its assignments and rental terms change one at a time.</summary>
+    public static string Equipment(int equipmentId) => $"AlMotaheda.Fleet.Equipment.{equipmentId}";
+
     /// <summary>Takes the lock called <paramref name="resource"/>. Must run inside a transaction. False on timeout.</summary>
     public static async Task<bool> TryAcquireAsync(FleetDbContext db, string resource, CancellationToken cancellationToken)
     {

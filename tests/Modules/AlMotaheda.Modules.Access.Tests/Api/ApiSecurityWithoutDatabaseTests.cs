@@ -266,8 +266,10 @@ public sealed class ApiSecurityWithoutDatabaseTests
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        var check = Assert.Single(body.RootElement.GetProperty("checks").EnumerateArray());
-        Assert.Equal("database", check.GetProperty("name").GetString());
+        // Other checks (the archive storage folder) may be listed too; the database one must be there and failing.
+        var check = Assert.Single(
+            body.RootElement.GetProperty("checks").EnumerateArray(), entry => entry.GetProperty("name").GetString() == "database");
+        Assert.Equal("Unhealthy", check.GetProperty("status").GetString());
         Assert.Equal(HttpStatusCode.OK, liveness.StatusCode);
     }
 

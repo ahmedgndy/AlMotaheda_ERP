@@ -13,7 +13,8 @@ namespace AlMotaheda.Modules.Fleet.Startup;
 /// <c>Database:ApplyMigrationsOnStartup</c> is true (meant for development; servers run the reviewed script).
 /// </summary>
 /// <remarks>
-/// The Fleet tables point to <c>projects.Project</c>, so the Projects migrations must run first. Hosted services
+/// The Fleet tables point to <c>projects.Project</c>, <c>projects.Supplier</c> and <c>access.User</c>, so the Access
+/// and Projects migrations must run first. Hosted services
 /// start one after another in registration order, and <c>ModuleCatalog</c> lists Projects before this module (a
 /// host test checks that order). If the Projects tables are still missing, startup stops here with a clear
 /// message instead of a foreign-key error halfway through the migration.
@@ -41,11 +42,11 @@ internal sealed class FleetStartup(
             return;
         }
 
-        if (!await ProjectTableExistsAsync(db, cancellationToken))
+        if (!await ProjectTablesExistAsync(db, cancellationToken))
         {
             throw new InvalidOperationException(
-                "The Fleet migrations need the projects.Project table. Apply the Access and Projects migrations first "
-                + "(the Projects module must be listed before Fleet in ModuleCatalog).");
+                "The Fleet migrations need the projects.Project and projects.Supplier tables. Apply the Access and Projects "
+                + "migrations first (the Projects module must be listed before Fleet in ModuleCatalog).");
         }
 
         await db.Database.MigrateAsync(cancellationToken);
@@ -54,19 +55,19 @@ internal sealed class FleetStartup(
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    private static async Task<bool> ProjectTableExistsAsync(FleetDbContext db, CancellationToken cancellationToken)
+    private static async Task<bool> ProjectTablesExistAsync(FleetDbContext db, CancellationToken cancellationToken)
     {
         try
         {
             var found = await db.Database
-                .SqlQuery<int>($"SELECT CASE WHEN OBJECT_ID(N'[projects].[Project]', N'U') IS NULL THEN 0 ELSE 1 END AS [Value]")
+                .SqlQuery<int>($"SELECT CASE WHEN OBJECT_ID(N'[projects].[Project]', N'U') IS NULL OR OBJECT_ID(N'[projects].[Supplier]', N'U') IS NULL THEN 0 ELSE 1 END AS [Value]")
                 .ToListAsync(cancellationToken);
 
             return found.Count == 1 && found[0] == 1;
         }
         catch (SqlException)
         {
-            // The database itself doesn't exist yet, so neither does projects.Project.
+            // The database itself doesn't exist yet, so neither do the projects tables.
             return false;
         }
     }

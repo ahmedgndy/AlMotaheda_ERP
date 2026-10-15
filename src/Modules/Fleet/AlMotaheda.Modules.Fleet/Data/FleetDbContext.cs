@@ -14,6 +14,18 @@ internal sealed class FleetDbContext(DbContextOptions<FleetDbContext> options) :
     /// <summary>The module keeps its own migration history, so each module's migrations stay independent.</summary>
     public const string MigrationsHistoryTable = "__EFMigrationsHistory";
 
+    /// <summary>The company's equipment register: one row per machine for its whole life.</summary>
+    public DbSet<Equipment> Equipment => Set<Equipment>();
+
+    public DbSet<EquipmentRental> EquipmentRentals => Set<EquipmentRental>();
+
+    public DbSet<EquipmentAssignment> EquipmentAssignments => Set<EquipmentAssignment>();
+
+    public DbSet<EquipmentCost> EquipmentCosts => Set<EquipmentCost>();
+
+    /// <summary>Every voided payment of an equipment cost: written at the void, never changed.</summary>
+    public DbSet<VoidedEquipmentCostPayment> VoidedEquipmentCostPayments => Set<VoidedEquipmentCostPayment>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(Schema);

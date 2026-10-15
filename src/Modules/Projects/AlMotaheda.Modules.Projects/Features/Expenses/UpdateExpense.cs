@@ -104,6 +104,11 @@ internal static class UpdateExpense
             return ProjectProblems.Validation(errors);
         }
 
+        if (references.IsEquipmentCost)
+        {
+            return CoreProblems.UseEquipmentCosts();
+        }
+
         // Linking to an inactive item is refused, unless the record is already on it (nothing changes then).
         if (references.ItemStatus is ProjectItemStatus.Inactive && fields!.ProjectItemId != expense.ProjectItemId)
         {
@@ -138,6 +143,11 @@ internal static class UpdateExpense
         catch (DbUpdateConcurrencyException)
         {
             return ApiProblem.ConcurrencyConflictResult();
+        }
+        catch (DbUpdateException exception) when (expense.ProjectItemId is not null && SqlViolations.IsReferenceOrCheck(exception))
+        {
+            // The item was deleted by someone else after our check: a lost race is a 409, never a 500.
+            return CoreProblems.ItemRemoved();
         }
 
         log.ExpenseResubmitted(caller.UserId, projectId, expense.Id, oldStatus.ToString());

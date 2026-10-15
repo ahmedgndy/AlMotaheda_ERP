@@ -1,6 +1,7 @@
 using AlMotaheda.BuildingBlocks.Modules;
 using AlMotaheda.BuildingBlocks.Time;
 using AlMotaheda.Modules.Projects.Contracts;
+using AlMotaheda.Modules.Workforce.Common;
 using AlMotaheda.Modules.Workforce.Data;
 using AlMotaheda.Modules.Workforce.Features;
 using AlMotaheda.Modules.Workforce.Integration;
@@ -12,6 +13,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace AlMotaheda.Modules.Workforce;
 
@@ -46,7 +48,11 @@ public sealed class WorkforceModule : IModule
                 RelationalEventId.CommandError,
                 RelationalEventId.ConnectionError)));
 
+        services.AddOptions<WorkforceOptions>().Bind(configuration.GetSection(WorkforceOptions.SectionName)).ValidateOnStart();
+        services.AddSingleton<IValidateOptions<WorkforceOptions>, WorkforceOptionsValidator>();
+
         services.AddCompanyClock();
+        services.AddSingleton<WorkforceLog>();
         services.AddScoped<ILaborItemCosts, LaborItemCosts>();
         services.AddScoped<IProjectCostSource, LaborCostSource>();
         WorkforceFeatures.AddServices(services);

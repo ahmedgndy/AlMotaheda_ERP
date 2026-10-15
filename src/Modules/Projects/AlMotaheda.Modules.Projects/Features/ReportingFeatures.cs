@@ -1,3 +1,5 @@
+using AlMotaheda.Modules.Projects.Features.Overview;
+using AlMotaheda.Modules.Projects.Features.Reports;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -11,10 +13,15 @@ internal static class ReportingFeatures
 {
     public static void AddServices(IServiceCollection services)
     {
+        // Reads the database and asks the other modules' cost sources, once per request.
+        services.AddScoped<ProjectCostLoader>();
     }
 
     /// <param name="projects">The <c>/api/projects</c> group.</param>
     public static void Map(IEndpointRouteBuilder projects)
     {
+        GetProjectOverview.Map(projects);
+        GetCostSummary.Map(projects);
+        GetObligations.Map(projects);
     }
 }

@@ -96,6 +96,8 @@ Dates are `yyyy-MM-dd` and can't be in the future (company time zone). Enums go 
 | 409 | `own_record` | Reviewing a record you recorded |
 | 409 | `invalid_status` | Reviewing a record that isn't Recorded; editing one that isn't Recorded or Returned; linking a rejected record; paying a record that isn't approved credit; deactivating an inactive item |
 | 409 | `item_inactive` | Linking a new record to an inactive item |
+| 409 | `item_removed` | The project item was deleted by someone else while the record was being saved with a link to it |
+| 409 | `use_equipment_costs` | A supply or site expense from a supplier of kind `Fuel` or `Equipment`: equipment fuel, rental and maintenance are recorded in Site equipment (decision F3) |
 | 409 | `item_name_taken`, `item_has_records`, `supplier_exists` | Rule conflicts |
 | 409 | `over_allocation`, `idempotency_key_reused`, `payment_already_voided` | Payment rule conflicts |
 | 409 | `project_completed`, `concurrency_conflict` | Completed project (non-Executive); stale `rowVersion` |

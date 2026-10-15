@@ -60,6 +60,34 @@ public sealed class ExpenseWorkflowTests(SqlServerFixture database)
     }
 
     [DatabaseFact]
+    public async Task Fuel_and_equipment_suppliers_are_refused_because_their_costs_are_recorded_in_site_equipment()
+    {
+        await using var api = await ProjectsApi.StartAsync(database);
+        var cast = await api.CastAsync();
+        var fuel = await api.CreateSupplierAsync(cast.Executive, "Misr Petroleum", kind: "Fuel");
+        var rentals = await api.CreateSupplierAsync(cast.Executive, "Crane Rentals", kind: "Equipment");
+        var cement = await api.CreateSupplierAsync(cast.Executive, "Cemex");
+
+        var fuelSupply = await api.SendAsync(HttpMethod.Post, $"/api/projects/{cast.ProjectId}/expenses", cast.Engineer,
+            SupplyBody(fuel, 500m, 15m, "Credit"));
+        Assert.Equal(HttpStatusCode.Conflict, fuelSupply.StatusCode);
+        Assert.Equal("use_equipment_costs", await CodeOf(fuelSupply));
+
+        var rentalExpense = await api.SendAsync(HttpMethod.Post, $"/api/projects/{cast.ProjectId}/expenses", cast.Engineer,
+            ExpenseBody(3_000m, "Credit", rentals));
+        Assert.Equal(HttpStatusCode.Conflict, rentalExpense.StatusCode);
+        Assert.Equal("use_equipment_costs", await CodeOf(rentalExpense));
+
+        // A record can't be moved to such a supplier when it is fixed either.
+        var recorded = await api.RecordAsync(cast.Engineer, cast.ProjectId, SupplyBody(cement, 10m, 100m, "Credit"));
+        var moved = await api.SendAsync(HttpMethod.Put, $"/api/projects/{cast.ProjectId}/expenses/{recorded.Id()}", cast.Engineer,
+            EditBody(recorded, new() { ["supplierId"] = fuel }));
+        Assert.Equal(HttpStatusCode.Conflict, moved.StatusCode);
+        Assert.Equal("use_equipment_costs", await CodeOf(moved));
+        Assert.Equal(1, (await api.ListExpensesAsync(cast.Executive, cast.ProjectId)).GetProperty("items").GetArrayLength());
+    }
+
+    [DatabaseFact]
     public async Task A_returned_record_is_fixed_and_resubmitted_by_its_recorder_only_and_a_rejected_one_is_final()
     {
         await using var api = await ProjectsApi.StartAsync(database);

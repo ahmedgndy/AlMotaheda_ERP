@@ -21,7 +21,8 @@
 | S2 | Retention is stored on the contract and shown on the contract account (`retentionHeld`, `dueNow`). It is not deducted from an item's outstanding amount | The ERD marks retention release as "confirm with the accountant" |
 | S3 | Paying before work exists is allowed for subcontractors and kept as an unapplied advance | Advances are a payment purpose in the prototype. An advance is never a cost |
 | F1 | Equipment costs are not split over project items | The prototype's items table has suppliers and labor only; no allocation rule exists for equipment |
-| F2 | A `Credit` equipment cost is settled by one full payment | No partial payment in the prototype; avoids a fourth payment table before Finance exists |
+| F2 | A `Credit` equipment cost is settled by one full payment. A void empties the payment and the cost can be paid again; every voided payment is first copied whole, with who voided it, when and why, to `fleet.VoidedEquipmentCostPayment` (insert only) | No partial payment in the prototype; avoids a fourth payment table before Finance exists. Refusing a new payment after a void was rejected: an approved cost can't be undone, so recording it again would count it twice, and the history table keeps "payments are never edited or deleted" |
+| F3 | A supply or site expense (Projects) from a supplier of kind `Fuel` or `Equipment` is refused with 409 `use_equipment_costs` | Equipment fuel, rental and maintenance are recorded only in Site equipment (Fleet); the same cost in both modules would be counted twice. Project expenses already have no equipment category |
 | A1 | Archive permissions reuse the `projects` permission module | There is no documents permission module among the 17 seeded ones |
 
 ## 2. Open business questions (need an answer from the company)
@@ -44,6 +45,19 @@
 9. **Contract value, client certificates and money in** are not built, so the overview has no "certified",
    "received" or "margin".
 10. **Opening balances** ("before the system") are not built.
+11. **Budget approval by its author.** An Executive may approve a budget they drafted (B1 has no "own record"
+    rule, unlike every other approval). Fine with one Executive; should a second person be required?
+
+## 2a. Known technical limits found in the final review (accepted for now)
+
+- Archive document links and daily-report links to subcontracts and equipment are checked for shape only, not
+  that the target record belongs to the same project. Nothing leaks (every list is project-scoped), but a wrong
+  link can be stored. Fix: small "exists on this project" contracts per module.
+- Inline PDF preview is served with `Content-Security-Policy: sandbox`. Some browser PDF viewers refuse that.
+  Test in the target browsers; if blocked, drop `sandbox` for PDFs only or preview with pdf.js in the client.
+- The race "item deleted while a record is linked to it" answers 409 `item_removed`; it has no automated test
+  (it needs two real SQL Server sessions).
+- The voided equipment payment history is stored but not yet returned by the API.
 
 ## 3. Not built in this round
 
