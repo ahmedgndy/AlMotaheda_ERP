@@ -153,7 +153,7 @@ internal static class ExpenseReview
         await transaction.CommitAsync(cancellationToken);
         log.ExpenseReviewed(caller.UserId, projectId, expense.Id, target.ToString());
 
-        var view = await ExpenseView.LoadAsync(db, users, projectId, expense.Id, cancellationToken);
+        var view = await ExpenseView.LoadAsync(db, users, projectId, expense.Id, caller.Can(PermissionAction.SeeMoney), cancellationToken);
         return view is null ? CoreProblems.ExpenseNotFound() : TypedResults.Ok(view);
     }
 }

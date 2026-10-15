@@ -135,7 +135,7 @@ internal static class LinkExpenseItem
 
         log.ExpenseLinked(caller.UserId, projectId, expense.Id, expense.ProjectItemId, previousItemId);
 
-        var view = await ExpenseView.LoadAsync(db, users, projectId, expense.Id, cancellationToken);
+        var view = await ExpenseView.LoadAsync(db, users, projectId, expense.Id, caller.Can(PermissionAction.SeeMoney), cancellationToken);
         return view is null ? CoreProblems.ExpenseNotFound() : TypedResults.Ok(view);
     }
 }

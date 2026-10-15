@@ -51,6 +51,6 @@ internal static class GetExpense
             return CoreProblems.ExpenseNotFound();
         }
 
-        return TypedResults.Ok((await ExpenseView.FromAsync([row], users, cancellationToken))[0]);
+        return TypedResults.Ok((await ExpenseView.FromAsync([row], users, caller.Can(PermissionAction.SeeMoney), cancellationToken))[0]);
     }
 }

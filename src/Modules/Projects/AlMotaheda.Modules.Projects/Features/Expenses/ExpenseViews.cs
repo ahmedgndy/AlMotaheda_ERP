@@ -18,6 +18,11 @@ internal sealed record ExpensePaymentView(int PaymentId, DateOnly Date, string M
 /// <see cref="ExpenseSettlement"/>: <see cref="Recognized"/> is zero until approved, <see cref="Paid"/> follows the
 /// channel, <see cref="PaymentState"/> is empty while nothing is owed.
 /// </summary>
+/// <remarks>
+/// A caller without projects SeeMoney sees only their own records and the amount they typed. How a record was
+/// paid is not theirs to see (owner decision, QA P9-02): <see cref="Paid"/>, <see cref="Outstanding"/> and
+/// <see cref="PaymentState"/> are <c>null</c> and <see cref="Payments"/> is empty for them.
+/// </remarks>
 internal sealed record ExpenseView(
     int Id,
     int ProjectId,
@@ -52,8 +57,8 @@ internal sealed record ExpenseView(
     string? ReviewNote,
     string? Notes,
     decimal Recognized,
-    decimal Paid,
-    decimal Outstanding,
+    decimal? Paid,
+    decimal? Outstanding,
     string? PaymentState,
     IReadOnlyList<ExpensePaymentView> Payments,
     DateTime CreatedAt,
@@ -62,7 +67,7 @@ internal sealed record ExpenseView(
     int? UpdatedBy,
     string RowVersion)
 {
-    public static ExpenseView From(ExpenseRow row, IReadOnlyDictionary<int, UserSummary> people)
+    public static ExpenseView From(ExpenseRow row, IReadOnlyDictionary<int, UserSummary> people, bool seesMoney)
     {
         var settlement = row.Settlement;
 
@@ -100,10 +105,10 @@ internal sealed record ExpenseView(
             row.ReviewNote,
             row.Notes,
             ExpenseSettlement.Recognized(settlement),
-            ExpenseSettlement.Paid(settlement),
-            ExpenseSettlement.Outstanding(settlement),
-            ExpenseSettlement.PaymentState(settlement),
-            row.Payments.Select(ExpensePaymentView.From).ToList(),
+            seesMoney ? ExpenseSettlement.Paid(settlement) : null,
+            seesMoney ? ExpenseSettlement.Outstanding(settlement) : null,
+            seesMoney ? ExpenseSettlement.PaymentState(settlement) : null,
+            seesMoney ? row.Payments.Select(ExpensePaymentView.From).ToList() : [],
             row.CreatedAt,
             PersonRef.From(row.CreatedBy, people),
             row.UpdatedAt,
@@ -113,7 +118,7 @@ internal sealed record ExpenseView(
 
     /// <summary>Builds the views of a page with one name lookup for every recorder and reviewer on it.</summary>
     public static async Task<IReadOnlyList<ExpenseView>> FromAsync(
-        IReadOnlyList<ExpenseRow> rows, IUserDirectory users, CancellationToken cancellationToken)
+        IReadOnlyList<ExpenseRow> rows, IUserDirectory users, bool seesMoney, CancellationToken cancellationToken)
     {
         var userIds = rows.Select(row => row.CreatedBy)
             .Concat(rows.Where(row => row.ReviewedBy is not null).Select(row => row.ReviewedBy!.Value))
@@ -123,14 +128,14 @@ internal sealed record ExpenseView(
             ? new Dictionary<int, UserSummary>()
             : await users.FindAsync(userIds, cancellationToken);
 
-        return rows.Select(row => From(row, people)).ToList();
+        return rows.Select(row => From(row, people, seesMoney)).ToList();
     }
 
     /// <summary>Reads one record of a project back after a write, with its names and payments.</summary>
     public static async Task<ExpenseView?> LoadAsync(
-        ProjectsDbContext db, IUserDirectory users, int projectId, int expenseId, CancellationToken cancellationToken)
+        ProjectsDbContext db, IUserDirectory users, int projectId, int expenseId, bool seesMoney, CancellationToken cancellationToken)
     {
         var row = await ExpenseQueries.One(db, projectId, expenseId).SingleOrDefaultAsync(cancellationToken);
-        return row is null ? null : (await FromAsync([row], users, cancellationToken))[0];
+        return row is null ? null : (await FromAsync([row], users, seesMoney, cancellationToken))[0];
     }
 }
