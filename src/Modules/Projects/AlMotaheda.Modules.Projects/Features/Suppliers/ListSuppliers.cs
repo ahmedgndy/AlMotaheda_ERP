@@ -20,7 +20,7 @@ internal static class ListSuppliers
 
     public static void Map(IEndpointRouteBuilder api) =>
         api.MapGet("/suppliers", HandleAsync)
-            .RequirePermission(ProjectPermissions.Module, PermissionAction.View)
+            .RequireAnyPermission((ProjectPermissions.Module, PermissionAction.View), (ProjectPermissions.ProcurementModule, PermissionAction.View))
             .WithName("ListSuppliers")
             .WithSummary("List the company's suppliers (search: names or phone; status: Active or Inactive; kind)");
 

@@ -56,6 +56,14 @@ internal sealed class ProjectExpense
     public string? InvoiceNo { get; set; }
     public string? DeliveryNoteNo { get; set; }
 
+    /// <summary>
+    /// Set when another module created this record: <c>SupplierInvoiceLine</c> for a posted Procurement invoice line.
+    /// Such a record is approved when created and is never edited as an ordinary expense; the pair is unique, so the
+    /// same invoice line is never counted twice.
+    /// </summary>
+    public string? SourceType { get; set; }
+    public int? SourceId { get; set; }
+
     /// <summary>Optional: the catalog item this supply is a purchase of. Same project.</summary>
     public int? CatalogItemId { get; set; }
     public CatalogItem? CatalogItem { get; set; }

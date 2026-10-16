@@ -18,10 +18,11 @@ public sealed class PermissionTests(SqlServerFixture database)
         var body = await AccessApi.Json(await api.SendAsync(HttpMethod.Get, "/api/roles", executive));
         var roles = body.GetProperty("roles").EnumerateArray().ToDictionary(role => role.GetProperty("code").GetString()!);
 
-        Assert.Equal(18, body.GetProperty("modules").GetArrayLength());
+        Assert.Equal(19, body.GetProperty("modules").GetArrayLength());
         Assert.Equal(["View", "Create", "Edit", "Approve", "SeeMoney"], body.GetProperty("actions").EnumerateArray().Select(action => action.GetString()));
-        Assert.Equal(7, roles.Count);
+        Assert.Equal(8, roles.Count);
         Assert.Equal(["View", "Create", "Edit", "SeeMoney"], Actions(roles["hr"], "hr"));
+        Assert.Equal(["View", "Create", "Edit", "SeeMoney"], Actions(roles["purchasing"], "procurement"));
         Assert.False(roles["executive"].GetProperty("isEditable").GetBoolean());
         Assert.True(roles["manager"].GetProperty("isEditable").GetBoolean());
         Assert.Equal(["View", "Edit", "Approve"], Actions(roles["manager"], "equipment"));
@@ -84,7 +85,7 @@ public sealed class PermissionTests(SqlServerFixture database)
         Assert.Equal(HttpStatusCode.Conflict, roleEdit.StatusCode);
         Assert.Equal("executive_role_locked", await AccessApi.CodeOf(roleEdit));
         Assert.Equal(HttpStatusCode.Conflict, userEdit.StatusCode);
-        Assert.Equal(87, await api.QueryAsync(db => db.RolePermissions.CountAsync(link => link.RoleId == PermissionCatalog.RoleId("executive"))));
+        Assert.Equal(92, await api.QueryAsync(db => db.RolePermissions.CountAsync(link => link.RoleId == PermissionCatalog.RoleId("executive"))));
     }
 
     [DatabaseFact]

@@ -37,4 +37,5 @@ internal static class RoleCodes
     public const string Accountant = AccessRoles.Accountant;
     public const string Staff = AccessRoles.Staff;
     public const string Hr = AccessRoles.Hr;
+    public const string Purchasing = AccessRoles.Purchasing;
 }

@@ -7,38 +7,40 @@ namespace AlMotaheda.Modules.Access.Tests.Unit;
 public sealed class PermissionCatalogTests
 {
     [Fact]
-    public void Catalog_has_18_modules_and_90_permissions_with_unique_ids()
+    public void Catalog_has_19_modules_and_95_permissions_with_unique_ids()
     {
         var permissions = PermissionCatalog.SeedPermissions().ToList();
 
-        Assert.Equal(18, PermissionCatalog.Modules.Count);
-        Assert.Equal(90, permissions.Count);
-        Assert.Equal(90, permissions.Select(permission => permission.Id).Distinct().Count());
-        Assert.Equal(90, permissions.Select(permission => (permission.Module, permission.Action)).Distinct().Count());
-        Assert.Equal(Enumerable.Range(1, 90), permissions.Select(permission => permission.Id).Order());
+        Assert.Equal(19, PermissionCatalog.Modules.Count);
+        Assert.Equal(95, permissions.Count);
+        Assert.Equal(95, permissions.Select(permission => permission.Id).Distinct().Count());
+        Assert.Equal(95, permissions.Select(permission => (permission.Module, permission.Action)).Distinct().Count());
+        Assert.Equal(Enumerable.Range(1, 95), permissions.Select(permission => permission.Id).Order());
 
         // Appended, so the prototype's 85 permissions keep their ids.
         Assert.Equal(86, PermissionCatalog.PermissionId("hr", PermissionAction.View));
+        Assert.Equal(91, PermissionCatalog.PermissionId("procurement", PermissionAction.View));
     }
 
     [Fact]
-    public void Seven_roles_are_seeded_with_214_role_permissions()
+    public void Eight_roles_are_seeded_with_232_role_permissions()
     {
         var roles = PermissionCatalog.SeedRoles().ToList();
         var links = PermissionCatalog.SeedRolePermissions().ToList();
 
-        Assert.Equal(["executive", "manager", "engineer", "office_admin", "accountant", "staff", "hr"], roles.Select(role => role.Code));
-        Assert.Equal(214, links.Count);
-        Assert.Equal(214, links.Select(link => (link.RoleId, link.PermissionId)).Distinct().Count());
+        Assert.Equal(["executive", "manager", "engineer", "office_admin", "accountant", "staff", "hr", "purchasing"], roles.Select(role => role.Code));
+        Assert.Equal(232, links.Count);
+        Assert.Equal(232, links.Select(link => (link.RoleId, link.PermissionId)).Distinct().Count());
 
         var countsByRole = links.GroupBy(link => link.RoleId).ToDictionary(group => group.Key, group => group.Count());
-        Assert.Equal(87, countsByRole[PermissionCatalog.RoleId("executive")]);
-        Assert.Equal(37, countsByRole[PermissionCatalog.RoleId("manager")]);
-        Assert.Equal(16, countsByRole[PermissionCatalog.RoleId("engineer")]);
+        Assert.Equal(92, countsByRole[PermissionCatalog.RoleId("executive")]);
+        Assert.Equal(41, countsByRole[PermissionCatalog.RoleId("manager")]);
+        Assert.Equal(18, countsByRole[PermissionCatalog.RoleId("engineer")]);
         Assert.Equal(8, countsByRole[PermissionCatalog.RoleId("office_admin")]);
-        Assert.Equal(53, countsByRole[PermissionCatalog.RoleId("accountant")]);
+        Assert.Equal(56, countsByRole[PermissionCatalog.RoleId("accountant")]);
         Assert.Equal(9, countsByRole[PermissionCatalog.RoleId("staff")]);
         Assert.Equal(4, countsByRole[PermissionCatalog.RoleId("hr")]);
+        Assert.Equal(4, countsByRole[PermissionCatalog.RoleId("purchasing")]);
     }
 
     [Theory]
@@ -56,6 +58,12 @@ public sealed class PermissionCatalogTests
     [InlineData("accountant", "hr", "VAF")]
     [InlineData("executive", "hr", "VCEAF")]
     [InlineData("manager", "hr", "")]
+    [InlineData("purchasing", "procurement", "VCEF")]
+    [InlineData("purchasing", "site", "")]
+    [InlineData("purchasing", "payments", "")]
+    [InlineData("manager", "procurement", "VCAF")]
+    [InlineData("engineer", "procurement", "VC")]
+    [InlineData("accountant", "procurement", "VAF")]
     public void Role_defaults_match_the_prototype(string role, string module, string expectedLetters)
     {
         var actions = PermissionCatalog.SeedRolePermissions()

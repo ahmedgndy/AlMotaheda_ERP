@@ -46,6 +46,16 @@ public sealed class ProjectCostsTests
     ];
 
     [Fact]
+    public void Materials_takes_only_the_committed_cost_of_open_purchase_orders_from_a_source()
+    {
+        // Procurement reports open purchase orders; invoiced purchases are already this module's supply records.
+        var groups = ProjectCosts.ByGroup(Expenses, [new SourceFigures(CostGroups.Materials, new ProjectCostFigures(1_000_000m, 1_000_000m, 1, 500m, 1, 9_000m))]);
+
+        var materials = Group(groups, CostGroups.Materials);
+        Assert.Equal((65_000.50m, 50_000.50m, 7_000m, 9_000m), (materials.Recognized, materials.Paid, materials.PendingReview, materials.Committed));
+    }
+
+    [Fact]
     public void Every_group_counts_only_approved_records_and_keeps_pending_apart()
     {
         var groups = ProjectCosts.ByGroup(Expenses, Sources);

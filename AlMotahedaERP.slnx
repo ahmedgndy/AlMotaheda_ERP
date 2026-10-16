@@ -34,6 +34,10 @@
   <Folder Name="/src/Modules/HR/">
     <Project Path="src/Modules/HR/AlMotaheda.Modules.HR/AlMotaheda.Modules.HR.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/Procurement/">
+    <Project Path="src/Modules/Procurement/AlMotaheda.Modules.Procurement.Contracts/AlMotaheda.Modules.Procurement.Contracts.csproj" />
+    <Project Path="src/Modules/Procurement/AlMotaheda.Modules.Procurement/AlMotaheda.Modules.Procurement.csproj" />
+  </Folder>
   <Folder Name="/src/Modules/Platform/">
     <Project Path="src/Modules/Platform/AlMotaheda.Modules.Platform/AlMotaheda.Modules.Platform.csproj" />
   </Folder>
@@ -59,6 +63,7 @@
   <Folder Name="/tests/Modules/">
     <Project Path="tests/Modules/AlMotaheda.Modules.Finance.Tests/AlMotaheda.Modules.Finance.Tests.csproj" />
     <Project Path="tests/Modules/AlMotaheda.Modules.HR.Tests/AlMotaheda.Modules.HR.Tests.csproj" />
+    <Project Path="tests/Modules/AlMotaheda.Modules.Procurement.Tests/AlMotaheda.Modules.Procurement.Tests.csproj" />
     <Project Path="tests/Modules/AlMotaheda.Modules.Platform.Tests/AlMotaheda.Modules.Platform.Tests.csproj" />
   </Folder>
 </Solution>

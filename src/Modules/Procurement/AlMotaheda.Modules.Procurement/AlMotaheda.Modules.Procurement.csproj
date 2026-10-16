@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Procurement module: purchase requisitions (with the auto-approval policy), quotations on the Executive's request,
+    purchase orders with revisions, goods receipts, supplier invoices and the 3-way match. Invoices become supplier
+    cost in Projects and are paid through the existing supplier payment requests.
+    Allowed references: BuildingBlocks and other modules' *.Contracts projects only.
+    Everything except ProcurementModule stays internal.
+  -->
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The module owns its tables, so it owns its EF Core context and migrations (schema "proc"). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <!-- Design-time only: lets `dotnet ef` create migrations for this module. Not shipped with the application. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks\AlMotaheda.BuildingBlocks.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks.Data\AlMotaheda.BuildingBlocks.Data.csproj" />
+    <!-- User names on the documents' history, and the Executive re-check. -->
+    <ProjectReference Include="..\..\Access\AlMotaheda.Modules.Access.Contracts\AlMotaheda.Modules.Access.Contracts.csproj" />
+    <!-- Projects, cost items, the price catalog and the one supplier list; who may see which project. -->
+    <ProjectReference Include="..\..\Projects\AlMotaheda.Modules.Projects.Contracts\AlMotaheda.Modules.Projects.Contracts.csproj" />
+    <!-- Posting matched invoices into the project's supplier cost (implemented by Projects). -->
+    <ProjectReference Include="..\AlMotaheda.Modules.Procurement.Contracts\AlMotaheda.Modules.Procurement.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Procurement.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="AlMotaheda.BuildingBlocks.Validation" />
+    <Using Include="AlMotaheda.BuildingBlocks.Data" />
+  </ItemGroup>
+
+</Project>

@@ -18,7 +18,7 @@ namespace AlMotaheda.Modules.Projects.Features.Reports;
 /// <param name="RecognizedRecords">How many approved records make up <paramref name="Recognized"/>.</param>
 /// <param name="PendingReview">Recorded or submitted, not approved yet. Never inside <paramref name="Recognized"/>.</param>
 /// <param name="PendingRecords">How many records wait for review.</param>
-/// <param name="Committed">Signed but not executed yet (subcontracts only; 0 elsewhere).</param>
+/// <param name="Committed">Signed but not executed or invoiced yet (subcontracts, and open purchase orders in Materials; 0 elsewhere).</param>
 internal sealed record CostGroupFigures(
     string CostGroup,
     bool HasSource,
@@ -113,8 +113,10 @@ internal static class ProjectCosts
     /// <summary>
     /// Every cost group, in the order of <see cref="CostGroups.All"/>: this module's groups from
     /// <paramref name="expenses"/>, the others from <paramref name="sources"/>. A source for a group this module
-    /// owns is ignored (those records are counted here already). Two sources of one group are added. A group with
-    /// no source is zero and says so (<see cref="CostGroupFigures.HasSource"/>).
+    /// owns is ignored (those records are counted here already), except the committed cost of open purchase orders
+    /// (Procurement), which is added to Materials: invoiced purchases are already this module's supply records.
+    /// Two sources of one group are added. A group with no source is zero and says so
+    /// (<see cref="CostGroupFigures.HasSource"/>).
     /// </summary>
     public static IReadOnlyList<CostGroupFigures> ByGroup(IEnumerable<ExpenseSettlementRow> expenses, IEnumerable<SourceFigures> sources)
     {
@@ -129,6 +131,11 @@ internal static class ProjectCosts
             if (SourceGroups.Contains(source.CostGroup))
             {
                 groups[source.CostGroup] = groups[source.CostGroup].Add(source.Figures);
+            }
+            else if (source.CostGroup == CostGroups.Materials)
+            {
+                groups[CostGroups.Materials] = groups[CostGroups.Materials].Add(
+                    ProjectCostFigures.Empty with { Committed = source.Figures.Committed });
             }
         }
 

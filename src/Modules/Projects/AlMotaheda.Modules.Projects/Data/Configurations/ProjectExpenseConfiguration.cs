@@ -11,6 +11,7 @@ internal sealed class ProjectExpenseConfiguration : IEntityTypeConfiguration<Pro
     public const int ReferenceMaxLength = 50;
     public const int ReviewNoteMaxLength = 500;
     public const int NotesMaxLength = 1000;
+    public const string SourceIndex = "UX_ProjectExpense_Source";
 
     public void Configure(EntityTypeBuilder<ProjectExpense> builder)
     {
@@ -45,6 +46,8 @@ internal sealed class ProjectExpenseConfiguration : IEntityTypeConfiguration<Pro
                 "([Status] = 'Recorded' AND [ReviewedAt] IS NULL AND [ReviewedBy] IS NULL) "
                 + "OR ([Status] <> 'Recorded' AND [ReviewedAt] IS NOT NULL AND [ReviewedBy] IS NOT NULL)");
 
+            table.HasCheckConstraint("CK_ProjectExpense_Source", "([SourceType] IS NULL AND [SourceId] IS NULL) OR ([SourceType] IS NOT NULL AND [SourceId] IS NOT NULL)");
+
             table.HasCheckConstraint(
                 "CK_ProjectExpense_ItemLink",
                 "([ItemLinkedAt] IS NULL AND [ItemLinkedBy] IS NULL) OR ([ItemLinkedAt] IS NOT NULL AND [ItemLinkedBy] IS NOT NULL)");
@@ -72,6 +75,12 @@ internal sealed class ProjectExpenseConfiguration : IEntityTypeConfiguration<Pro
         builder.HasIndex(expense => expense.ProjectItemId, "IX_ProjectExpense_ProjectItemId");
         builder.HasIndex(expense => expense.SupplierId, "IX_ProjectExpense_SupplierId");
         builder.HasIndex(expense => expense.CatalogItemId, "IX_ProjectExpense_CatalogItemId");
+
+        builder.Property(expense => expense.SourceType).HasMaxLength(30);
+        builder.HasIndex(expense => new { expense.SourceType, expense.SourceId })
+            .IsUnique()
+            .HasFilter("[SourceId] IS NOT NULL")
+            .HasDatabaseName(SourceIndex);
 
         builder.HasOne(expense => expense.Project)
             .WithMany()

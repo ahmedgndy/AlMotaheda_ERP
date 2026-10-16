@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    What the Procurement module asks other modules to do: public interfaces and records only.
+    IInvoicePosting is implemented by Projects: a matched supplier invoice becomes the project's supplier cost.
+  -->
+
+  <ItemGroup>
+    <!-- SharedTransaction: the invoice and the project's supplier records are written in one transaction. -->
+    <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks.Data\AlMotaheda.BuildingBlocks.Data.csproj" />
+  </ItemGroup>
+
+</Project>

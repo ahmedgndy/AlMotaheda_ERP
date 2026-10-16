@@ -47,20 +47,24 @@ internal static class ProjectPermissions
 
     /// <summary>Used to read another user's project list (the Accounts screens).</summary>
     public const string AccountsModule = "accounts";
+
+    /// <summary>Purchasing manages the same supplier list (procurement View / Edit).</summary>
+    public const string ProcurementModule = "procurement";
 }
 
 /// <summary>
-/// The data scope of each role. Executive and Accountant see every project ("company" in the prototype);
+/// The data scope of each role. Executive, Accountant and Purchasing see every project ("company" in the prototype;
+/// Purchasing serves every project but holds no <c>projects</c> permission, so this only scopes its procurement lists);
 /// Manager, Engineer and Staff see only projects where they have an active membership. Office administrators
 /// have no projects permission by default, so the scope never applies to them unless an Executive grants one.
 /// </summary>
 /// <remarks>
-/// Roles are fixed (six seeded, no endpoint adds roles), so the map lives here, in one place, and Access needs no
+/// Roles are fixed (seeded, no endpoint adds roles), so the map lives here, in one place, and Access needs no
 /// scope column. If roles ever become editable, the scope should move to the Access role table.
 /// </remarks>
 internal static class ProjectScopes
 {
-    public static bool IsCompanyWide(string role) => role is AccessRoles.Executive or AccessRoles.Accountant;
+    public static bool IsCompanyWide(string role) => role is AccessRoles.Executive or AccessRoles.Accountant or AccessRoles.Purchasing;
 }
 
 /// <summary>Which roles may hold each responsibility (decision D6: the prototype's pickers).</summary>

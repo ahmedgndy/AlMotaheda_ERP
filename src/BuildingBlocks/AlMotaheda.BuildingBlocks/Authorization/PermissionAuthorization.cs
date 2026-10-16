@@ -45,6 +45,23 @@ public static class PermissionAuthorization
     }
 
     /// <summary>
+    /// Users whose token grants at least one of <paramref name="alternatives"/> may call the endpoint, for records
+    /// two modules both work on (suppliers: projects or procurement).
+    /// </summary>
+    public static TBuilder RequireAnyPermission<TBuilder>(this TBuilder builder, params (string Module, PermissionAction Action)[] alternatives)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        if (alternatives.Length == 0 || alternatives.Any(alternative => string.IsNullOrWhiteSpace(alternative.Module)))
+        {
+            throw new ArgumentException("Give at least one module and action.", nameof(alternatives));
+        }
+
+        return builder.RequireAuthorization(SignedInPolicy()
+            .RequireAssertion(context => alternatives.Any(alternative => context.User.HasPermission(alternative.Module, alternative.Action)))
+            .Build());
+    }
+
+    /// <summary>
     /// Only users whose token carries the role <paramref name="roleCode"/> may call the endpoint. This is the fast
     /// first check; handlers that grant or remove access, or move money, re-check the caller in the database,
     /// because a token can be up to 15 minutes old.

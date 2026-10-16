@@ -27,7 +27,8 @@ internal static class CreateSupplier
 
     public static void Map(IEndpointRouteBuilder api) =>
         api.MapPost("/suppliers", HandleAsync)
-            .RequirePermission(ProjectPermissions.Module, PermissionAction.Create)
+            // One supplier list for the project screens and for Purchasing (12-procurement-design.md §4).
+            .RequireAnyPermission((ProjectPermissions.Module, PermissionAction.Create), (ProjectPermissions.ProcurementModule, PermissionAction.Edit))
             .WithName("CreateSupplier")
             .WithSummary("Add a supplier to the company list");
 

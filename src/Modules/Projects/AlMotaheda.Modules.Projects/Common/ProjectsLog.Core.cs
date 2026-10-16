@@ -52,4 +52,7 @@ internal sealed partial class ProjectsLog
 
     [LoggerMessage(EventId = 2435, Level = LogLevel.Information, Message = "User {ActorId} decided adjustment {AdjustmentId} of record {ExpenseId} on project {ProjectId}: {Outcome}")]
     public partial void ExpenseAdjustmentDecided(int actorId, int projectId, int expenseId, int adjustmentId, string outcome);
+
+    [LoggerMessage(EventId = 2436, Level = LogLevel.Information, Message = "User {ActorId} posted {LineCount} supplier invoice lines as records on project {ProjectId}")]
+    public partial void SupplierInvoicePosted(int actorId, int projectId, int lineCount);
 }

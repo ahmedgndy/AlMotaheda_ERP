@@ -26,8 +26,9 @@ internal sealed class ProjectCostLoader(ProjectsDbContext db, IEnumerable<IProje
         var figures = new List<SourceFigures>();
         foreach (var source in sources)
         {
-            // Groups owned by this module are counted from its own records, never from a source.
-            if (ProjectCosts.SourceGroups.Contains(source.Group))
+            // Groups owned by this module are counted from its own records, never from a source; Materials takes only
+            // the committed cost of open purchase orders from Procurement (ProjectCosts.ByGroup).
+            if (ProjectCosts.SourceGroups.Contains(source.Group) || source.Group == CostGroups.Materials)
             {
                 figures.Add(new SourceFigures(source.Group, await source.SummarizeAsync(projectId, from, to, cancellationToken)));
             }

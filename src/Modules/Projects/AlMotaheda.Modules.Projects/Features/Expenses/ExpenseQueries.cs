@@ -31,6 +31,8 @@ internal sealed class ExpenseRow
     public PaymentChannel Channel { get; init; }
     public string? InvoiceNo { get; init; }
     public string? DeliveryNoteNo { get; init; }
+    public string? SourceType { get; init; }
+    public int? SourceId { get; init; }
     public int? CatalogItemId { get; init; }
     public string? CatalogItemNameAr { get; init; }
     public string? CatalogItemNameEn { get; init; }
@@ -266,6 +268,8 @@ internal static class ExpenseQueries
             Channel = expense.Channel,
             InvoiceNo = expense.InvoiceNo,
             DeliveryNoteNo = expense.DeliveryNoteNo,
+            SourceType = expense.SourceType,
+            SourceId = expense.SourceId,
             CatalogItemId = expense.CatalogItemId,
             CatalogItemNameAr = expense.CatalogItem != null ? expense.CatalogItem.NameAr : null,
             CatalogItemNameEn = expense.CatalogItem != null ? expense.CatalogItem.NameEn : null,

@@ -47,6 +47,8 @@ internal static class NotificationRules
         ["ExpenseAdjustment"] = ("correction of a record", "تصحيح السجل"),
         ["EquipmentCostAdjustment"] = ("correction of an equipment cost", "تصحيح تكلفة المعدة"),
         ["SalarySheet"] = ("salary sheet", "كشف الرواتب"),
+        ["Requisition"] = ("purchase requisition", "طلب الشراء"),
+        ["QuotationRequest"] = ("quotation set", "مجموعة عروض الأسعار"),
     };
 
     /// <summary>StatusAfter <c>null</c> = the record was just added.</summary>
@@ -68,6 +70,10 @@ internal static class NotificationRules
         new("EquipmentCostAdjustment", "Rejected", "RequestedBy", NotificationTypes.RecordRejected),
         new("SalarySheet", "Approved", "SubmittedBy", NotificationTypes.RecordApproved),
         new("SalarySheet", "Returned", "SubmittedBy", NotificationTypes.RecordReturned),
+        new("Requisition", "Approved", "CreatedBy", NotificationTypes.RecordApproved),
+        new("Requisition", "Rejected", "CreatedBy", NotificationTypes.RecordRejected),
+        new("QuotationRequest", "Selected", "SubmittedBy", NotificationTypes.RecordApproved),
+        new("QuotationRequest", "Returned", "SubmittedBy", NotificationTypes.RecordReturned),
         new("ReportRequest", null, "RecipientUserId", NotificationTypes.ReportRequested),
         new("ReportRequest", "InProgress", "RequesterUserId", NotificationTypes.ReportStarted),
         new("ReportRequest", "Submitted", "RequesterUserId", NotificationTypes.ReportSubmitted),

@@ -31,7 +31,7 @@ internal static class UpdateSupplier
 
     public static void Map(IEndpointRouteBuilder api) =>
         api.MapPut("/suppliers/{supplierId:int}", HandleAsync)
-            .RequirePermission(ProjectPermissions.Module, PermissionAction.Edit)
+            .RequireAnyPermission((ProjectPermissions.Module, PermissionAction.Edit), (ProjectPermissions.ProcurementModule, PermissionAction.Edit))
             .WithName("UpdateSupplier")
             .WithSummary("Edit a supplier or set it inactive");
 

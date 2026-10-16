@@ -15,4 +15,7 @@ public static class AccessRoles
 
     /// <summary>Human resources: employees, salary structures and the monthly salary sheet (no payments).</summary>
     public const string Hr = "hr";
+
+    /// <summary>Purchasing: requisitions it receives, quotations, purchase orders and suppliers (no payments, no receipts).</summary>
+    public const string Purchasing = "purchasing";
 }
