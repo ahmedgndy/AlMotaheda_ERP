@@ -14,6 +14,8 @@ internal sealed class PlatformDbContext(DbContextOptions<PlatformDbContext> opti
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<DatabaseBackup.BackupSettings> BackupSettings => Set<DatabaseBackup.BackupSettings>();
+    public DbSet<DatabaseBackup.BackupRun> BackupRuns => Set<DatabaseBackup.BackupRun>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -92,14 +92,47 @@ Docker Desktop settings.
 - Set `Archive__Storage__RootPath` to a folder on persistent storage that is backed up. It is required in
   Production; the API refuses to start without it.
 - Apply migrations with the reviewed scripts or migration bundles before starting a new version: Platform first,
-  then Access, Projects, Workforce, Subcontractors, Fleet, Archive and Finance. Without the Platform tables every save
-  fails.
+  then Access, Projects, Workforce, Subcontractors, Fleet, Archive, HR, Procurement, Reports and Finance. Without the
+  Platform tables every save fails.
 - `Projects__TimeZone` is the company time zone (default `Africa/Cairo`). The server needs time zone data; on a
   minimal container image without it, install `tzdata` or set `UTC`.
 - Turn on `READ_COMMITTED_SNAPSHOT` for the database.
 - Behind a reverse proxy on another machine, list it in `ForwardedHeaders__KnownProxies__0`.
 - Serve the frontend and the API from the same site (for example `erp.example.com` and `erp.example.com/api`):
   the refresh cookie is `SameSite=Strict`.
+
+## Database backup and restore
+
+The API backs up the database itself on the Windows server (Settings → Backup, Executive only): every day at the
+set time, or at once with "Run backup now". Each backup is `BACKUP DATABASE ... WITH CHECKSUM` (and `COMPRESSION`
+except on Express), checked with `RESTORE VERIFYONLY`, and saved in the backup folder as
+`{Database}_Full_{yyyyMMdd_HHmmss}.bak`, with the uploaded documents zipped next to it as
+`{Database}_Files_{yyyyMMdd_HHmmss}.zip`. The newest N verified backups are kept (default 3); older ones are deleted
+only after a new one is verified, and only files with these exact names. A failed backup notifies every Executive.
+History: Settings → Backup history (`GET /api/backups`).
+
+- The SQL Server service account must be able to write to the backup folder, and the API must run on the same
+  machine (it zips the documents and removes old files locally).
+- **Keep a copy off this machine** (another disk, a NAS or cloud storage, copied daily): a backup on the same disk
+  is lost with the disk. This is not automated.
+
+**Restore** (stop the API first, so nothing writes during the restore):
+
+1. Pick the newest `*_Full_*.bak` that the history shows as verified.
+2. In SQL Server Management Studio, or with `sqlcmd`:
+
+   ```sql
+   RESTORE VERIFYONLY FROM DISK = N'D:\Backups\AlMotahedaErp_Full_20261016_020000.bak' WITH CHECKSUM;
+   ALTER DATABASE [AlMotahedaErp] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+   RESTORE DATABASE [AlMotahedaErp] FROM DISK = N'D:\Backups\AlMotahedaErp_Full_20261016_020000.bak'
+       WITH REPLACE, CHECKSUM, RECOVERY;
+   ALTER DATABASE [AlMotahedaErp] SET MULTI_USER;
+   ```
+
+   To restore on another server or under another name, add `MOVE` for the data and log files
+   (`RESTORE FILELISTONLY FROM DISK = ...` lists their logical names).
+3. Unzip the `*_Files_*.zip` of the same time into the `Archive__Storage__RootPath` folder, replacing its content.
+4. Start the API. Everyone signs in again if the restored data predates their last sign-in.
 
 ## Documentation
 

@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AlMotaheda.Modules.Platform.Data.Migrations
 {
     [DbContext(typeof(PlatformDbContext))]
-    internal partial class PlatformDbContextModelSnapshot : ModelSnapshot
+    partial class PlatformDbContextModelSnapshot : ModelSnapshot
     {
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
@@ -22,6 +22,144 @@ namespace AlMotaheda.Modules.Platform.Data.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("AlMotaheda.Modules.Platform.DatabaseBackup.BackupRun", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<bool>("Compressed")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Database")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(128)");
+
+                    b.Property<string>("DocumentsFilePath")
+                        .HasMaxLength(400)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<long?>("DocumentsSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(1000)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("FilePath")
+                        .HasMaxLength(400)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<DateTime?>("FilesDeletedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("RequestedBy")
+                        .HasColumnType("int");
+
+                    b.Property<long?>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<bool>("Verified")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "Trigger", "StartedAt" }, "IX_BackupRun_Trigger_StartedAt");
+
+                    b.ToTable("BackupRun", "platform", t =>
+                        {
+                            t.HasCheckConstraint("CK_BackupRun_Status", "[Status] IN ('Running', 'Succeeded', 'Failed')");
+
+                            t.HasCheckConstraint("CK_BackupRun_Trigger", "[Trigger] IN ('Scheduled', 'Manual')");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Platform.DatabaseBackup.BackupSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<TimeOnly>("DailyAt")
+                        .HasColumnType("time");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Folder")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(260)");
+
+                    b.Property<bool>("IncludeDocuments")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("RetentionCount")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("RunRequestedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("RunRequestedBy")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BackupSettings", "platform", t =>
+                        {
+                            t.HasCheckConstraint("CK_BackupSettings_Retention", "[RetentionCount] BETWEEN 1 AND 365");
+
+                            t.HasCheckConstraint("CK_BackupSettings_Single", "[Id] = 1");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            DailyAt = new TimeOnly(2, 0, 0),
+                            Enabled = true,
+                            Folder = "C:\\AlMotaheda\\Backups",
+                            IncludeDocuments = true,
+                            RetentionCount = 3,
+                            RowVersion = new byte[0]
+                        });
+                });
 
             modelBuilder.Entity("AlMotaheda.Modules.Platform.Data.AuditEntry", b =>
                 {

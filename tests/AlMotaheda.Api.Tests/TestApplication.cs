@@ -95,9 +95,10 @@ internal sealed class TestApplication : IAsyncDisposable
         var usesRealDatabase = builder.Configuration.GetConnectionString("Erp") != NoDatabaseConnectionString;
         if (!usesRealDatabase)
         {
-            // Without a database the outbox dispatcher and the export worker could only fail and retry in the background.
+            // Without a database the outbox dispatcher, the export worker and the backup service could only fail and retry.
             builder.Configuration["Platform:Outbox:Enabled"] = "false";
             builder.Configuration["Reports:BackgroundExports"] = "false";
+            builder.Configuration["Platform:Backup:ServiceEnabled"] = "false";
         }
 
         builder.AddApiHost();

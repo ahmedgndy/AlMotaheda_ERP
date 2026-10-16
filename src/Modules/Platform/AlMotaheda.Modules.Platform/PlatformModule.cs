@@ -1,6 +1,7 @@
 using AlMotaheda.BuildingBlocks.Data;
 using AlMotaheda.BuildingBlocks.Modules;
 using AlMotaheda.BuildingBlocks.Time;
+using AlMotaheda.Modules.Platform.DatabaseBackup;
 using AlMotaheda.Modules.Platform.Common;
 using AlMotaheda.Modules.Platform.Data;
 using AlMotaheda.Modules.Platform.Features.Audit;
@@ -50,9 +51,16 @@ public sealed class PlatformModule : IModule
         // Cache removal: the same dependency map as the live signals.
         services.AddSingleton<IChangeObserver, CacheInvalidation>();
 
+        // Database backup (Windows): daily schedule, "Run now", verification, retention, failure notification.
+        services.AddOptions<BackupOptions>().Bind(configuration.GetSection(BackupOptions.SectionName));
+        services.AddSingleton<BackupSignal>();
+        services.AddSingleton<IBackupFiles, LocalBackupFiles>();
+        services.AddScoped<BackupRunner>();
+
         // Order matters: hosted services start in registration order, so the migrations run before the dispatcher.
         services.AddHostedService<PlatformStartup>();
         services.AddHostedService<OutboxDispatcher>();
+        services.AddHostedService<BackupService>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints)
@@ -64,6 +72,7 @@ public sealed class PlatformModule : IModule
         GetUnreadNotificationCount.Map(api);
         MarkNotificationsRead.Map(api);
         ListAuditEntries.Map(api);
+        BackupEndpoints.Map(api);
 
         // The connection closes when its access token expires: the client reconnects with a fresh token and every
         // join is checked again, so a removed permission or project stops the signals within the token's lifetime.
