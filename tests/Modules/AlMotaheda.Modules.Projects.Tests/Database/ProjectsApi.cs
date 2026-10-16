@@ -18,6 +18,10 @@ internal sealed class ProjectsApi : IAsyncDisposable
 
     public static async Task<ProjectsApi> StartAsync(SqlServerFixture database) => new(await AccessApi.StartAsync(database));
 
+    /// <summary>The same, with extra settings (for example a lower background-export threshold).</summary>
+    public static async Task<ProjectsApi> StartAsync(SqlServerFixture database, IDictionary<string, string?> settings) =>
+        new(await AccessApi.StartAsync(database, settings));
+
     public Task<Session> SignInExecutiveAsync() => Access.SignInExecutiveAsync();
 
     /// <summary>A new user with their own password set, signed in. Returns the user's id and session.</summary>

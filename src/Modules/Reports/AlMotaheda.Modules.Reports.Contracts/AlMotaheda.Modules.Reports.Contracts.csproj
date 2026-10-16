@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    How a module offers reports: IReportSource with the reports' definitions (code, names, who may run them,
+    filters, columns) and their rows. Implemented by the module that owns the data, so a report is computed with the
+    same queries as the module's screens. Records and interfaces only; no references.
+  -->
+
+</Project>

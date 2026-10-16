@@ -9,6 +9,7 @@ using AlMotaheda.Modules.Finance.Features.PaymentRequests;
 using AlMotaheda.Modules.Finance.Integration;
 using AlMotaheda.Modules.Finance.Requests;
 using AlMotaheda.Modules.Finance.Startup;
+using AlMotaheda.Modules.Reports.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -45,6 +46,7 @@ public sealed class FinanceModule : IModule
         services.AddScoped<PaymentRequestViews>();
         services.AddScoped<PaymentRequestWorkflow>();
         services.AddScoped<IPaymentRequests, PaymentRequestsContract>();
+        services.AddScoped<IReportSource, FinanceReports>();
 
         services.AddHostedService<FinanceStartup>();
     }

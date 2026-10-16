@@ -29,6 +29,8 @@
     <ProjectReference Include="..\..\Projects\AlMotaheda.Modules.Projects.Contracts\AlMotaheda.Modules.Projects.Contracts.csproj" />
     <!-- Worker payments go through Finance payment requests; Finance writes them back here once paid. -->
     <ProjectReference Include="..\..\Finance\AlMotaheda.Modules.Finance.Contracts\AlMotaheda.Modules.Finance.Contracts.csproj" />
+    <!-- The module's reports (IReportSource). -->
+    <ProjectReference Include="..\..\Reports\AlMotaheda.Modules.Reports.Contracts\AlMotaheda.Modules.Reports.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

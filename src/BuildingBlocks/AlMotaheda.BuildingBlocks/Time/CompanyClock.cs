@@ -31,6 +31,9 @@ public sealed class CompanyClock
         _zone = TimeZoneInfo.FindSystemTimeZoneById(string.IsNullOrWhiteSpace(zoneId) ? DefaultTimeZone : zoneId);
     }
 
+    /// <summary>The company's time zone, for showing stored UTC moments as company time (report headers).</summary>
+    public TimeZoneInfo Zone => _zone;
+
     public DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
 
     public DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(_time.GetUtcNow(), _zone).DateTime);

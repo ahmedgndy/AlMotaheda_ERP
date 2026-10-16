@@ -6,6 +6,7 @@ using AlMotaheda.Modules.Fleet.Data;
 using AlMotaheda.Modules.Fleet.Features;
 using AlMotaheda.Modules.Fleet.Integration;
 using AlMotaheda.Modules.Fleet.Startup;
+using AlMotaheda.Modules.Reports.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -35,6 +36,7 @@ public sealed class FleetModule : IModule
         services.AddScoped<IWorkInboxSource, FleetInboxSource>();
         services.AddScoped<IPaymentSource, EquipmentCostPaymentSource>();
         services.AddScoped<IProjectRecordOwnership, FleetRecordOwnership>();
+        services.AddScoped<IReportSource, FleetReports>();
         FleetFeatures.AddServices(services);
 
         services.AddHostedService<FleetStartup>();

@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Reports module tests.
+    - Unit: the catalog (every report well formed), filter parsing, totals, the Excel file and the print page.
+    - Api: the real host over HTTP without SQL Server: sign-in, who sees which report, 403 / 404 / 400.
+    - Database: the real host against a real SQL Server in Docker (Testcontainers): reports that reconcile with the
+      ledger and the screens, Excel and print, background exports and their notification. Skipped without Docker.
+  -->
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Testcontainers.MsSql" />
+    <!-- Reads the exported .xlsx files back. -->
+    <PackageReference Include="ClosedXML" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Host\AlMotaheda.Api\AlMotaheda.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Reports\AlMotaheda.Modules.Reports\AlMotaheda.Modules.Reports.csproj" />
+    <!-- Users are created through the real Access endpoints; projects, catalog items, suppliers and payments through the real Projects endpoints. -->
+    <ProjectReference Include="..\..\..\src\Modules\Access\AlMotaheda.Modules.Access\AlMotaheda.Modules.Access.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Projects\AlMotaheda.Modules.Projects\AlMotaheda.Modules.Projects.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- One test host for every test project: the same composition as Program.cs. -->
+    <Compile Include="..\..\AlMotaheda.Api.Tests\TestApplication.cs" Link="Shared\TestApplication.cs" />
+    <!-- Runs the real queries without SQL Server, and small helpers for calling the API. -->
+    <Compile Include="..\..\AlMotaheda.Api.Tests\Shared\StandInDatabase.cs" Link="Shared\StandInDatabase.cs" />
+    <Compile Include="..\..\AlMotaheda.Api.Tests\Shared\ApiCalls.cs" Link="Shared\ApiCalls.cs" />
+    <!-- The Access test helpers: SQL Server in Docker, signing in, and test tokens. -->
+    <Compile Include="..\AlMotaheda.Modules.Access.Tests\Database\SqlServerFixture.cs" Link="Shared\SqlServerFixture.cs" />
+    <Compile Include="..\AlMotaheda.Modules.Access.Tests\Database\AccessApi.cs" Link="Shared\AccessApi.cs" />
+    <Compile Include="..\AlMotaheda.Modules.Access.Tests\TestTokens.cs" Link="Shared\TestTokens.cs" />
+    <!-- The Projects test helpers: projects, suppliers and the expense review flow, the way the frontend calls them. -->
+    <Compile Include="..\AlMotaheda.Modules.Projects.Tests\Database\ProjectsApi.cs" Link="Shared\ProjectsApi.cs" />
+    <Compile Include="..\AlMotaheda.Modules.Projects.Tests\Database\Core\CoreApi.cs" Link="Shared\CoreApi.cs" />
+  </ItemGroup>
+
+</Project>

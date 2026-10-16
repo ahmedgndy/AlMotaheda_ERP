@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Reports module: the report catalog, running a report (paged, with totals), Excel export, print pages, background
+    exports and their history. The rows come from the modules that own the data (IReportSource).
+    Allowed references: BuildingBlocks and other modules' *.Contracts projects only.
+    Everything except ReportsModule stays internal.
+  -->
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The module owns its export history, so it owns its EF Core context and migrations (schema "rpt"). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <!-- .xlsx files with right-to-left sheets, typed cells and number formats. -->
+    <PackageReference Include="ClosedXML" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks\AlMotaheda.BuildingBlocks.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks.Data\AlMotaheda.BuildingBlocks.Data.csproj" />
+    <!-- Who generated a report (names on the header). -->
+    <ProjectReference Include="..\..\Access\AlMotaheda.Modules.Access.Contracts\AlMotaheda.Modules.Access.Contracts.csproj" />
+    <ProjectReference Include="..\AlMotaheda.Modules.Reports.Contracts\AlMotaheda.Modules.Reports.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Reports.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="AlMotaheda.BuildingBlocks.Validation" />
+    <Using Include="AlMotaheda.BuildingBlocks.Data" />
+  </ItemGroup>
+
+</Project>

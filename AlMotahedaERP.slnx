@@ -38,6 +38,10 @@
     <Project Path="src/Modules/Procurement/AlMotaheda.Modules.Procurement.Contracts/AlMotaheda.Modules.Procurement.Contracts.csproj" />
     <Project Path="src/Modules/Procurement/AlMotaheda.Modules.Procurement/AlMotaheda.Modules.Procurement.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/Reports/">
+    <Project Path="src/Modules/Reports/AlMotaheda.Modules.Reports.Contracts/AlMotaheda.Modules.Reports.Contracts.csproj" />
+    <Project Path="src/Modules/Reports/AlMotaheda.Modules.Reports/AlMotaheda.Modules.Reports.csproj" />
+  </Folder>
   <Folder Name="/src/Modules/Platform/">
     <Project Path="src/Modules/Platform/AlMotaheda.Modules.Platform/AlMotaheda.Modules.Platform.csproj" />
   </Folder>
@@ -64,6 +68,7 @@
     <Project Path="tests/Modules/AlMotaheda.Modules.Finance.Tests/AlMotaheda.Modules.Finance.Tests.csproj" />
     <Project Path="tests/Modules/AlMotaheda.Modules.HR.Tests/AlMotaheda.Modules.HR.Tests.csproj" />
     <Project Path="tests/Modules/AlMotaheda.Modules.Procurement.Tests/AlMotaheda.Modules.Procurement.Tests.csproj" />
+    <Project Path="tests/Modules/AlMotaheda.Modules.Reports.Tests/AlMotaheda.Modules.Reports.Tests.csproj" />
     <Project Path="tests/Modules/AlMotaheda.Modules.Platform.Tests/AlMotaheda.Modules.Platform.Tests.csproj" />
   </Folder>
 </Solution>

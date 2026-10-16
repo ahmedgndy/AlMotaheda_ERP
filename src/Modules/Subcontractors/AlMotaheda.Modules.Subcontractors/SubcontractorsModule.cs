@@ -6,6 +6,7 @@ using AlMotaheda.Modules.Subcontractors.Data;
 using AlMotaheda.Modules.Subcontractors.Features;
 using AlMotaheda.Modules.Subcontractors.Integration;
 using AlMotaheda.Modules.Subcontractors.Startup;
+using AlMotaheda.Modules.Reports.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -36,6 +37,7 @@ public sealed class SubcontractorsModule : IModule
         services.AddScoped<IWorkInboxSource, SubcontractorsInboxSource>();
         services.AddScoped<IPaymentSource, SubcontractPaymentSource>();
         services.AddScoped<IProjectRecordOwnership, SubcontractRecordOwnership>();
+        services.AddScoped<IReportSource, SubcontractorReports>();
         SubcontractorsFeatures.AddServices(services);
 
         services.AddHostedService<SubcontractorsStartup>();

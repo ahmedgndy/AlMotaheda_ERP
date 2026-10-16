@@ -31,6 +31,7 @@
     <ProjectReference Include="..\..\Modules\Finance\AlMotaheda.Modules.Finance\AlMotaheda.Modules.Finance.csproj" />
     <ProjectReference Include="..\..\Modules\HR\AlMotaheda.Modules.HR\AlMotaheda.Modules.HR.csproj" />
     <ProjectReference Include="..\..\Modules\Procurement\AlMotaheda.Modules.Procurement\AlMotaheda.Modules.Procurement.csproj" />
+    <ProjectReference Include="..\..\Modules\Reports\AlMotaheda.Modules.Reports\AlMotaheda.Modules.Reports.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -45,6 +46,7 @@
     <InternalsVisibleTo Include="AlMotaheda.Modules.Finance.Tests" />
     <InternalsVisibleTo Include="AlMotaheda.Modules.HR.Tests" />
     <InternalsVisibleTo Include="AlMotaheda.Modules.Procurement.Tests" />
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Reports.Tests" />
   </ItemGroup>
 
 </Project>

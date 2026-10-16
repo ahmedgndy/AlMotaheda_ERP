@@ -12,6 +12,8 @@ internal static class NotificationTypes
     public const string ReportSubmitted = "ReportSubmitted";
     public const string ReportCompleted = "ReportCompleted";
     public const string ReportCancelled = "ReportCancelled";
+    public const string ExportReady = "ExportReady";
+    public const string ExportFailed = "ExportFailed";
 }
 
 /// <summary>A notification to store: who gets it, its type and its title in both languages.</summary>
@@ -49,6 +51,7 @@ internal static class NotificationRules
         ["SalarySheet"] = ("salary sheet", "كشف الرواتب"),
         ["Requisition"] = ("purchase requisition", "طلب الشراء"),
         ["QuotationRequest"] = ("quotation set", "مجموعة عروض الأسعار"),
+        ["ReportRun"] = ("report export", "تصدير التقرير"),
     };
 
     /// <summary>StatusAfter <c>null</c> = the record was just added.</summary>
@@ -74,6 +77,8 @@ internal static class NotificationRules
         new("Requisition", "Rejected", "CreatedBy", NotificationTypes.RecordRejected),
         new("QuotationRequest", "Selected", "SubmittedBy", NotificationTypes.RecordApproved),
         new("QuotationRequest", "Returned", "SubmittedBy", NotificationTypes.RecordReturned),
+        new("ReportRun", "Ready", "RequestedBy", NotificationTypes.ExportReady),
+        new("ReportRun", "Failed", "RequestedBy", NotificationTypes.ExportFailed),
         new("ReportRequest", null, "RecipientUserId", NotificationTypes.ReportRequested),
         new("ReportRequest", "InProgress", "RequesterUserId", NotificationTypes.ReportStarted),
         new("ReportRequest", "Submitted", "RequesterUserId", NotificationTypes.ReportSubmitted),
@@ -132,6 +137,8 @@ internal static class NotificationRules
         NotificationTypes.ReportSubmitted => ("The report you requested was submitted", "تم تسليم التقرير الذي طلبته"),
         NotificationTypes.ReportCompleted => ("Your report was accepted as complete", "تم قبول التقرير واعتباره مكتملاً"),
         NotificationTypes.ReportCancelled => ("A report request to you was cancelled", "تم إلغاء طلب تقرير موجّه إليك"),
+        NotificationTypes.ExportReady => ("Your report export is ready to download", "تصدير التقرير جاهز للتنزيل"),
+        NotificationTypes.ExportFailed => ("Your report export failed", "تعذّر تصدير التقرير"),
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown notification type."),
     };
 }

@@ -29,6 +29,8 @@
     <ProjectReference Include="..\AlMotaheda.Modules.Projects.Contracts\AlMotaheda.Modules.Projects.Contracts.csproj" />
     <!-- Supplier payments go through Finance payment requests; Finance writes them back here once paid. -->
     <ProjectReference Include="..\..\Finance\AlMotaheda.Modules.Finance.Contracts\AlMotaheda.Modules.Finance.Contracts.csproj" />
+    <!-- The project cost and supplier reports (IReportSource). -->
+    <ProjectReference Include="..\..\Reports\AlMotaheda.Modules.Reports.Contracts\AlMotaheda.Modules.Reports.Contracts.csproj" />
     <!-- Matched supplier invoices from Procurement become supply records here (IInvoicePosting). -->
     <ProjectReference Include="..\..\Procurement\AlMotaheda.Modules.Procurement.Contracts\AlMotaheda.Modules.Procurement.Contracts.csproj" />
   </ItemGroup>
@@ -43,6 +45,7 @@
     <InternalsVisibleTo Include="AlMotaheda.Modules.Platform.Tests" />
     <InternalsVisibleTo Include="AlMotaheda.Modules.Finance.Tests" />
     <InternalsVisibleTo Include="AlMotaheda.Modules.Procurement.Tests" />
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Reports.Tests" />
   </ItemGroup>
 
   <ItemGroup>

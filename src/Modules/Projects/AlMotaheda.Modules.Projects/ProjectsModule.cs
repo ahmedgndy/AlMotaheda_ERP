@@ -59,6 +59,7 @@ public sealed class ProjectsModule : IModule
         services.AddScoped<ISupplierDirectory, SupplierDirectoryContract>();
         services.AddScoped<IProjectCatalog, ProjectCatalogContract>();
         services.AddScoped<IInvoicePosting, InvoicePostingContract>();
+        services.AddScoped<AlMotaheda.Modules.Reports.Contracts.IReportSource, ProjectReports>();
         services.AddScoped<IProjectRecordOwnership, ProjectRecordOwnership>();
         CoreFeatures.AddServices(services);
         PlanningFeatures.AddServices(services);

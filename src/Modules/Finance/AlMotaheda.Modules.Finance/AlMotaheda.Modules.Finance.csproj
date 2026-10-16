@@ -21,6 +21,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The ledger and payment request reports (IReportSource). -->
+    <ProjectReference Include="..\..\Reports\AlMotaheda.Modules.Reports.Contracts\AlMotaheda.Modules.Reports.Contracts.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks\AlMotaheda.BuildingBlocks.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks.Data\AlMotaheda.BuildingBlocks.Data.csproj" />
     <ProjectReference Include="..\AlMotaheda.Modules.Finance.Contracts\AlMotaheda.Modules.Finance.Contracts.csproj" />

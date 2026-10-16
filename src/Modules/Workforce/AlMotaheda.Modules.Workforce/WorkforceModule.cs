@@ -7,6 +7,7 @@ using AlMotaheda.Modules.Workforce.Data;
 using AlMotaheda.Modules.Workforce.Features;
 using AlMotaheda.Modules.Workforce.Integration;
 using AlMotaheda.Modules.Workforce.Startup;
+using AlMotaheda.Modules.Reports.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -42,6 +43,7 @@ public sealed class WorkforceModule : IModule
         services.AddScoped<IWorkInboxSource, WorkforceInboxSource>();
         services.AddScoped<IPaymentSource, WorkerPaymentSource>();
         services.AddScoped<IProjectRecordOwnership, WorkforceRecordOwnership>();
+        services.AddScoped<IReportSource, WorkforceReports>();
         WorkforceFeatures.AddServices(services);
 
         services.AddHostedService<WorkforceStartup>();
