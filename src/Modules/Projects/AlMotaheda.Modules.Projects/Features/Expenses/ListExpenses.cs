@@ -135,7 +135,7 @@ internal static class ListExpenses
         var query = ExpenseQueries.Filtered(db, projectId, filter);
         var totalCount = await query.CountAsync(cancellationToken);
         var rows = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
-        var items = await ExpenseView.FromAsync(rows, users, cancellationToken);
+        var items = await ExpenseView.FromAsync(rows, users, seesMoney, cancellationToken);
 
         ExpenseSummary? summary = null;
         if (seesMoney)

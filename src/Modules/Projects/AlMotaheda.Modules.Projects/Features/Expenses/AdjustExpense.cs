@@ -130,7 +130,7 @@ internal static class RequestExpenseAdjustment
         await transaction.CommitAsync(cancellationToken);
         log.ExpenseAdjustmentRequested(caller.UserId, projectId, expenseId, adjustment.Id);
 
-        var view = await ExpenseView.LoadAsync(db, users, projectId, expenseId, cancellationToken);
+        var view = await ExpenseView.LoadAsync(db, users, projectId, expenseId, caller.Can(PermissionAction.SeeMoney), cancellationToken);
         return view is null ? CoreProblems.ExpenseNotFound() : TypedResults.Created($"/api/projects/{projectId}/expenses/{expenseId}", view);
     }
 }
@@ -257,7 +257,7 @@ internal static class DecideExpenseAdjustment
         await transaction.CommitAsync(cancellationToken);
         log.ExpenseAdjustmentDecided(caller.UserId, projectId, adjustment.ExpenseId, adjustment.Id, outcome.ToString());
 
-        var view = await ExpenseView.LoadAsync(db, users, projectId, adjustment.ExpenseId, cancellationToken);
+        var view = await ExpenseView.LoadAsync(db, users, projectId, adjustment.ExpenseId, caller.Can(PermissionAction.SeeMoney), cancellationToken);
         return view is null ? CoreProblems.ExpenseNotFound() : TypedResults.Ok(view);
     }
 }

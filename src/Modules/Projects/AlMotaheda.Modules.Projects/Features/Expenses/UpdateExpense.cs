@@ -147,7 +147,7 @@ internal static class UpdateExpense
 
         log.ExpenseResubmitted(caller.UserId, projectId, expense.Id, oldStatus.ToString());
 
-        var view = await ExpenseView.LoadAsync(db, users, projectId, expense.Id, cancellationToken);
+        var view = await ExpenseView.LoadAsync(db, users, projectId, expense.Id, caller.Can(PermissionAction.SeeMoney), cancellationToken);
         return view is null ? CoreProblems.ExpenseNotFound() : TypedResults.Ok(view);
     }
 }

@@ -26,7 +26,9 @@ public sealed class ExpenseWorkflowTests(SqlServerFixture database)
         Assert.Equal("Recorded", recorded.GetProperty("status").GetString());
         Assert.Equal(14_309.38m, recorded.Money("amount"));
         Assert.Equal(0m, recorded.Money("recognized"));
-        Assert.Equal(0m, recorded.Money("paid"));
+        // The engineer has no projects SeeMoney: how the record is paid is not shown to them (P9-02).
+        Assert.Equal(JsonValueKind.Null, recorded.GetProperty("paid").ValueKind);
+        Assert.Equal(JsonValueKind.Null, recorded.GetProperty("outstanding").ValueKind);
         Assert.Equal(JsonValueKind.Null, recorded.GetProperty("paymentState").ValueKind);
         Assert.Equal(cast.Engineer.UserId, recorded.GetProperty("recorder").GetProperty("userId").GetInt32());
         Assert.Equal("Cemex", recorded.GetProperty("supplierNameEn").GetString());
@@ -143,6 +145,35 @@ public sealed class ExpenseWorkflowTests(SqlServerFixture database)
         Assert.Equal(0m, summary.Money("recognizedTotal"));
         Assert.Equal(0, summary.GetProperty("pendingReviewCount").GetInt32());
         Assert.Equal(0, summary.GetProperty("returnedCount").GetInt32());
+    }
+
+    [DatabaseFact]
+    public async Task Without_see_money_the_recorder_sees_their_amount_but_not_how_it_was_paid()
+    {
+        await using var api = await ProjectsApi.StartAsync(database);
+        var cast = await api.CastAsync();
+        var supplier = await api.CreateSupplierAsync(cast.Executive, "Steel House", "Materials");
+        var credit = await api.RecordApprovedAsync(cast.Engineer, cast.Accountant, cast.ProjectId, SupplyBody(supplier, 20m, 100m, "Credit"));
+        await api.PaidAsync(cast.Accountant, cast.ProjectId, supplier, 1_500m, (credit.Id(), 1_500m));
+
+        // The engineer recorded it: they see it and the amount they typed, in the list and the detail...
+        var listed = Assert.Single((await api.ListExpensesAsync(cast.Engineer, cast.ProjectId)).GetProperty("items").EnumerateArray());
+        var detail = await api.GetExpenseAsync(cast.Engineer, cast.ProjectId, credit.Id());
+        foreach (var view in new[] { listed, detail })
+        {
+            Assert.Equal(2_000m, view.Money("amount"));
+            Assert.Equal(JsonValueKind.Null, view.GetProperty("paid").ValueKind);
+            Assert.Equal(JsonValueKind.Null, view.GetProperty("outstanding").ValueKind);
+            Assert.Equal(JsonValueKind.Null, view.GetProperty("paymentState").ValueKind);
+            Assert.Empty(view.GetProperty("payments").EnumerateArray());
+        }
+
+        // ...while someone with SeeMoney sees the same record with its payment.
+        var accountant = await api.GetExpenseAsync(cast.Accountant, cast.ProjectId, credit.Id());
+        Assert.Equal(1_500m, accountant.Money("paid"));
+        Assert.Equal(500m, accountant.Money("outstanding"));
+        Assert.Equal("PartiallyPaid", accountant.GetProperty("paymentState").GetString());
+        Assert.Single(accountant.GetProperty("payments").EnumerateArray());
     }
 
     [DatabaseFact]

@@ -129,7 +129,7 @@ internal static class CreateExpense
         }
         log.ExpenseRecorded(caller.UserId, projectId, expense.Id, expense.Kind.ToString(), expense.Channel.ToString());
 
-        var view = await ExpenseView.LoadAsync(db, users, projectId, expense.Id, cancellationToken);
+        var view = await ExpenseView.LoadAsync(db, users, projectId, expense.Id, caller.Can(PermissionAction.SeeMoney), cancellationToken);
         return TypedResults.Created($"/api/projects/{projectId}/expenses/{expense.Id}", view!);
     }
 }
