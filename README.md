@@ -42,16 +42,19 @@ You need the .NET 10 SDK, a SQL Server you can reach, and Docker if you want to 
 3. **Create the database tables.** Review the SQL first, then apply it:
 
    ```bash
+   dotnet ef migrations script --idempotent --project src/Modules/Platform/AlMotaheda.Modules.Platform -o platform.sql
    dotnet ef migrations script --idempotent --project src/Modules/Access/AlMotaheda.Modules.Access -o access.sql
    dotnet ef migrations script --idempotent --project src/Modules/Projects/AlMotaheda.Modules.Projects -o projects.sql
+   dotnet ef database update --project src/Modules/Platform/AlMotaheda.Modules.Platform --connection "<the same connection string>"
    dotnet ef database update --project src/Modules/Access/AlMotaheda.Modules.Access --connection "<the same connection string>"
    dotnet ef database update --project src/Modules/Projects/AlMotaheda.Modules.Projects --connection "<the same connection string>"
    ```
 
    Then, the same way: Workforce, Subcontractors, Fleet, Archive.
 
-   Always Access first, then Projects, then the others: their tables point to `access.User`, `projects.Project`,
-   `projects.ProjectItem` and `projects.Supplier`.
+   Always Platform first (every save of every module writes its audit and outbox tables), then Access, then
+   Projects, then the others: their tables point to `access.User`, `projects.Project`, `projects.ProjectItem` and
+   `projects.Supplier`.
 
    Or, in development only, set `Database:ApplyMigrationsOnStartup` to `true` and let the API apply it at startup.
 
@@ -88,8 +91,8 @@ Docker Desktop settings.
   with `openssl rand -base64 48` and keep it secret; changing it signs everyone out.
 - Set `Archive__Storage__RootPath` to a folder on persistent storage that is backed up. It is required in
   Production; the API refuses to start without it.
-- Apply migrations with the reviewed scripts or migration bundles before starting a new version: Access first,
-  then Projects, then Workforce, Subcontractors, Fleet and Archive.
+- Apply migrations with the reviewed scripts or migration bundles before starting a new version: Platform first,
+  then Access, Projects, Workforce, Subcontractors, Fleet and Archive. Without the Platform tables every save fails.
 - `Projects__TimeZone` is the company time zone (default `Africa/Cairo`). The server needs time zone data; on a
   minimal container image without it, install `tzdata` or set `UTC`.
 - Turn on `READ_COMMITTED_SNAPSHOT` for the database.
@@ -107,3 +110,4 @@ Docker Desktop settings.
 - [Subcontractors module](src/Modules/Subcontractors/AlMotaheda.Modules.Subcontractors/README.md): companies, contracts, measured work, manpower, payments
 - [Fleet module](src/Modules/Fleet/AlMotaheda.Modules.Fleet/README.md): equipment, project assignment, equipment costs
 - [Archive module](src/Modules/Archive/AlMotaheda.Modules.Archive/README.md): project documents
+- [Platform module](src/Modules/Platform/AlMotaheda.Modules.Platform/README.md): audit trail, outbox, notifications

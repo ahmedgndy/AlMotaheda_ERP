@@ -6,8 +6,6 @@ using AlMotaheda.Modules.Archive.Startup;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -29,22 +27,7 @@ public sealed class ArchiveModule : IModule
 
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString(ArchiveDatabase.ConnectionStringName);
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            throw new InvalidOperationException(
-                $"ConnectionStrings:{ArchiveDatabase.ConnectionStringName} is missing. Set it with user secrets in development "
-                + $"or the ConnectionStrings__{ArchiveDatabase.ConnectionStringName} environment variable on the server.");
-        }
-
-        services.AddDbContext<ArchiveDbContext>(options => options
-            .UseSqlServer(connectionString, ArchiveDatabase.Configure)
-            // Failures are logged once, by the host's exception handler; expected ones (a duplicate key) become 409s.
-            .ConfigureWarnings(warnings => warnings.Ignore(
-                CoreEventId.SaveChangesFailed,
-                CoreEventId.QueryIterationFailed,
-                RelationalEventId.CommandError,
-                RelationalEventId.ConnectionError)));
+        services.AddModuleDbContext<ArchiveDbContext>(configuration, ArchiveDatabase.Configure);
 
         services.AddCompanyClock();
         ArchiveFeatures.AddServices(services, configuration);

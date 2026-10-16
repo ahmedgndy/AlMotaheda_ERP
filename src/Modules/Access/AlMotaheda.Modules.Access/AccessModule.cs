@@ -15,8 +15,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -37,24 +35,7 @@ public sealed class AccessModule : IModule
 
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString(AccessDatabase.ConnectionStringName);
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            throw new InvalidOperationException(
-                $"ConnectionStrings:{AccessDatabase.ConnectionStringName} is missing. Set it with user secrets in development "
-                + $"or the ConnectionStrings__{AccessDatabase.ConnectionStringName} environment variable on the server.");
-        }
-
-        services.AddDbContext<AccessDbContext>(options => options
-            .UseSqlServer(connectionString, AccessDatabase.Configure)
-            // Failures are logged once, by the host's exception handler. EF's own error logs would repeat them,
-            // and its "save failed" entry would copy the duplicate key value (an email address) into the logs
-            // even when the slice handles the error as a normal 409.
-            .ConfigureWarnings(warnings => warnings.Ignore(
-                CoreEventId.SaveChangesFailed,
-                CoreEventId.QueryIterationFailed,
-                RelationalEventId.CommandError,
-                RelationalEventId.ConnectionError)));
+        services.AddModuleDbContext<AccessDbContext>(configuration, AccessDatabase.Configure);
 
         services.AddOptions<AccessTokenOptions>().Bind(configuration.GetSection(AccessTokenOptions.SectionName)).ValidateOnStart();
         services.AddSingleton<IValidateOptions<AccessTokenOptions>, AccessTokenOptionsValidator>();

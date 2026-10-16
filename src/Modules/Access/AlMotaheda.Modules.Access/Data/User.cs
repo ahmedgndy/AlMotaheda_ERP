@@ -24,7 +24,8 @@ internal sealed class User
 
     public UserStatus Status { get; set; } = UserStatus.Active;
 
-    /// <summary>Salted PBKDF2 hash. Never returned by the API and never logged.</summary>
+    /// <summary>Salted PBKDF2 hash. Never returned by the API, never logged and never copied to the audit trail.</summary>
+    [NotAudited]
     public string PasswordHash { get; set; } = "";
 
     /// <summary>When set, the user's token only allows changing the password, reading their profile and signing out.</summary>
@@ -51,7 +52,9 @@ internal sealed class User
 /// Sign-in bookkeeping, kept apart from <see cref="User"/> so that signing in (or failing to) never changes the
 /// user's RowVersion. Otherwise every sign-in would make an Executive's open edit form fail with a conflict, and
 /// someone who knows a password could keep an emergency "disable" from going through.
+/// Not audited: it changes on every sign-in and is bookkeeping, not a business change (the security log records sign-ins).
 /// </summary>
+[NotAudited]
 internal sealed class UserSignInState
 {
     public int UserId { get; set; }

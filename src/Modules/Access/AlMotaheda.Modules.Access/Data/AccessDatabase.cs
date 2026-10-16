@@ -7,9 +7,6 @@ namespace AlMotaheda.Modules.Access.Data;
 /// <summary>SQL Server settings shared by the running application and the <c>dotnet ef</c> tools.</summary>
 internal static class AccessDatabase
 {
-    /// <summary>The connection string name in configuration: <c>ConnectionStrings:Erp</c>. One database, one schema per module.</summary>
-    public const string ConnectionStringName = "Erp";
-
     public static void Configure(SqlServerDbContextOptionsBuilder sql) =>
         sql.MigrationsHistoryTable(AccessDbContext.MigrationsHistoryTable, AccessDbContext.Schema);
 }

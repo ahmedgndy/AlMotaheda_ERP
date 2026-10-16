@@ -9,8 +9,6 @@ using AlMotaheda.Modules.Workforce.Startup;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -31,22 +29,7 @@ public sealed class WorkforceModule : IModule
 
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString(WorkforceDatabase.ConnectionStringName);
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            throw new InvalidOperationException(
-                $"ConnectionStrings:{WorkforceDatabase.ConnectionStringName} is missing. Set it with user secrets in development "
-                + $"or the ConnectionStrings__{WorkforceDatabase.ConnectionStringName} environment variable on the server.");
-        }
-
-        services.AddDbContext<WorkforceDbContext>(options => options
-            .UseSqlServer(connectionString, WorkforceDatabase.Configure)
-            // Failures are logged once, by the host's exception handler; expected ones (a duplicate key) become 409s.
-            .ConfigureWarnings(warnings => warnings.Ignore(
-                CoreEventId.SaveChangesFailed,
-                CoreEventId.QueryIterationFailed,
-                RelationalEventId.CommandError,
-                RelationalEventId.ConnectionError)));
+        services.AddModuleDbContext<WorkforceDbContext>(configuration, WorkforceDatabase.Configure);
 
         services.AddOptions<WorkforceOptions>().Bind(configuration.GetSection(WorkforceOptions.SectionName)).ValidateOnStart();
         services.AddSingleton<IValidateOptions<WorkforceOptions>, WorkforceOptionsValidator>();

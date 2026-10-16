@@ -2,6 +2,7 @@ using AlMotaheda.BuildingBlocks.Modules;
 using AlMotaheda.Modules.Access;
 using AlMotaheda.Modules.Archive;
 using AlMotaheda.Modules.Fleet;
+using AlMotaheda.Modules.Platform;
 using AlMotaheda.Modules.Projects;
 using AlMotaheda.Modules.Subcontractors;
 using AlMotaheda.Modules.Workforce;
@@ -19,11 +20,12 @@ internal static class ModuleCatalog
 {
     /// <summary>Creates a new instance of every module. Called once at startup.</summary>
     /// <remarks>
-    /// The order is the migration order: Access, then Projects, then the modules whose tables point to
-    /// <c>projects</c> tables.
+    /// The order is the migration order: Platform first (every save of every module writes its audit and outbox
+    /// tables), then Access, then Projects, then the modules whose tables point to <c>projects</c> tables.
     /// </remarks>
     public static IReadOnlyList<IModule> CreateAll() =>
     [
+        new PlatformModule(),
         new AccessModule(),
         new ProjectsModule(),
         new WorkforceModule(),

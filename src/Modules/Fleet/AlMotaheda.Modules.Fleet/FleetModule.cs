@@ -8,8 +8,6 @@ using AlMotaheda.Modules.Fleet.Startup;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -29,22 +27,7 @@ public sealed class FleetModule : IModule
 
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString(FleetDatabase.ConnectionStringName);
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            throw new InvalidOperationException(
-                $"ConnectionStrings:{FleetDatabase.ConnectionStringName} is missing. Set it with user secrets in development "
-                + $"or the ConnectionStrings__{FleetDatabase.ConnectionStringName} environment variable on the server.");
-        }
-
-        services.AddDbContext<FleetDbContext>(options => options
-            .UseSqlServer(connectionString, FleetDatabase.Configure)
-            // Failures are logged once, by the host's exception handler; expected ones (a duplicate key) become 409s.
-            .ConfigureWarnings(warnings => warnings.Ignore(
-                CoreEventId.SaveChangesFailed,
-                CoreEventId.QueryIterationFailed,
-                RelationalEventId.CommandError,
-                RelationalEventId.ConnectionError)));
+        services.AddModuleDbContext<FleetDbContext>(configuration, FleetDatabase.Configure);
 
         services.AddCompanyClock();
         services.AddScoped<IProjectCostSource, EquipmentCostSource>();

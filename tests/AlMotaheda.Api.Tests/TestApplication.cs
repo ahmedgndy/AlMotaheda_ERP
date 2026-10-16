@@ -93,6 +93,11 @@ internal sealed class TestApplication : IAsyncDisposable
         }
 
         var usesRealDatabase = builder.Configuration.GetConnectionString("Erp") != NoDatabaseConnectionString;
+        if (!usesRealDatabase)
+        {
+            // Without a database the outbox dispatcher could only fail and retry in the background.
+            builder.Configuration["Platform:Outbox:Enabled"] = "false";
+        }
 
         builder.AddApiHost();
 

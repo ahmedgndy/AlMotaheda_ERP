@@ -8,8 +8,6 @@ using AlMotaheda.Modules.Subcontractors.Startup;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -29,22 +27,7 @@ public sealed class SubcontractorsModule : IModule
 
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString(SubcontractorsDatabase.ConnectionStringName);
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            throw new InvalidOperationException(
-                $"ConnectionStrings:{SubcontractorsDatabase.ConnectionStringName} is missing. Set it with user secrets in development "
-                + $"or the ConnectionStrings__{SubcontractorsDatabase.ConnectionStringName} environment variable on the server.");
-        }
-
-        services.AddDbContext<SubcontractorsDbContext>(options => options
-            .UseSqlServer(connectionString, SubcontractorsDatabase.Configure)
-            // Failures are logged once, by the host's exception handler; expected ones (a duplicate key) become 409s.
-            .ConfigureWarnings(warnings => warnings.Ignore(
-                CoreEventId.SaveChangesFailed,
-                CoreEventId.QueryIterationFailed,
-                RelationalEventId.CommandError,
-                RelationalEventId.ConnectionError)));
+        services.AddModuleDbContext<SubcontractorsDbContext>(configuration, SubcontractorsDatabase.Configure);
 
         services.AddCompanyClock();
         services.AddScoped<ISubcontractItemCosts, SubcontractItemCosts>();

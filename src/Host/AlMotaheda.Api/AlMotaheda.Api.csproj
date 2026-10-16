@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\BuildingBlocks\AlMotaheda.BuildingBlocks\AlMotaheda.BuildingBlocks.csproj" />
+    <ProjectReference Include="..\..\Modules\Platform\AlMotaheda.Modules.Platform\AlMotaheda.Modules.Platform.csproj" />
     <ProjectReference Include="..\..\Modules\Access\AlMotaheda.Modules.Access\AlMotaheda.Modules.Access.csproj" />
     <ProjectReference Include="..\..\Modules\Projects\AlMotaheda.Modules.Projects\AlMotaheda.Modules.Projects.csproj" />
     <ProjectReference Include="..\..\Modules\Workforce\AlMotaheda.Modules.Workforce\AlMotaheda.Modules.Workforce.csproj" />
@@ -37,6 +38,7 @@
     <InternalsVisibleTo Include="AlMotaheda.Modules.Subcontractors.Tests" />
     <InternalsVisibleTo Include="AlMotaheda.Modules.Fleet.Tests" />
     <InternalsVisibleTo Include="AlMotaheda.Modules.Archive.Tests" />
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Platform.Tests" />
   </ItemGroup>
 
 </Project>

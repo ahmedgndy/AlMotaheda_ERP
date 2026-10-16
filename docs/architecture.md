@@ -108,6 +108,11 @@ environment: the connection string, rate limits, forwarded headers and the datab
 **Data rule:** each module owns its own tables, in its own database schema (Access uses `access`).
 No module reads another module's tables. Modules exchange data only through contracts.
 
+**One deliberate exception:** every module **writes** `platform.AuditEntry` and `platform.OutboxMessage`, through
+`AuditTrailInterceptor` (BuildingBlocks.Data), in the transaction of its own save. The audit and the outbox must
+commit or roll back together with the change they describe. Only the Platform module creates and reads those
+tables (see its README).
+
 ## 5. How the host works
 
 ### Startup
@@ -358,9 +363,10 @@ No caching exists yet. When a feature shows a measured need, follow these rules:
 - **Foreign keys between schemas** are allowed only towards the modules the ERD names as shared (Access, Projects,
   Finance), and only for rows that are never deleted. Today there is one: `projects.ProjectMember.UserId` →
   `access.User`. EF can't model a key into another module's context, so it is written by hand in the migration.
-  It makes the order matter: **apply the Access migrations before the Projects migrations.** At startup, modules
-  migrate in `ModuleCatalog` order (Access first; a host test checks it), and Projects stops with a clear message
-  if `access.User` is missing.
+  It makes the order matter: **apply the Platform migrations first, then Access, then Projects.** At startup,
+  modules migrate in `ModuleCatalog` order (Platform, then Access; a host test checks it), and Projects stops with
+  a clear message if `access.User` is missing. Platform is first because every save of every module writes its
+  audit and outbox tables.
 - **Migrations are internal classes.** `dotnet ef` generates them as `public`; change them to `internal`,
   or the module-boundary test fails.
 - **Creating a migration** (from the repository root):

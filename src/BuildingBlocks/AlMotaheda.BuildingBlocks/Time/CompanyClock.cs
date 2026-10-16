@@ -34,6 +34,13 @@ public sealed class CompanyClock
     public DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
 
     public DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(_time.GetUtcNow(), _zone).DateTime);
+
+    /// <summary>
+    /// The UTC moment the company's day <paramref name="date"/> starts (midnight in the company time zone), for
+    /// filtering stored UTC moments by business dates: from <c>StartOfDayUtc(from)</c> to <c>StartOfDayUtc(to + 1 day)</c>.
+    /// </summary>
+    public DateTime StartOfDayUtc(DateOnly date) =>
+        TimeZoneInfo.ConvertTimeToUtc(date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified), _zone);
 }
 
 public static class CompanyClockRegistration

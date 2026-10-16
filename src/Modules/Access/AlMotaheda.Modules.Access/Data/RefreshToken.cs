@@ -3,7 +3,9 @@ namespace AlMotaheda.Modules.Access.Data;
 /// <summary>
 /// A long-lived sign-in token, stored only as a hash. Every refresh revokes the used token and adds a new
 /// one in the same family, so a stolen token works at most once.
+/// Not audited: the hash is a secret, and sign-ins are in the security log.
 /// </summary>
+[NotAudited]
 internal sealed class RefreshToken
 {
     public long Id { get; set; }

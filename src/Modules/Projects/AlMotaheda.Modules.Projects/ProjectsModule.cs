@@ -13,8 +13,6 @@ using AlMotaheda.Modules.Projects.Startup;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -38,22 +36,7 @@ public sealed class ProjectsModule : IModule
 
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString(ProjectsDatabase.ConnectionStringName);
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            throw new InvalidOperationException(
-                $"ConnectionStrings:{ProjectsDatabase.ConnectionStringName} is missing. Set it with user secrets in development "
-                + $"or the ConnectionStrings__{ProjectsDatabase.ConnectionStringName} environment variable on the server.");
-        }
-
-        services.AddDbContext<ProjectsDbContext>(options => options
-            .UseSqlServer(connectionString, ProjectsDatabase.Configure)
-            // Failures are logged once, by the host's exception handler; expected ones (a duplicate code) become 409s.
-            .ConfigureWarnings(warnings => warnings.Ignore(
-                CoreEventId.SaveChangesFailed,
-                CoreEventId.QueryIterationFailed,
-                RelationalEventId.CommandError,
-                RelationalEventId.ConnectionError)));
+        services.AddModuleDbContext<ProjectsDbContext>(configuration, ProjectsDatabase.Configure);
 
         services.AddOptions<ProjectsOptions>().Bind(configuration.GetSection(ProjectsOptions.SectionName)).ValidateOnStart();
         services.AddSingleton<IValidateOptions<ProjectsOptions>, ProjectsOptionsValidator>();

@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Platform module: the audit trail, the outbox dispatcher and the stored notifications. Every other module writes
+    its audit rows and outbox messages through AlMotaheda.BuildingBlocks.Data; this module owns those tables and
+    is the only one that reads them.
+    Allowed references: BuildingBlocks and other modules' *.Contracts projects only.
+    Everything except PlatformModule stays internal.
+  -->
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The module owns its tables, so it owns its EF Core context and migrations (schema "platform"). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <!-- Design-time only: lets `dotnet ef` create migrations for this module. Not shipped with the application. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks\AlMotaheda.BuildingBlocks.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks.Data\AlMotaheda.BuildingBlocks.Data.csproj" />
+    <!-- User names on the audit trail, and the Executive role code. -->
+    <ProjectReference Include="..\..\Access\AlMotaheda.Modules.Access.Contracts\AlMotaheda.Modules.Access.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Platform.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Shared input rules (ValidationErrors, Input, NumberInput, Paging, RowVersions) and SQL Server helpers
+         (SqlAppLock, SqlViolations, SqlList, ModuleMigrations), used by most slices. -->
+    <Using Include="AlMotaheda.BuildingBlocks.Validation" />
+    <Using Include="AlMotaheda.BuildingBlocks.Data" />
+  </ItemGroup>
+
+</Project>

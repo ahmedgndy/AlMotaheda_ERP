@@ -2,13 +2,27 @@
 
   <!--
     SQL Server helpers shared by every module that owns tables (no business logic): application locks,
-    recognising constraint failures, CHECK constraint lists, and applying a module's migrations at startup.
+    recognising constraint failures, CHECK constraint lists, the shared column types, registering a module's
+    DbContext, applying its migrations at startup, and writing the audit trail and outbox of every save.
     Kept apart from AlMotaheda.BuildingBlocks so that project stays free of EF Core.
     Must never reference a module or the API host.
   -->
 
   <ItemGroup>
+    <!-- The audit trail records who made a change, from the signed-in user of the current request. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AlMotaheda.BuildingBlocks\AlMotaheda.BuildingBlocks.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Platform.Tests" />
   </ItemGroup>
 
 </Project>

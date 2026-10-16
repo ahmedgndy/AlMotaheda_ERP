@@ -7,9 +7,6 @@ namespace AlMotaheda.Modules.Subcontractors.Data;
 /// <summary>SQL Server settings shared by the running application and the <c>dotnet ef</c> tools.</summary>
 internal static class SubcontractorsDatabase
 {
-    /// <summary>The connection string name in configuration: <c>ConnectionStrings:Erp</c>. One database, one schema per module.</summary>
-    public const string ConnectionStringName = "Erp";
-
     public static void Configure(SqlServerDbContextOptionsBuilder sql) =>
         sql.MigrationsHistoryTable(SubcontractorsDbContext.MigrationsHistoryTable, SubcontractorsDbContext.Schema);
 }

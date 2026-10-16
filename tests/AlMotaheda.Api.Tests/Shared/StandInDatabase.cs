@@ -2,10 +2,12 @@ using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
 using System.Reflection;
+using AlMotaheda.BuildingBlocks.Data;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace AlMotaheda.Api.Tests;
 
@@ -19,6 +21,8 @@ namespace AlMotaheda.Api.Tests;
 /// collection, so a new module is covered without editing this class.</para>
 /// <para>Only for reads. Nothing here can commit a transaction, so tests stop before any save (for example at a
 /// refused Executive check, or at a project that "doesn't exist").</para>
+/// <para>The audit trail is replaced by an interceptor that does nothing: the real one opens a transaction before
+/// every save and writes Platform tables this stand-in doesn't have. It is tested against SQL Server.</para>
 /// </remarks>
 internal sealed class StandInDatabase
 {
@@ -29,6 +33,9 @@ internal sealed class StandInDatabase
 
     public void AddTo(WebApplicationBuilder builder)
     {
+        builder.Services.RemoveAllKeyed<ISaveChangesInterceptor>(ModuleDatabase.AuditTrailServiceKey);
+        builder.Services.AddKeyedSingleton<ISaveChangesInterceptor, NoAuditTrail>(ModuleDatabase.AuditTrailServiceKey);
+
         var connections = new NeverOpen();
         var commands = new NoRows(Commands);
 
@@ -48,6 +55,8 @@ internal sealed class StandInDatabase
     private static void ConfigureDbContext<TContext>(IServiceCollection services, NeverOpen connections, NoRows commands)
         where TContext : DbContext =>
         services.ConfigureDbContext<TContext>(options => options.AddInterceptors(connections, commands));
+
+    private sealed class NoAuditTrail : SaveChangesInterceptor;
 
     private sealed class NeverOpen : DbConnectionInterceptor
     {
