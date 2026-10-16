@@ -23,6 +23,7 @@ internal sealed partial class ProjectsDbContext(DbContextOptions<ProjectsDbConte
     public DbSet<CatalogItem> CatalogItems => Set<CatalogItem>();
     public DbSet<ItemPrice> ItemPrices => Set<ItemPrice>();
     public DbSet<ProjectExpense> ProjectExpenses => Set<ProjectExpense>();
+    public DbSet<ExpenseAdjustment> ExpenseAdjustments => Set<ExpenseAdjustment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

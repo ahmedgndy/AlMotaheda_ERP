@@ -96,19 +96,13 @@ internal static class ApproveBudget
             .SingleOrDefaultAsync(candidate => candidate.ProjectId == projectId && candidate.Status == BudgetStatus.Approved, cancellationToken);
         if (previous is not null)
         {
-            previous.Status = BudgetStatus.Superseded;
-            previous.UpdatedAt = now;
-            previous.UpdatedBy = caller.UserId;
+            previous.Supersede(caller.UserId, now);
             await db.SaveChangesAsync(cancellationToken);
         }
 
         // A stale rowVersion rolls the whole transaction back, the supersede included.
         db.Entry(budget).Property(candidate => candidate.RowVersion).OriginalValue = rowVersion!;
-        budget.Status = BudgetStatus.Approved;
-        budget.ApprovedAt = now;
-        budget.ApprovedBy = caller.UserId;
-        budget.UpdatedAt = now;
-        budget.UpdatedBy = caller.UserId;
+        budget.Approve(caller.UserId, now);
 
         try
         {

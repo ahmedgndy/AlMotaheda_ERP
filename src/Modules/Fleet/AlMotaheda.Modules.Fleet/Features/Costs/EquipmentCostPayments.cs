@@ -130,6 +130,13 @@ internal static class RecordEquipmentCostPayment
             return FleetProblems.PaymentAlreadyRequested();
         }
 
+        // The full amount, corrections included (M6); an open correction waits for its decision first.
+        var settlement = await EquipmentCostQueries.SettlementRow(db, projectId, costId).SingleAsync(cancellationToken);
+        if (await db.EquipmentCostAdjustments.AnyAsync(adjustment => adjustment.CostId == costId && adjustment.Status == AdjustmentStatus.Requested, cancellationToken))
+        {
+            return FleetProblems.AdjustmentAlreadyOpen();
+        }
+
         PaymentRequestRef created;
         try
         {
@@ -140,14 +147,14 @@ internal static class RecordEquipmentCostPayment
                     cost.SupplierId!.Value,
                     projectId,
                     PaymentPurposes.EquipmentCost,
-                    cost.Amount,
+                    settlement.Amount,
                     method.Value.ToString(),
                     paidOn.Value,
                     reference,
                     null,
                     key,
                     caller.UserId,
-                    [new PaymentLine(PaidRecordTypes.EquipmentCost, costId, projectId, cost.Amount)]),
+                    [new PaymentLine(PaidRecordTypes.EquipmentCost, costId, projectId, settlement.Amount)]),
                 shared,
                 cancellationToken);
         }

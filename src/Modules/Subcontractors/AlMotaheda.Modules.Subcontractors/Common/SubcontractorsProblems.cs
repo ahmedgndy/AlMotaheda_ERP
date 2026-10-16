@@ -72,7 +72,7 @@ internal static class SubcontractorsProblems
         ApiProblem.Create(StatusCodes.Status503ServiceUnavailable, Busy, "Another change is still running. Try again in a moment.");
 
     public static ProblemHttpResult NameTaken() =>
-        Conflict(SubcontractorExists, "A subcontractor with this English name already exists.");
+        Conflict(SubcontractorExists, "A subcontractor with this Arabic or English name already exists.");
 
     public static ProblemHttpResult InactiveSubcontractor() =>
         Conflict(SubcontractorInactive, "This subcontractor is inactive. Reactivate it before giving it a new contract.");

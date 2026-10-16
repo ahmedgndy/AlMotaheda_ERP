@@ -40,6 +40,7 @@ public sealed class FleetApiSecurityTests
         { "POST", "/api/projects/1/equipment-costs/2/payment/void", "payments:A" },
         { "GET", "/api/projects/1/equipment-costs/2/voided-payments", "equipment:V" },
         { "GET", "/api/projects/1/equipment-summary", "equipment:F" },
+        { "POST", "/api/projects/1/equipment-costs/2/adjustments", "equipment:CE" },
     };
 
     [Theory]
@@ -366,6 +367,11 @@ public sealed class FleetApiSecurityTests
         if (method == "GET")
         {
             return null;
+        }
+
+        if (path.EndsWith("/adjustments", StringComparison.Ordinal))
+        {
+            return new { amount = -100m, reason = "Fuel invoice counted twice" };
         }
 
         if (path.EndsWith("/payment/void", StringComparison.Ordinal))

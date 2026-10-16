@@ -8,6 +8,8 @@ internal sealed class SupplierConfiguration : IEntityTypeConfiguration<Supplier>
 {
     /// <summary>Unique index on the English name. A lost race on it is answered with 409 <c>supplier_exists</c>.</summary>
     public const string NameIndex = "UX_Supplier_NameEn";
+    public const string NameArIndex = "UX_Supplier_NameAr";
+    public const string TaxNumberIndex = "UX_Supplier_TaxNumber";
 
     public const int NameMaxLength = 200;
     public const int PhoneMaxLength = 30;
@@ -24,7 +26,11 @@ internal sealed class SupplierConfiguration : IEntityTypeConfiguration<Supplier>
 
         builder.Property(supplier => supplier.NameAr).HasMaxLength(NameMaxLength).IsUnicode();
         builder.Property(supplier => supplier.NameEn).HasMaxLength(NameMaxLength).IsUnicode();
+        // One supplier per name in either language, and per tax number when it is known: the same supplier entered
+        // twice would split its balance (refactor plan M9).
         builder.HasIndex(supplier => supplier.NameEn).IsUnique().HasDatabaseName(NameIndex);
+        builder.HasIndex(supplier => supplier.NameAr).IsUnique().HasDatabaseName(NameArIndex);
+        builder.HasIndex(supplier => supplier.TaxNumber).IsUnique().HasFilter("[TaxNumber] IS NOT NULL").HasDatabaseName(TaxNumberIndex);
 
         builder.Property(supplier => supplier.Kind).HasConversion<string>().HasMaxLength(30).IsUnicode(false);
         builder.Property(supplier => supplier.Status).HasConversion<string>().HasMaxLength(30).IsUnicode(false);

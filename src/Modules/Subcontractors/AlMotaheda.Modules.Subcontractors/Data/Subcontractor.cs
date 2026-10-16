@@ -1,3 +1,4 @@
+using AlMotaheda.BuildingBlocks.Domain;
 namespace AlMotaheda.Modules.Subcontractors.Data;
 
 /// <summary>
@@ -187,7 +188,10 @@ internal sealed class ProgressMeasurement
     /// <summary>round(Quantity × UnitPrice), computed by the server.</summary>
     public decimal Amount { get; set; }
 
-    public WorkStatus Status { get; set; }
+    private WorkStatus _status;
+
+    /// <summary>Set when the record is created; afterwards only this class's methods change it, through <see cref="Flow"/>.</summary>
+    public WorkStatus Status { get => _status; init => _status = value; }
 
     public string? Note { get; set; }
 
@@ -199,6 +203,19 @@ internal sealed class ProgressMeasurement
     public int CreatedBy { get; set; }
 
     public byte[] RowVersion { get; set; } = [];
+
+    /// <summary>Recorded work is approved or rejected once (decision S1).</summary>
+    private static readonly StatusFlow<WorkStatus> Flow = new(
+        (WorkStatus.Recorded, WorkStatus.Approved),
+        (WorkStatus.Recorded, WorkStatus.Rejected));
+
+    public void Review(WorkStatus outcome, int reviewerId, DateTime now, string? note)
+    {
+        _status = Flow.Move(_status, outcome);
+        ReviewedAt = now;
+        ReviewedBy = reviewerId;
+        ReviewNote = note;
+    }
 }
 
 /// <summary>
@@ -232,7 +249,10 @@ internal sealed class ManpowerSheet
 
     public string? Note { get; set; }
 
-    public WorkStatus Status { get; set; }
+    private WorkStatus _status;
+
+    /// <summary>Set when the record is created; afterwards only this class's methods change it, through <see cref="Flow"/>.</summary>
+    public WorkStatus Status { get => _status; init => _status = value; }
 
     public DateTime? ReviewedAt { get; set; }
     public int? ReviewedBy { get; set; }
@@ -244,6 +264,19 @@ internal sealed class ManpowerSheet
     public int? UpdatedBy { get; set; }
 
     public byte[] RowVersion { get; set; } = [];
+
+    /// <summary>Recorded work is approved or rejected once (decision S1).</summary>
+    private static readonly StatusFlow<WorkStatus> Flow = new(
+        (WorkStatus.Recorded, WorkStatus.Approved),
+        (WorkStatus.Recorded, WorkStatus.Rejected));
+
+    public void Review(WorkStatus outcome, int reviewerId, DateTime now, string? note)
+    {
+        _status = Flow.Move(_status, outcome);
+        ReviewedAt = now;
+        ReviewedBy = reviewerId;
+        ReviewNote = note;
+    }
 }
 
 /// <summary>The review state of a measurement or a manpower sheet. Stored by name.</summary>

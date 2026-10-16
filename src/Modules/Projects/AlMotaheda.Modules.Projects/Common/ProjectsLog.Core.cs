@@ -46,4 +46,10 @@ internal sealed partial class ProjectsLog
 
     [LoggerMessage(EventId = 2433, Level = LogLevel.Information, Message = "User {ActorId} requested payment {RequestId} to supplier {SupplierId} on project {ProjectId} with {AllocationCount} allocation(s)")]
     public partial void SupplierPaymentRequested(int actorId, int projectId, int requestId, int supplierId, int allocationCount);
+
+    [LoggerMessage(EventId = 2434, Level = LogLevel.Information, Message = "User {ActorId} asked to correct record {ExpenseId} on project {ProjectId} (adjustment {AdjustmentId})")]
+    public partial void ExpenseAdjustmentRequested(int actorId, int projectId, int expenseId, int adjustmentId);
+
+    [LoggerMessage(EventId = 2435, Level = LogLevel.Information, Message = "User {ActorId} decided adjustment {AdjustmentId} of record {ExpenseId} on project {ProjectId}: {Outcome}")]
+    public partial void ExpenseAdjustmentDecided(int actorId, int projectId, int expenseId, int adjustmentId, string outcome);
 }

@@ -131,10 +131,7 @@ internal static class PriceDecision
             return PlanningProblems.PriceDateAlreadyUsed();
         }
 
-        price.Status = target;
-        price.DecidedAt = clock.UtcNow;
-        price.DecidedBy = caller.UserId;
-        price.DecisionNote = note;
+        price.Decide(target, caller.UserId, clock.UtcNow, note);
 
         try
         {

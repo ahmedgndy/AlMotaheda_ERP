@@ -497,6 +497,72 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.ExpenseAdjustment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("DecidedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("ExpenseId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("RequestedBy")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpenseId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ExpenseAdjustment_OneOpen")
+                        .HasFilter("[Status] = 'Requested'");
+
+                    b.HasIndex(new[] { "ExpenseId", "Status" }, "IX_ExpenseAdjustment_Expense_Status");
+
+                    b.ToTable("ExpenseAdjustment", "projects", t =>
+                        {
+                            t.HasCheckConstraint("CK_ExpenseAdjustment_Amount", "[Amount] <> 0");
+
+                            t.HasCheckConstraint("CK_ExpenseAdjustment_Status", "[Status] IN ('Requested', 'Approved', 'Rejected')");
+                        });
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.ItemPrice", b =>
                 {
                     b.Property<int>("Id")
@@ -1222,9 +1288,18 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("NameAr")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Supplier_NameAr");
+
                     b.HasIndex("NameEn")
                         .IsUnique()
                         .HasDatabaseName("UX_Supplier_NameEn");
+
+                    b.HasIndex("TaxNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Supplier_TaxNumber")
+                        .HasFilter("[TaxNumber] IS NOT NULL");
 
                     b.ToTable("Supplier", "projects", t =>
                         {
@@ -1456,6 +1531,15 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                     b.Navigation("Report");
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.ExpenseAdjustment", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.ProjectExpense", null)
+                        .WithMany("Adjustments")
+                        .HasForeignKey("ExpenseId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.ItemPrice", b =>
                 {
                     b.HasOne("AlMotaheda.Modules.Projects.Data.CatalogItem", "CatalogItem")
@@ -1592,6 +1676,11 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.Project", b =>
                 {
                     b.Navigation("Members");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.ProjectExpense", b =>
+                {
+                    b.Navigation("Adjustments");
                 });
 
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.SupplierPayment", b =>

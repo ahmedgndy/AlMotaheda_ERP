@@ -1,3 +1,4 @@
+using AlMotaheda.BuildingBlocks.Domain;
 namespace AlMotaheda.Modules.Projects.Data;
 
 /// <summary>
@@ -22,7 +23,10 @@ internal sealed class Budget
     /// <summary>1, 2, 3… within the project, in the order the versions were created.</summary>
     public int Version { get; set; }
 
-    public BudgetStatus Status { get; set; } = BudgetStatus.Draft;
+    private BudgetStatus _status = BudgetStatus.Draft;
+
+    /// <summary>Set when the record is created; afterwards only this class's methods change it, through <see cref="Flow"/>.</summary>
+    public BudgetStatus Status { get => _status; init => _status = value; }
 
     public string? Title { get; set; }
     public string? Notes { get; set; }
@@ -39,6 +43,27 @@ internal sealed class Budget
     public byte[] RowVersion { get; set; } = [];
 
     public List<BudgetLine> Lines { get; } = [];
+
+    /// <summary>A draft is approved once; an approved budget is superseded when the next version is approved.</summary>
+    private static readonly StatusFlow<BudgetStatus> Flow = new(
+        (BudgetStatus.Draft, BudgetStatus.Approved),
+        (BudgetStatus.Approved, BudgetStatus.Superseded));
+
+    public void Approve(int userId, DateTime now)
+    {
+        _status = Flow.Move(_status, BudgetStatus.Approved);
+        ApprovedAt = now;
+        ApprovedBy = userId;
+        UpdatedAt = now;
+        UpdatedBy = userId;
+    }
+
+    public void Supersede(int userId, DateTime now)
+    {
+        _status = Flow.Move(_status, BudgetStatus.Superseded);
+        UpdatedAt = now;
+        UpdatedBy = userId;
+    }
 }
 
 /// <summary>Stored by name.</summary>

@@ -21,6 +21,7 @@ internal sealed class FleetDbContext(DbContextOptions<FleetDbContext> options) :
     public DbSet<EquipmentAssignment> EquipmentAssignments => Set<EquipmentAssignment>();
 
     public DbSet<EquipmentCost> EquipmentCosts => Set<EquipmentCost>();
+    public DbSet<EquipmentCostAdjustment> EquipmentCostAdjustments => Set<EquipmentCostAdjustment>();
 
     /// <summary>Every voided payment of an equipment cost: written at the void, never changed.</summary>
     public DbSet<VoidedEquipmentCostPayment> VoidedEquipmentCostPayments => Set<VoidedEquipmentCostPayment>();

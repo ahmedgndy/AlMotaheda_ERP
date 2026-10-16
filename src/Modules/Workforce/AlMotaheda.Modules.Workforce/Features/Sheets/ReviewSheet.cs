@@ -170,12 +170,7 @@ internal static class SheetReview
         }
 
         var now = clock.UtcNow;
-        sheet.Status = target;
-        sheet.ReviewedAt = now;
-        sheet.ReviewedBy = caller.UserId;
-        sheet.ReviewNote = note;
-        sheet.UpdatedAt = now;
-        sheet.UpdatedBy = caller.UserId;
+        sheet.Review(target, caller.UserId, now, note);
 
         db.Entry(sheet).Property(candidate => candidate.RowVersion).OriginalValue = rowVersion!;
 

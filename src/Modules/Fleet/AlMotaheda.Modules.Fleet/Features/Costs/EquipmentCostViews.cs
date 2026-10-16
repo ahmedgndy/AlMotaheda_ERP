@@ -17,6 +17,17 @@ internal sealed record EquipmentCostVoidView(DateTime VoidedAt, FleetPerson Void
 /// <see cref="EquipmentCostSettlement"/>: <see cref="Recognized"/> is zero until approved, <see cref="Paid"/>
 /// follows the channel, <see cref="PaymentState"/> is empty while nothing is owed.
 /// </summary>
+/// <summary>A correction of the cost: <see cref="Amount"/> is signed.</summary>
+internal sealed record CostAdjustmentView(
+    int Id, decimal Amount, string Reason, string Status, DateTime RequestedAt, FleetPerson RequestedBy,
+    DateTime? DecidedAt, FleetPerson? DecidedBy, string? DecisionNote, string RowVersion)
+{
+    public static CostAdjustmentView From(CostAdjustmentRef adjustment, IReadOnlyDictionary<int, UserSummary> people) => new(
+        adjustment.Id, adjustment.Amount, adjustment.Reason, adjustment.Status.ToString(), adjustment.RequestedAt,
+        FleetPerson.From(adjustment.RequestedBy, people), adjustment.DecidedAt, FleetPerson.FromOptional(adjustment.DecidedBy, people),
+        adjustment.DecisionNote, RowVersions.Format(adjustment.RowVersion));
+}
+
 internal sealed record EquipmentCostView(
     int Id,
     int ProjectId,
@@ -32,6 +43,7 @@ internal sealed record EquipmentCostView(
     decimal? Liters,
     decimal? PricePerLiter,
     decimal Amount,
+    decimal AdjustedAmount,
     string Description,
     int? SupplierId,
     string? SupplierNameAr,
@@ -48,6 +60,7 @@ internal sealed record EquipmentCostView(
     string? PaymentState,
     EquipmentCostPaymentView? Payment,
     EquipmentCostVoidView? LastVoidedPayment,
+    IReadOnlyList<CostAdjustmentView> Adjustments,
     DateTime CreatedAt,
     FleetPerson Recorder,
     DateTime? UpdatedAt,
@@ -79,6 +92,7 @@ internal sealed record EquipmentCostView(
             row.Liters,
             row.PricePerLiter,
             row.Amount,
+            row.AdjustedAmount,
             row.Description,
             row.SupplierId,
             supplier?.NameAr,
@@ -104,6 +118,7 @@ internal sealed record EquipmentCostView(
             row.PaymentVoidedAt is { } voidedAt
                 ? new EquipmentCostVoidView(voidedAt, FleetPerson.From(row.PaymentVoidedBy!.Value, people), row.PaymentVoidReason!)
                 : null,
+            row.Adjustments.Select(adjustment => CostAdjustmentView.From(adjustment, people)).ToList(),
             row.CreatedAt,
             FleetPerson.From(row.CreatedBy, people),
             row.UpdatedAt,
@@ -117,7 +132,8 @@ internal sealed record EquipmentCostView(
     {
         var people = await Lookups.UsersAsync(
             users,
-            rows.SelectMany(row => new[] { row.CreatedBy, row.ReviewedBy, row.PaymentRecordedBy, row.PaymentVoidedBy }),
+            rows.SelectMany(row => new[] { row.CreatedBy, row.ReviewedBy, row.PaymentRecordedBy, row.PaymentVoidedBy }
+                .Concat(row.Adjustments.SelectMany(adjustment => new[] { adjustment.RequestedBy, adjustment.DecidedBy }))),
             cancellationToken);
         var supplierNames = await Lookups.SuppliersAsync(suppliers, rows.Select(row => row.SupplierId), cancellationToken);
 

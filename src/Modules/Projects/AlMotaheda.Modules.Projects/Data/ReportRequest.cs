@@ -1,3 +1,4 @@
+using AlMotaheda.BuildingBlocks.Domain;
 namespace AlMotaheda.Modules.Projects.Data;
 
 /// <summary>
@@ -33,7 +34,10 @@ internal sealed class ReportRequest
 
     public ReportRequestPriority Priority { get; set; } = ReportRequestPriority.Normal;
 
-    public ReportRequestStatus Status { get; set; } = ReportRequestStatus.Requested;
+    private ReportRequestStatus _status = ReportRequestStatus.Requested;
+
+    /// <summary>Set when the record is created; afterwards only this class's methods change it, through <see cref="Flow"/>.</summary>
+    public ReportRequestStatus Status { get => _status; init => _status = value; }
 
     /// <summary>True for a report filed without being asked. It is created already Submitted.</summary>
     public bool IsProactive { get; set; }
@@ -56,6 +60,21 @@ internal sealed class ReportRequest
     public string? CancelNote { get; set; }
 
     public byte[] RowVersion { get; set; } = [];
+
+    /// <summary>The moves of <c>ReportRequestFlow</c>: open requests are started, submitted or cancelled; submitted ones completed or returned.</summary>
+    private static readonly StatusFlow<ReportRequestStatus> Flow = new(
+        (ReportRequestStatus.Requested, ReportRequestStatus.InProgress),
+        (ReportRequestStatus.Requested, ReportRequestStatus.Submitted),
+        (ReportRequestStatus.InProgress, ReportRequestStatus.Submitted),
+        (ReportRequestStatus.Returned, ReportRequestStatus.Submitted),
+        (ReportRequestStatus.Requested, ReportRequestStatus.Cancelled),
+        (ReportRequestStatus.InProgress, ReportRequestStatus.Cancelled),
+        (ReportRequestStatus.Returned, ReportRequestStatus.Cancelled),
+        (ReportRequestStatus.Submitted, ReportRequestStatus.Completed),
+        (ReportRequestStatus.Submitted, ReportRequestStatus.Returned));
+
+    /// <summary>Moves the request; the slice sets the fields of the move (response, dates, notes).</summary>
+    public void MoveTo(ReportRequestStatus target) => _status = Flow.Move(_status, target);
 }
 
 /// <summary>What the request is about. Stored by name.</summary>

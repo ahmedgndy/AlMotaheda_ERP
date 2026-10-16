@@ -41,6 +41,8 @@ internal static class FleetFeatures
         ApproveEquipmentCost.Map(api);
         ReturnEquipmentCost.Map(api);
         RejectEquipmentCost.Map(api);
+        RequestEquipmentCostAdjustment.Map(api);
+        DecideEquipmentCostAdjustment.Map(api);
         RecordEquipmentCostPayment.Map(api);
         VoidEquipmentCostPayment.Map(api);
         ListVoidedEquipmentPayments.Map(api);

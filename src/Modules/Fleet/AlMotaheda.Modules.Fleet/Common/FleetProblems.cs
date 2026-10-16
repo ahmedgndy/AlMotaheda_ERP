@@ -17,6 +17,9 @@ internal static class FleetProblems
     public const string NeverOnProject = "never_on_project";
     public const string AlreadyPaid = "already_paid";
     public const string PaymentRequested = "payment_requested";
+    public const string AdjustmentOpen = "adjustment_open";
+    public const string AdjustmentBelowPaid = "adjustment_below_paid";
+    public const string CostBeingPaid = "cost_being_paid";
     public const string IdempotencyKeyReused = "idempotency_key_reused";
     public const string NotPaid = "not_paid";
 
@@ -33,6 +36,23 @@ internal static class FleetProblems
     public static ProblemHttpResult EquipmentNotFound() => NotFound("equipment");
 
     public static ProblemHttpResult AssignmentNotFound() => NotFound("assignment");
+
+    public static ProblemHttpResult AdjustmentNotFound() => NotFound("adjustment");
+
+    public static ProblemHttpResult ExecutiveOnly() =>
+        ApiProblem.ForbiddenResult("Only a currently signed-in Executive can decide a correction.");
+
+    /// <summary>One correction of a cost waits for a decision at a time.</summary>
+    public static ProblemHttpResult AdjustmentAlreadyOpen() =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, AdjustmentOpen, "A correction of this cost is already waiting for a decision.");
+
+    public static ProblemHttpResult AdjustmentBelowZero() =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, AdjustmentBelowPaid, "The corrected amount can't be negative.");
+
+    /// <summary>A credit cost is paid once for its full amount (decision F2): once requested or paid it isn't corrected.</summary>
+    public static ProblemHttpResult BeingPaid() =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, CostBeingPaid,
+            "This cost is paid or its payment is requested, so it can't be corrected. Void the payment or cancel the request first.");
 
     public static ProblemHttpResult CostNotFound() => NotFound("equipment cost");
 

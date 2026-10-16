@@ -70,9 +70,14 @@ internal static class CreateSupplier
         {
             await db.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException exception) when (SqlViolations.IsUnique(exception, SupplierConfiguration.NameIndex))
+        catch (DbUpdateException exception) when (SqlViolations.IsUnique(exception, SupplierConfiguration.NameIndex)
+                                                   || SqlViolations.IsUnique(exception, SupplierConfiguration.NameArIndex))
         {
             return CoreProblems.SupplierNameTaken();
+        }
+        catch (DbUpdateException exception) when (SqlViolations.IsUnique(exception, SupplierConfiguration.TaxNumberIndex))
+        {
+            return CoreProblems.SupplierTaxNumberTaken();
         }
 
         log.SupplierCreated(caller.UserId, supplier.Id);

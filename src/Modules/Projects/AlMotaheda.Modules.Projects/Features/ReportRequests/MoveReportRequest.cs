@@ -175,7 +175,7 @@ internal static class ReportRequestMove
 
         var now = clock.UtcNow;
         var oldStatus = row.Status;
-        row.Status = ReportRequestFlow.Target(action);
+        row.MoveTo(ReportRequestFlow.Target(action));
         switch (action)
         {
             case RequestAction.Start:

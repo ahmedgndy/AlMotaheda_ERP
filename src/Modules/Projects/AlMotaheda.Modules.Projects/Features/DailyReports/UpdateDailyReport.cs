@@ -114,8 +114,7 @@ internal static class UpdateDailyReport
         db.DailyReportLines.RemoveRange(report.Lines);
         db.DailyReportMaterials.RemoveRange(report.Materials);
         db.DailyReportEquipment.RemoveRange(report.Equipment);
-        report.Status = DailyReportStatus.Submitted;
-        report.SubmittedAt = clock.UtcNow;
+        report.Resubmit(clock.UtcNow);
 
         try
         {

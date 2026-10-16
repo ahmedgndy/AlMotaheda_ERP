@@ -118,10 +118,7 @@ internal static class DailyReportReview
                 return WorkspaceProblems.WrongStatus($"Only a submitted report can be reviewed or returned. This one is {report.Status}.");
         }
 
-        report.Status = target;
-        report.ReviewedAt = clock.UtcNow;
-        report.ReviewedBy = caller.UserId;
-        report.ReviewNote = note;
+        report.Review(target, caller.UserId, clock.UtcNow, note);
         db.Entry(report).Property(candidate => candidate.RowVersion).OriginalValue = rowVersion!;
 
         try

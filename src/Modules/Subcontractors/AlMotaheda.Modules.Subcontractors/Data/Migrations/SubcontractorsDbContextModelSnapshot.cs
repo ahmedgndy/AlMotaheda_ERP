@@ -602,6 +602,10 @@ namespace AlMotaheda.Modules.Subcontractors.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("NameAr")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Subcontractor_NameAr");
+
                     b.HasIndex("NameEn")
                         .IsUnique()
                         .HasDatabaseName("UX_Subcontractor_NameEn");

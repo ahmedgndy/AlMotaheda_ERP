@@ -1,3 +1,4 @@
+using AlMotaheda.BuildingBlocks.Domain;
 namespace AlMotaheda.Modules.Projects.Data;
 
 /// <summary>
@@ -72,7 +73,10 @@ internal sealed class ProjectExpense
     public DateTime? ItemLinkedAt { get; set; }
     public int? ItemLinkedBy { get; set; }
 
-    public ExpenseStatus Status { get; set; } = ExpenseStatus.Recorded;
+    private ExpenseStatus _status = ExpenseStatus.Recorded;
+
+    /// <summary>Set when the record is created; afterwards only this class's methods change it, through <see cref="Flow"/>.</summary>
+    public ExpenseStatus Status { get => _status; init => _status = value; }
 
     public DateTime? ReviewedAt { get; set; }
     public int? ReviewedBy { get; set; }
@@ -89,6 +93,44 @@ internal sealed class ProjectExpense
     public int? UpdatedBy { get; set; }
 
     public byte[] RowVersion { get; set; } = [];
+
+    /// <summary>Corrections after approval (refactor plan M6). Approved ones change every figure of the record.</summary>
+    public List<ExpenseAdjustment> Adjustments { get; } = [];
+
+    /// <summary>Recorded → Approved, Returned or Rejected by a reviewer; Recorded or Returned → Recorded when its recorder fixes it.</summary>
+    private static readonly StatusFlow<ExpenseStatus> Flow = new(
+        (ExpenseStatus.Recorded, ExpenseStatus.Approved),
+        (ExpenseStatus.Recorded, ExpenseStatus.Returned),
+        (ExpenseStatus.Recorded, ExpenseStatus.Rejected),
+        (ExpenseStatus.Recorded, ExpenseStatus.Recorded),
+        (ExpenseStatus.Returned, ExpenseStatus.Recorded));
+
+    /// <summary>Approve, return or reject (the slice checked <c>ExpenseRules.Review</c> first).</summary>
+    public void Review(ExpenseStatus outcome, int reviewerId, DateTime now, string? note)
+    {
+        if (outcome == ExpenseStatus.Recorded)
+        {
+            throw new ArgumentOutOfRangeException(nameof(outcome), outcome, "A review approves, returns or rejects.");
+        }
+
+        _status = Flow.Move(_status, outcome);
+        ReviewedAt = now;
+        ReviewedBy = reviewerId;
+        ReviewNote = note;
+        UpdatedAt = now;
+        UpdatedBy = reviewerId;
+    }
+
+    /// <summary>Fixed by its recorder and sent again: Recorded, with the last review cleared.</summary>
+    public void Resubmit(int userId, DateTime now)
+    {
+        _status = Flow.Move(_status, ExpenseStatus.Recorded);
+        ReviewedAt = null;
+        ReviewedBy = null;
+        ReviewNote = null;
+        UpdatedAt = now;
+        UpdatedBy = userId;
+    }
 }
 
 /// <summary>Stored by name.</summary>

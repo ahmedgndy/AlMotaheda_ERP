@@ -36,9 +36,14 @@ internal sealed class EquipmentCostPaymentSource(
 
         var cost = await joined.EquipmentCosts
             .SingleOrDefaultAsync(candidate => candidate.Id == line.RecordId && candidate.ProjectId == projectId, cancellationToken);
+        var adjusted = cost is null
+            ? 0
+            : cost.Amount + (await joined.EquipmentCostAdjustments
+                .Where(adjustment => adjustment.CostId == cost.Id && adjustment.Status == AdjustmentStatus.Approved)
+                .SumAsync(adjustment => (decimal?)adjustment.Amount, cancellationToken) ?? 0);
         if (cost is null
             || cost.SupplierId != settlement.PayeeId
-            || cost.Amount != settlement.Amount
+            || adjusted != settlement.Amount
             || EquipmentCostRules.Pay(cost.Status, cost.Channel, cost.PaidOn is not null) != CostDecision.Allowed)
         {
             throw new PaymentNotPayableException($"Equipment cost {line.RecordId} can no longer be paid as requested.");

@@ -65,7 +65,8 @@ internal static class CreateSubcontractor
         {
             await db.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException exception) when (SqlViolations.IsUnique(exception, SubcontractorConfiguration.NameIndex))
+        catch (DbUpdateException exception) when (SqlViolations.IsUnique(exception, SubcontractorConfiguration.NameIndex)
+                                                   || SqlViolations.IsUnique(exception, SubcontractorConfiguration.NameArIndex))
         {
             return SubcontractorsProblems.NameTaken();
         }
@@ -146,7 +147,8 @@ internal static class UpdateSubcontractor
         {
             return ApiProblem.ConcurrencyConflictResult();
         }
-        catch (DbUpdateException exception) when (SqlViolations.IsUnique(exception, SubcontractorConfiguration.NameIndex))
+        catch (DbUpdateException exception) when (SqlViolations.IsUnique(exception, SubcontractorConfiguration.NameIndex)
+                                                   || SqlViolations.IsUnique(exception, SubcontractorConfiguration.NameArIndex))
         {
             return SubcontractorsProblems.NameTaken();
         }

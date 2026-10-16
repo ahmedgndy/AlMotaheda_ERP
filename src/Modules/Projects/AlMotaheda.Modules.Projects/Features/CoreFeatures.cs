@@ -47,6 +47,8 @@ internal static class CoreFeatures
         ReturnExpense.Map(projects);
         RejectExpense.Map(projects);
         LinkExpenseItem.Map(projects);
+        RequestExpenseAdjustment.Map(projects);
+        DecideExpenseAdjustment.Map(projects);
 
         ListSupplierPayments.Map(projects);
         RecordSupplierPayment.Map(projects);

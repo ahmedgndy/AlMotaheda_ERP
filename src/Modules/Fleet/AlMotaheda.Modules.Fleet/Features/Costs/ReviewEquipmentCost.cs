@@ -133,12 +133,7 @@ internal static class EquipmentCostReview
                 return FleetProblems.WrongStatus($"Only a recorded cost can be reviewed. This one is {cost.Status}.");
         }
 
-        cost.Status = target;
-        cost.ReviewedAt = clock.UtcNow;
-        cost.ReviewedBy = caller.UserId;
-        cost.ReviewNote = note;
-        cost.UpdatedAt = cost.ReviewedAt;
-        cost.UpdatedBy = caller.UserId;
+        cost.Review(target, caller.UserId, clock.UtcNow, note);
         db.Entry(cost).Property(candidate => candidate.RowVersion).OriginalValue = rowVersion!;
 
         try

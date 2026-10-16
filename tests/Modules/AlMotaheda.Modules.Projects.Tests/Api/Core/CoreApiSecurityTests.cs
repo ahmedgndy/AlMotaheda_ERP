@@ -41,6 +41,7 @@ public sealed class CoreApiSecurityTests
         { "POST", "/api/projects/1/expenses/2/return", "projects:A" },
         { "POST", "/api/projects/1/expenses/2/reject", "projects:A" },
         { "PUT", "/api/projects/1/expenses/2/item", "projects:EA" },
+        { "POST", "/api/projects/1/expenses/2/adjustments", "projects:C" },
         { "GET", "/api/projects/1/supplier-payments", "projects:F" },
         { "POST", "/api/projects/1/supplier-payments", "payments:C" },
         { "POST", "/api/projects/1/supplier-payments/2/void", "payments:A" },
@@ -371,6 +372,11 @@ public sealed class CoreApiSecurityTests
             return path.EndsWith("activate", StringComparison.Ordinal)
                 ? new { rowVersion = RowVersion }
                 : new { nameAr = "الأعمال الخرسانية", nameEn = "Concrete works", category = "Concrete", unit = "M3", rowVersion = RowVersion };
+        }
+
+        if (path.EndsWith("/adjustments", StringComparison.Ordinal))
+        {
+            return new { amount = -100m, reason = "Charged twice for the same truck" };
         }
 
         if (path.EndsWith("/item", StringComparison.Ordinal))

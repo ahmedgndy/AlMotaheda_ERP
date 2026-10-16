@@ -42,9 +42,19 @@ internal sealed class EquipmentCostRow
     public int? UpdatedBy { get; init; }
     public byte[] RowVersion { get; init; } = [];
 
+    /// <summary>The recorded amount plus its approved adjustments: what every figure uses.</summary>
+    public decimal AdjustedAmount { get; init; }
+
+    public List<CostAdjustmentRef> Adjustments { get; init; } = [];
+
     public EquipmentCostSettlementRow Settlement =>
-        new(Id, EquipmentId, Type, Status, Channel, CostDate, Amount, Liters, PaidOn is not null);
+        new(Id, EquipmentId, Type, Status, Channel, CostDate, AdjustedAmount, Liters, PaidOn is not null);
 }
+
+/// <summary>One correction of a cost, as loaded with it.</summary>
+internal sealed record CostAdjustmentRef(
+    int Id, decimal Amount, string Reason, AdjustmentStatus Status, DateTime RequestedAt, int RequestedBy,
+    DateTime? DecidedAt, int? DecidedBy, string? DecisionNote, byte[] RowVersion);
 
 /// <summary>The filters of <c>GET /api/projects/{pid}/equipment-costs</c>, after validation.</summary>
 /// <param name="RecordedBy">Set for a caller without equipment See money: only their own records.</param>
@@ -81,6 +91,15 @@ internal static class EquipmentCostQueries
             query = query.Where(cost => cost.CostDate <= end);
         }
 
+        return Settle(query);
+    }
+
+    /// <summary>The same row for one cost of the project (a correction, a payment request).</summary>
+    public static IQueryable<EquipmentCostSettlementRow> SettlementRow(FleetDbContext db, int projectId, int costId) =>
+        Settle(db.EquipmentCosts.AsNoTracking().Where(cost => cost.ProjectId == projectId && cost.Id == costId));
+
+    private static IQueryable<EquipmentCostSettlementRow> Settle(IQueryable<EquipmentCost> query)
+    {
         return query.Select(cost => new EquipmentCostSettlementRow(
             cost.Id,
             cost.EquipmentId,
@@ -88,7 +107,9 @@ internal static class EquipmentCostQueries
             cost.Status,
             cost.Channel,
             cost.CostDate,
-            cost.Amount,
+            // The adjusted amount: the recorded amount plus its approved corrections (M6).
+            cost.Amount + (cost.Adjustments.Where(adjustment => adjustment.Status == AdjustmentStatus.Approved)
+                .Sum(adjustment => (decimal?)adjustment.Amount) ?? 0),
             cost.Liters,
             cost.PaidOn != null));
     }
@@ -163,6 +184,14 @@ internal static class EquipmentCostQueries
             Liters = cost.Liters,
             PricePerLiter = cost.PricePerLiter,
             Amount = cost.Amount,
+            AdjustedAmount = cost.Amount + (cost.Adjustments.Where(adjustment => adjustment.Status == AdjustmentStatus.Approved)
+                .Sum(adjustment => (decimal?)adjustment.Amount) ?? 0),
+            Adjustments = cost.Adjustments
+                .OrderBy(adjustment => adjustment.Id)
+                .Select(adjustment => new CostAdjustmentRef(
+                    adjustment.Id, adjustment.Amount, adjustment.Reason, adjustment.Status, adjustment.RequestedAt, adjustment.RequestedBy,
+                    adjustment.DecidedAt, adjustment.DecidedBy, adjustment.DecisionNote, adjustment.RowVersion))
+                .ToList(),
             Description = cost.Description,
             SupplierId = cost.SupplierId,
             Channel = cost.Channel,

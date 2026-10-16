@@ -1,3 +1,4 @@
+using AlMotaheda.BuildingBlocks.Domain;
 namespace AlMotaheda.Modules.Projects.Data;
 
 /// <summary>
@@ -86,7 +87,10 @@ internal sealed class ItemPrice
     /// <summary>The first day this price applies. May be in the future: it then becomes current on that day.</summary>
     public DateOnly EffectiveFrom { get; set; }
 
-    public ItemPriceStatus Status { get; set; } = ItemPriceStatus.Pending;
+    private ItemPriceStatus _status = ItemPriceStatus.Pending;
+
+    /// <summary>Set when the record is created; afterwards only this class's methods change it, through <see cref="Flow"/>.</summary>
+    public ItemPriceStatus Status { get => _status; init => _status = value; }
 
     public string? Reason { get; set; }
 
@@ -96,6 +100,19 @@ internal sealed class ItemPrice
     public DateTime? DecidedAt { get; set; }
     public int? DecidedBy { get; set; }
     public string? DecisionNote { get; set; }
+
+    /// <summary>A requested price is approved or rejected once.</summary>
+    private static readonly StatusFlow<ItemPriceStatus> Flow = new(
+        (ItemPriceStatus.Pending, ItemPriceStatus.Approved),
+        (ItemPriceStatus.Pending, ItemPriceStatus.Rejected));
+
+    public void Decide(ItemPriceStatus outcome, int deciderId, DateTime now, string? note)
+    {
+        _status = Flow.Move(_status, outcome);
+        DecidedAt = now;
+        DecidedBy = deciderId;
+        DecisionNote = note;
+    }
 }
 
 internal enum ItemPriceStatus

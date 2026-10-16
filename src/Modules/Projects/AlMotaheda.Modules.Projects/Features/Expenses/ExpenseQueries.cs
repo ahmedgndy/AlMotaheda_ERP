@@ -56,8 +56,18 @@ internal sealed class ExpenseRow
 
     public decimal Allocated => Payments.Sum(payment => payment.Amount);
 
-    public ExpenseSettlementRow Settlement => new(Id, Kind, Status, Channel, Category, SupplierId, ProjectItemId, Amount, Allocated);
+    /// <summary>The recorded amount plus its approved adjustments: what every figure uses.</summary>
+    public decimal AdjustedAmount { get; init; }
+
+    public List<ExpenseAdjustmentRef> Adjustments { get; init; } = [];
+
+    public ExpenseSettlementRow Settlement => new(Id, Kind, Status, Channel, Category, SupplierId, ProjectItemId, AdjustedAmount, Allocated);
 }
+
+/// <summary>One correction of a record, as loaded with it.</summary>
+internal sealed record ExpenseAdjustmentRef(
+    int Id, decimal Amount, string Reason, AdjustmentStatus Status, DateTime RequestedAt, int RequestedBy,
+    DateTime? DecidedAt, int? DecidedBy, string? DecisionNote, byte[] RowVersion);
 
 /// <summary>The filters of <c>GET /api/projects/{pid}/expenses</c>, after validation.</summary>
 internal sealed record ExpenseFilter(
@@ -97,7 +107,9 @@ internal static class ExpenseQueries
             expense.Category,
             expense.SupplierId,
             expense.ProjectItemId,
-            expense.Amount,
+            // The adjusted amount: the recorded amount plus its approved corrections (M6).
+            expense.Amount + (expense.Adjustments.Where(adjustment => adjustment.Status == AdjustmentStatus.Approved)
+                .Sum(adjustment => (decimal?)adjustment.Amount) ?? 0),
             db.SupplierPaymentAllocations
                 .Where(allocation => allocation.ExpenseId == expense.Id && allocation.Payment.VoidedAt == null)
                 .Sum(allocation => allocation.Amount)));
@@ -243,6 +255,14 @@ internal static class ExpenseQueries
             Category = expense.Category,
             Description = expense.Description,
             Amount = expense.Amount,
+            AdjustedAmount = expense.Amount + (expense.Adjustments.Where(adjustment => adjustment.Status == AdjustmentStatus.Approved)
+                .Sum(adjustment => (decimal?)adjustment.Amount) ?? 0),
+            Adjustments = expense.Adjustments
+                .OrderBy(adjustment => adjustment.Id)
+                .Select(adjustment => new ExpenseAdjustmentRef(
+                    adjustment.Id, adjustment.Amount, adjustment.Reason, adjustment.Status, adjustment.RequestedAt, adjustment.RequestedBy,
+                    adjustment.DecidedAt, adjustment.DecidedBy, adjustment.DecisionNote, adjustment.RowVersion))
+                .ToList(),
             Channel = expense.Channel,
             InvoiceNo = expense.InvoiceNo,
             DeliveryNoteNo = expense.DeliveryNoteNo,

@@ -94,10 +94,7 @@ internal static class SubmitSheet
 
         var oldStatus = sheet.Status;
         var now = clock.UtcNow;
-        sheet.Status = SheetStatus.Submitted;
-        sheet.SubmittedAt = now;
-        sheet.UpdatedAt = now;
-        sheet.UpdatedBy = caller.UserId;
+        sheet.Submit(caller.UserId, now);
 
         db.Entry(sheet).Property(candidate => candidate.RowVersion).OriginalValue = rowVersion!;
 

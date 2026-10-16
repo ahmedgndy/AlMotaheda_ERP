@@ -127,10 +127,7 @@ internal static class ManpowerReview
         }
 
         var now = clock.UtcNow;
-        sheet.Status = target;
-        sheet.ReviewedAt = now;
-        sheet.ReviewedBy = caller.UserId;
-        sheet.ReviewNote = input!.Note;
+        sheet.Review(target, caller.UserId, now, input!.Note);
         db.Entry(sheet).Property(candidate => candidate.RowVersion).OriginalValue = input.RowVersion;
 
         try

@@ -18,6 +18,18 @@ internal sealed record ExpensePaymentView(int PaymentId, DateOnly Date, string M
 /// <see cref="ExpenseSettlement"/>: <see cref="Recognized"/> is zero until approved, <see cref="Paid"/> follows the
 /// channel, <see cref="PaymentState"/> is empty while nothing is owed.
 /// </summary>
+/// <summary>A correction of the record: <see cref="Amount"/> is signed. Money fields are null without See money, like the record's.</summary>
+internal sealed record ExpenseAdjustmentView(
+    int Id, decimal Amount, string Reason, string Status, DateTime RequestedAt, PersonRef RequestedBy,
+    DateTime? DecidedAt, PersonRef? DecidedBy, string? DecisionNote, string RowVersion)
+{
+    public static ExpenseAdjustmentView From(ExpenseAdjustmentRef adjustment, IReadOnlyDictionary<int, UserSummary> people) => new(
+        adjustment.Id, adjustment.Amount, adjustment.Reason, adjustment.Status.ToString(), adjustment.RequestedAt,
+        PersonRef.From(adjustment.RequestedBy, people), adjustment.DecidedAt,
+        adjustment.DecidedBy is { } decider ? PersonRef.From(decider, people) : null, adjustment.DecisionNote,
+        RowVersions.Format(adjustment.RowVersion));
+}
+
 internal sealed record ExpenseView(
     int Id,
     int ProjectId,
@@ -34,6 +46,7 @@ internal sealed record ExpenseView(
     string? Category,
     string? Description,
     decimal Amount,
+    decimal AdjustedAmount,
     string Channel,
     string? InvoiceNo,
     string? DeliveryNoteNo,
@@ -56,6 +69,7 @@ internal sealed record ExpenseView(
     decimal Outstanding,
     string? PaymentState,
     IReadOnlyList<ExpensePaymentView> Payments,
+    IReadOnlyList<ExpenseAdjustmentView> Adjustments,
     DateTime CreatedAt,
     PersonRef Recorder,
     DateTime? UpdatedAt,
@@ -82,6 +96,7 @@ internal sealed record ExpenseView(
             row.Category?.ToString(),
             row.Description,
             row.Amount,
+            row.AdjustedAmount,
             row.Channel.ToString(),
             row.InvoiceNo,
             row.DeliveryNoteNo,
@@ -104,6 +119,7 @@ internal sealed record ExpenseView(
             ExpenseSettlement.Outstanding(settlement),
             ExpenseSettlement.PaymentState(settlement),
             row.Payments.Select(ExpensePaymentView.From).ToList(),
+            row.Adjustments.Select(adjustment => ExpenseAdjustmentView.From(adjustment, people)).ToList(),
             row.CreatedAt,
             PersonRef.From(row.CreatedBy, people),
             row.UpdatedAt,
@@ -117,6 +133,7 @@ internal sealed record ExpenseView(
     {
         var userIds = rows.Select(row => row.CreatedBy)
             .Concat(rows.Where(row => row.ReviewedBy is not null).Select(row => row.ReviewedBy!.Value))
+            .Concat(rows.SelectMany(row => row.Adjustments).SelectMany(adjustment => new[] { adjustment.RequestedBy, adjustment.DecidedBy ?? adjustment.RequestedBy }))
             .Distinct()
             .ToList();
         var people = userIds.Count == 0

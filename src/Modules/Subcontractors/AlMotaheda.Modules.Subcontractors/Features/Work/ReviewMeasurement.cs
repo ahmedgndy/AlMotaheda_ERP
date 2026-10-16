@@ -146,10 +146,7 @@ internal static class MeasurementReview
         }
 
         var now = clock.UtcNow;
-        measurement.Status = target;
-        measurement.ReviewedAt = now;
-        measurement.ReviewedBy = caller.UserId;
-        measurement.ReviewNote = input!.Note;
+        measurement.Review(target, caller.UserId, now, input!.Note);
         db.Entry(measurement).Property(candidate => candidate.RowVersion).OriginalValue = input.RowVersion;
 
         try

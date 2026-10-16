@@ -142,8 +142,7 @@ internal static class UpdateSheet
         sheet.UpdatedBy = caller.UserId;
         if (form.Submit)
         {
-            sheet.Status = SheetStatus.Submitted;
-            sheet.SubmittedAt = now;
+            sheet.Submit(caller.UserId, now);
         }
 
         db.Entry(sheet).Property(candidate => candidate.RowVersion).OriginalValue = rowVersion!;

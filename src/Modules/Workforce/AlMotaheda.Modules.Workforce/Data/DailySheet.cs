@@ -1,3 +1,4 @@
+using AlMotaheda.BuildingBlocks.Domain;
 namespace AlMotaheda.Modules.Workforce.Data;
 
 /// <summary>
@@ -18,7 +19,10 @@ internal sealed class DailySheet
     /// <summary>The engineer who recorded the sheet. Only they edit and submit it; never they approve it.</summary>
     public int RecordedBy { get; set; }
 
-    public SheetStatus Status { get; set; } = SheetStatus.Draft;
+    private SheetStatus _status = SheetStatus.Draft;
+
+    /// <summary>Set when the record is created; afterwards only this class's methods change it, through <see cref="Flow"/>.</summary>
+    public SheetStatus Status { get => _status; init => _status = value; }
 
     public DateTime? SubmittedAt { get; set; }
 
@@ -38,6 +42,32 @@ internal sealed class DailySheet
     public byte[] RowVersion { get; set; } = [];
 
     public List<AttendanceLine> Lines { get; } = [];
+
+    /// <summary>Draft or Returned → Submitted by its recorder; Submitted → Approved, Returned or Rejected by a reviewer.</summary>
+    private static readonly StatusFlow<SheetStatus> Flow = new(
+        (SheetStatus.Draft, SheetStatus.Submitted),
+        (SheetStatus.Returned, SheetStatus.Submitted),
+        (SheetStatus.Submitted, SheetStatus.Approved),
+        (SheetStatus.Submitted, SheetStatus.Returned),
+        (SheetStatus.Submitted, SheetStatus.Rejected));
+
+    public void Submit(int userId, DateTime now)
+    {
+        _status = Flow.Move(_status, SheetStatus.Submitted);
+        SubmittedAt = now;
+        UpdatedAt = now;
+        UpdatedBy = userId;
+    }
+
+    public void Review(SheetStatus outcome, int reviewerId, DateTime now, string? note)
+    {
+        _status = Flow.Move(_status, outcome);
+        ReviewedAt = now;
+        ReviewedBy = reviewerId;
+        ReviewNote = note;
+        UpdatedAt = now;
+        UpdatedBy = reviewerId;
+    }
 }
 
 /// <summary>Stored by name. A worker can be recorded once per shift per day: a night guard can also work the day.</summary>

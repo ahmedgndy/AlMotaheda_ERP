@@ -120,12 +120,7 @@ internal static class UpdateExpense
 
         fields!.ApplyTo(expense);
         expense.CatalogPriceAtRecording = references.CatalogPrice;
-        expense.Status = ExpenseStatus.Recorded;
-        expense.ReviewedAt = null;
-        expense.ReviewedBy = null;
-        expense.ReviewNote = null;
-        expense.UpdatedAt = now;
-        expense.UpdatedBy = caller.UserId;
+        expense.Resubmit(caller.UserId, now);
 
         if (fields.ProjectItemId != expense.ProjectItemId)
         {

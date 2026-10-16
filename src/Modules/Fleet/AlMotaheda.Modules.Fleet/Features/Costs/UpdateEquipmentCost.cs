@@ -112,12 +112,7 @@ internal static class UpdateEquipmentCost
 
         var oldStatus = cost.Status;
         fields!.ApplyTo(cost);
-        cost.Status = EquipmentCostStatus.Recorded;
-        cost.ReviewedAt = null;
-        cost.ReviewedBy = null;
-        cost.ReviewNote = null;
-        cost.UpdatedAt = clock.UtcNow;
-        cost.UpdatedBy = caller.UserId;
+        cost.Resubmit(caller.UserId, clock.UtcNow);
         db.Entry(cost).Property(candidate => candidate.RowVersion).OriginalValue = rowVersion!;
 
         try

@@ -132,12 +132,7 @@ internal static class ExpenseReview
                 return WorkspaceProblems.WrongStatus($"Only a recorded record can be reviewed. This one is {expense.Status}.");
         }
 
-        expense.Status = target;
-        expense.ReviewedAt = clock.UtcNow;
-        expense.ReviewedBy = caller.UserId;
-        expense.ReviewNote = note;
-        expense.UpdatedAt = expense.ReviewedAt;
-        expense.UpdatedBy = caller.UserId;
+        expense.Review(target, caller.UserId, clock.UtcNow, note);
 
         db.Entry(expense).Property(candidate => candidate.RowVersion).OriginalValue = rowVersion!;
 

@@ -8,6 +8,7 @@ internal sealed class SubcontractorConfiguration : IEntityTypeConfiguration<Subc
 {
     /// <summary>Unique index on the English name. A lost race on it is answered with 409 <c>subcontractor_exists</c>.</summary>
     public const string NameIndex = "UX_Subcontractor_NameEn";
+    public const string NameArIndex = "UX_Subcontractor_NameAr";
 
     public const int NameMaxLength = 200;
     public const int ContactMaxLength = 200;
@@ -26,7 +27,9 @@ internal sealed class SubcontractorConfiguration : IEntityTypeConfiguration<Subc
 
         builder.Property(company => company.NameAr).HasMaxLength(NameMaxLength).IsUnicode();
         builder.Property(company => company.NameEn).HasMaxLength(NameMaxLength).IsUnicode();
+        // One company per name in either language: the same company entered twice would split its contracts (M9).
         builder.HasIndex(company => company.NameEn).IsUnique().HasDatabaseName(NameIndex);
+        builder.HasIndex(company => company.NameAr).IsUnique().HasDatabaseName(NameArIndex);
 
         builder.Property(company => company.Specialty).HasConversion<string>().HasMaxLength(30).IsUnicode(false);
         builder.Property(company => company.Status).HasConversion<string>().HasMaxLength(30).IsUnicode(false);

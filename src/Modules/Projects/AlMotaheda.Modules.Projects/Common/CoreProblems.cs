@@ -11,12 +11,15 @@ namespace AlMotaheda.Modules.Projects.Common;
 internal static class CoreProblems
 {
     public const string SupplierExists = "supplier_exists";
+    public const string SupplierTaxNumberExists = "supplier_tax_number_exists";
     public const string ItemNameTaken = "item_name_taken";
     public const string ItemHasRecords = "item_has_records";
     public const string OverAllocation = "over_allocation";
     public const string PaymentAlreadyVoided = "payment_already_voided";
     public const string EquipmentCostsElsewhere = "use_equipment_costs";
     public const string ItemGone = "item_removed";
+    public const string AdjustmentOpen = "adjustment_open";
+    public const string AdjustmentBelowPaid = "adjustment_below_paid";
 
     public static ProblemHttpResult SupplierNotFound() => WorkspaceProblems.NotFound("supplier");
 
@@ -24,10 +27,24 @@ internal static class CoreProblems
 
     public static ProblemHttpResult ExpenseNotFound() => WorkspaceProblems.NotFound("record");
 
+    public static ProblemHttpResult AdjustmentNotFound() => WorkspaceProblems.NotFound("adjustment");
+
+    /// <summary>One correction of a record waits for a decision at a time.</summary>
+    public static ProblemHttpResult AdjustmentAlreadyOpen() =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, AdjustmentOpen, "A correction of this record is already waiting for a decision.");
+
+    /// <summary>The corrected amount would be negative, or below what is paid or held by payment requests.</summary>
+    public static ProblemHttpResult AdjustmentBelowPaidAmount(decimal floor) =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, AdjustmentBelowPaid,
+            $"The corrected amount can't go below {floor:0.00}: that much is already paid or requested, or it would be negative.");
+
     public static ProblemHttpResult PaymentNotFound() => WorkspaceProblems.NotFound("payment");
 
     public static ProblemHttpResult SupplierNameTaken() =>
-        ApiProblem.Create(StatusCodes.Status409Conflict, SupplierExists, "A supplier with this English name already exists.");
+        ApiProblem.Create(StatusCodes.Status409Conflict, SupplierExists, "A supplier with this Arabic or English name already exists.");
+
+    public static ProblemHttpResult SupplierTaxNumberTaken() =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, SupplierTaxNumberExists, "A supplier with this tax number already exists.");
 
     public static ProblemHttpResult ItemNameAlreadyUsed() =>
         ApiProblem.Create(StatusCodes.Status409Conflict, ItemNameTaken, "This project already has an item with this name.");

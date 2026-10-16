@@ -72,7 +72,9 @@ internal static class ReportQueries
             expense.Category,
             expense.SupplierId,
             expense.ProjectItemId,
-            expense.Amount,
+            // The adjusted amount, like ExpenseQueries.SettlementRows.
+            expense.Amount + (expense.Adjustments.Where(adjustment => adjustment.Status == AdjustmentStatus.Approved)
+                .Sum(adjustment => (decimal?)adjustment.Amount) ?? 0),
             db.SupplierPaymentAllocations
                 .Where(allocation => allocation.ExpenseId == expense.Id && allocation.Payment.VoidedAt == null)
                 .Sum(allocation => allocation.Amount)));

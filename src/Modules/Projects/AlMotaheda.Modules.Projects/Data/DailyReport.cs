@@ -1,3 +1,4 @@
+using AlMotaheda.BuildingBlocks.Domain;
 namespace AlMotaheda.Modules.Projects.Data;
 
 /// <summary>
@@ -24,7 +25,10 @@ internal sealed class DailyReport
     /// <summary>The user who wrote the report (Access module). Only they can edit it; they can never review it.</summary>
     public int AuthorUserId { get; set; }
 
-    public DailyReportStatus Status { get; set; } = DailyReportStatus.Submitted;
+    private DailyReportStatus _status = DailyReportStatus.Submitted;
+
+    /// <summary>Set when the record is created; afterwards only this class's methods change it, through <see cref="Flow"/>.</summary>
+    public DailyReportStatus Status { get => _status; init => _status = value; }
 
     /// <summary>How many workers were on site, as the author counted them. Information only: nobody is paid from it.</summary>
     public int? WorkersPresent { get; set; }
@@ -58,6 +62,32 @@ internal sealed class DailyReport
     public List<DailyReportLine> Lines { get; } = [];
     public List<DailyReportMaterial> Materials { get; } = [];
     public List<DailyReportEquipment> Equipment { get; } = [];
+
+    /// <summary>Submitted → Reviewed or Returned; Submitted or Returned → Submitted when its author sends it again.</summary>
+    private static readonly StatusFlow<DailyReportStatus> Flow = new(
+        (DailyReportStatus.Submitted, DailyReportStatus.Reviewed),
+        (DailyReportStatus.Submitted, DailyReportStatus.Returned),
+        (DailyReportStatus.Submitted, DailyReportStatus.Submitted),
+        (DailyReportStatus.Returned, DailyReportStatus.Submitted));
+
+    public void Review(DailyReportStatus outcome, int reviewerId, DateTime now, string? note)
+    {
+        if (outcome == DailyReportStatus.Submitted)
+        {
+            throw new ArgumentOutOfRangeException(nameof(outcome), outcome, "A review marks the report reviewed or returns it.");
+        }
+
+        _status = Flow.Move(_status, outcome);
+        ReviewedAt = now;
+        ReviewedBy = reviewerId;
+        ReviewNote = note;
+    }
+
+    public void Resubmit(DateTime now)
+    {
+        _status = Flow.Move(_status, DailyReportStatus.Submitted);
+        SubmittedAt = now;
+    }
 }
 
 /// <summary>Stored by name.</summary>

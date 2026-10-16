@@ -370,6 +370,72 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.EquipmentCostAdjustment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("CostId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("DecidedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("RequestedBy")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CostId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_EquipmentCostAdjustment_OneOpen")
+                        .HasFilter("[Status] = 'Requested'");
+
+                    b.HasIndex(new[] { "CostId", "Status" }, "IX_EquipmentCostAdjustment_Cost_Status");
+
+                    b.ToTable("EquipmentCostAdjustment", "fleet", t =>
+                        {
+                            t.HasCheckConstraint("CK_EquipmentCostAdjustment_Amount", "[Amount] <> 0");
+
+                            t.HasCheckConstraint("CK_EquipmentCostAdjustment_Status", "[Status] IN ('Requested', 'Approved', 'Rejected')");
+                        });
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.EquipmentRental", b =>
                 {
                     b.Property<int>("Id")
@@ -507,6 +573,15 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
                     b.Navigation("Equipment");
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.EquipmentCostAdjustment", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Fleet.Data.EquipmentCost", null)
+                        .WithMany("Adjustments")
+                        .HasForeignKey("CostId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.EquipmentRental", b =>
                 {
                     b.HasOne("AlMotaheda.Modules.Fleet.Data.Equipment", "Equipment")
@@ -527,6 +602,11 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Cost");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.EquipmentCost", b =>
+                {
+                    b.Navigation("Adjustments");
                 });
 #pragma warning restore 612, 618
         }
