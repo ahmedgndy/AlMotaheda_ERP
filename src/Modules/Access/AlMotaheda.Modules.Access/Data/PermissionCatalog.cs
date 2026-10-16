@@ -3,30 +3,36 @@ using AlMotaheda.BuildingBlocks.Authorization;
 namespace AlMotaheda.Modules.Access.Data;
 
 /// <summary>
-/// The permission modules and the six roles' default permissions, copied from the prototype's role definitions.
+/// The permission modules and the roles' default permissions, copied from the prototype's role definitions, plus the
+/// HR role and module (docs/modernization/10-hr-design.md).
 /// </summary>
 /// <remarks>
-/// <para>This is the seed data of the first migration. Changing it later needs a new migration.</para>
+/// <para>This is the seed data of the migrations. Changing it later needs a new migration, and new roles and modules
+/// are only ever appended, so existing ids never change.</para>
 /// <para>Ids are fixed: role ids follow <see cref="Roles"/>, and permission ids are
 /// <c>moduleIndex * 5 + actionIndex + 1</c>, so the seed rows never change id between migrations.</para>
 /// </remarks>
 internal static class PermissionCatalog
 {
-    /// <summary>The 17 permission modules, in the prototype's order.</summary>
+    /// <summary>The 18 permission modules: the prototype's 17 in its order, then <c>hr</c>.</summary>
     public static IReadOnlyList<string> Modules { get; } =
     [
         "projects", "subcontractors", "workers", "site", "fuel", "fleet", "equipment", "office", "custody",
         "income", "catalog", "reports", "monitoring", "payments", "finance", "accounts", "settings",
+        HrModule,
     ];
+
+    /// <summary>Employees, salary structures, payroll inputs and salary sheets.</summary>
+    public const string HrModule = "hr";
 
     /// <summary>The module that controls the users screens.</summary>
     public const string AccountsModule = "accounts";
 
-    /// <summary>The six roles, in id order (executive = 1).</summary>
+    /// <summary>The seven roles, in id order (executive = 1, hr = 7).</summary>
     public static IReadOnlyList<string> Roles { get; } =
     [
         RoleCodes.Executive, RoleCodes.Manager, RoleCodes.Engineer,
-        RoleCodes.OfficeAdmin, RoleCodes.Accountant, RoleCodes.Staff,
+        RoleCodes.OfficeAdmin, RoleCodes.Accountant, RoleCodes.Staff, RoleCodes.Hr,
     ];
 
     /// <summary>
@@ -58,11 +64,18 @@ internal static class PermissionCatalog
                 ["fuel"] = "VAF", ["fleet"] = "VAF", ["equipment"] = "VAF", ["office"] = "VCEAF", ["custody"] = "VAF",
                 ["income"] = "VCEF", ["catalog"] = "VF", ["reports"] = "VCEA", ["payments"] = "VCF",
                 ["finance"] = "VCEAF", ["accounts"] = "V",
+                // Reviews the salary sheet (approve or return) and sees salaries; can't edit employees.
+                [HrModule] = "VAF",
             },
             [RoleCodes.Staff] = new Dictionary<string, string>
             {
                 ["projects"] = "V", ["fuel"] = "VC", ["fleet"] = "V", ["equipment"] = "V", ["custody"] = "VC",
                 ["reports"] = "VC",
+            },
+            // Prepares everything up to the salary sheet; never approves it and has no payments access.
+            [RoleCodes.Hr] = new Dictionary<string, string>
+            {
+                [HrModule] = "VCEF",
             },
         };
 

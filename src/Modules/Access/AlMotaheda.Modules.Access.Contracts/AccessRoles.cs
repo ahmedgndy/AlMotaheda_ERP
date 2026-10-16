@@ -1,7 +1,7 @@
 namespace AlMotaheda.Modules.Access.Contracts;
 
 /// <summary>
-/// The six fixed role codes, exactly as they appear in the access token's <c>role</c> claim.
+/// The fixed role codes, exactly as they appear in the access token's <c>role</c> claim.
 /// </summary>
 /// <remarks>Roles are seeded by the Access module; there is no endpoint to add or remove roles.</remarks>
 public static class AccessRoles
@@ -12,4 +12,7 @@ public static class AccessRoles
     public const string OfficeAdmin = "office_admin";
     public const string Accountant = "accountant";
     public const string Staff = "staff";
+
+    /// <summary>Human resources: employees, salary structures and the monthly salary sheet (no payments).</summary>
+    public const string Hr = "hr";
 }

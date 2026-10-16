@@ -3,38 +3,42 @@ using AlMotaheda.Modules.Access.Data;
 
 namespace AlMotaheda.Modules.Access.Tests.Unit;
 
-/// <summary>The seed data must match the prototype's role definitions exactly (design, "Role defaults").</summary>
+/// <summary>The seed data must match the prototype's role definitions exactly (design, "Role defaults"), plus the HR role and module.</summary>
 public sealed class PermissionCatalogTests
 {
     [Fact]
-    public void Catalog_has_17_modules_and_85_permissions_with_unique_ids()
+    public void Catalog_has_18_modules_and_90_permissions_with_unique_ids()
     {
         var permissions = PermissionCatalog.SeedPermissions().ToList();
 
-        Assert.Equal(17, PermissionCatalog.Modules.Count);
-        Assert.Equal(85, permissions.Count);
-        Assert.Equal(85, permissions.Select(permission => permission.Id).Distinct().Count());
-        Assert.Equal(85, permissions.Select(permission => (permission.Module, permission.Action)).Distinct().Count());
-        Assert.Equal(Enumerable.Range(1, 85), permissions.Select(permission => permission.Id).Order());
+        Assert.Equal(18, PermissionCatalog.Modules.Count);
+        Assert.Equal(90, permissions.Count);
+        Assert.Equal(90, permissions.Select(permission => permission.Id).Distinct().Count());
+        Assert.Equal(90, permissions.Select(permission => (permission.Module, permission.Action)).Distinct().Count());
+        Assert.Equal(Enumerable.Range(1, 90), permissions.Select(permission => permission.Id).Order());
+
+        // Appended, so the prototype's 85 permissions keep their ids.
+        Assert.Equal(86, PermissionCatalog.PermissionId("hr", PermissionAction.View));
     }
 
     [Fact]
-    public void Six_roles_are_seeded_with_202_role_permissions()
+    public void Seven_roles_are_seeded_with_214_role_permissions()
     {
         var roles = PermissionCatalog.SeedRoles().ToList();
         var links = PermissionCatalog.SeedRolePermissions().ToList();
 
-        Assert.Equal(["executive", "manager", "engineer", "office_admin", "accountant", "staff"], roles.Select(role => role.Code));
-        Assert.Equal(202, links.Count);
-        Assert.Equal(202, links.Select(link => (link.RoleId, link.PermissionId)).Distinct().Count());
+        Assert.Equal(["executive", "manager", "engineer", "office_admin", "accountant", "staff", "hr"], roles.Select(role => role.Code));
+        Assert.Equal(214, links.Count);
+        Assert.Equal(214, links.Select(link => (link.RoleId, link.PermissionId)).Distinct().Count());
 
         var countsByRole = links.GroupBy(link => link.RoleId).ToDictionary(group => group.Key, group => group.Count());
-        Assert.Equal(82, countsByRole[PermissionCatalog.RoleId("executive")]);
+        Assert.Equal(87, countsByRole[PermissionCatalog.RoleId("executive")]);
         Assert.Equal(37, countsByRole[PermissionCatalog.RoleId("manager")]);
         Assert.Equal(16, countsByRole[PermissionCatalog.RoleId("engineer")]);
         Assert.Equal(8, countsByRole[PermissionCatalog.RoleId("office_admin")]);
-        Assert.Equal(50, countsByRole[PermissionCatalog.RoleId("accountant")]);
+        Assert.Equal(53, countsByRole[PermissionCatalog.RoleId("accountant")]);
         Assert.Equal(9, countsByRole[PermissionCatalog.RoleId("staff")]);
+        Assert.Equal(4, countsByRole[PermissionCatalog.RoleId("hr")]);
     }
 
     [Theory]
@@ -47,6 +51,11 @@ public sealed class PermissionCatalogTests
     [InlineData("office_admin", "office", "VCE")]
     [InlineData("staff", "fuel", "VC")]
     [InlineData("engineer", "payments", "")]
+    [InlineData("hr", "hr", "VCEF")]
+    [InlineData("hr", "payments", "")]
+    [InlineData("accountant", "hr", "VAF")]
+    [InlineData("executive", "hr", "VCEAF")]
+    [InlineData("manager", "hr", "")]
     public void Role_defaults_match_the_prototype(string role, string module, string expectedLetters)
     {
         var actions = PermissionCatalog.SeedRolePermissions()

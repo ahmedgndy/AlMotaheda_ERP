@@ -654,6 +654,41 @@ namespace AlMotaheda.Modules.Access.Data.Migrations
                             Action = "SeeMoney",
                             CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc),
                             Module = "settings"
+                        },
+                        new
+                        {
+                            Id = 86,
+                            Action = "View",
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Module = "hr"
+                        },
+                        new
+                        {
+                            Id = 87,
+                            Action = "Create",
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Module = "hr"
+                        },
+                        new
+                        {
+                            Id = 88,
+                            Action = "Edit",
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Module = "hr"
+                        },
+                        new
+                        {
+                            Id = 89,
+                            Action = "Approve",
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Module = "hr"
+                        },
+                        new
+                        {
+                            Id = 90,
+                            Action = "SeeMoney",
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Module = "hr"
                         });
                 });
 
@@ -802,6 +837,13 @@ namespace AlMotaheda.Modules.Access.Data.Migrations
                         {
                             Id = 6,
                             Code = "staff",
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc),
+                            RowVersion = new byte[0]
+                        },
+                        new
+                        {
+                            Id = 7,
+                            Code = "hr",
                             CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc),
                             RowVersion = new byte[0]
                         });
@@ -1324,6 +1366,36 @@ namespace AlMotaheda.Modules.Access.Data.Migrations
                         },
                         new
                         {
+                            RoleId = 1,
+                            PermissionId = 86,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 1,
+                            PermissionId = 87,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 1,
+                            PermissionId = 88,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 1,
+                            PermissionId = 89,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 1,
+                            PermissionId = 90,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
                             RoleId = 2,
                             PermissionId = 1,
                             CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1990,6 +2062,24 @@ namespace AlMotaheda.Modules.Access.Data.Migrations
                         },
                         new
                         {
+                            RoleId = 5,
+                            PermissionId = 86,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 5,
+                            PermissionId = 89,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 5,
+                            PermissionId = 90,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
                             RoleId = 6,
                             PermissionId = 1,
                             CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -2040,6 +2130,30 @@ namespace AlMotaheda.Modules.Access.Data.Migrations
                         {
                             RoleId = 6,
                             PermissionId = 57,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 7,
+                            PermissionId = 86,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 7,
+                            PermissionId = 87,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 7,
+                            PermissionId = 88,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 7,
+                            PermissionId = 90,
                             CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
                         });
                 });

@@ -20,7 +20,7 @@ public sealed class DatabaseSchemaTests
         using var db = CreateContext();
 
         Assert.False(db.Database.HasPendingModelChanges(), "The model changed without a migration. Run dotnet ef migrations add.");
-        Assert.Equal(["InitialAccess"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
+        Assert.Equal(["InitialAccess", "AddHrRole"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
     }
 
     [Fact]
@@ -80,8 +80,8 @@ public sealed class DatabaseSchemaTests
         using var db = CreateContext();
         var model = db.GetService<IDesignTimeModel>().Model;
 
-        Assert.Equal(6, model.FindEntityType(typeof(Role))!.GetSeedData().Count());
-        Assert.Equal(85, model.FindEntityType(typeof(Permission))!.GetSeedData().Count());
-        Assert.Equal(202, model.FindEntityType(typeof(RolePermission))!.GetSeedData().Count());
+        Assert.Equal(7, model.FindEntityType(typeof(Role))!.GetSeedData().Count());
+        Assert.Equal(90, model.FindEntityType(typeof(Permission))!.GetSeedData().Count());
+        Assert.Equal(214, model.FindEntityType(typeof(RolePermission))!.GetSeedData().Count());
     }
 }

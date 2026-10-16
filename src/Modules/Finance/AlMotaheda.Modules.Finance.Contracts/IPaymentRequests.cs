@@ -15,6 +15,13 @@ public interface IPaymentRequests
     Task<IReadOnlyDictionary<int, decimal>> ReservedAsync(
         string recordType, IReadOnlyCollection<int> recordIds, SharedTransaction transaction, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// How much open requests plan to pay each payee, for sources whose requests have no lines (a salary sheet is
+    /// paid as one batch, its payee being the sheet). Read inside the caller's transaction, after its lock.
+    /// </summary>
+    Task<IReadOnlyDictionary<int, decimal>> HeldForPayeesAsync(
+        string sourceType, string payeeType, IReadOnlyCollection<int> payeeIds, SharedTransaction transaction, CancellationToken cancellationToken);
+
     /// <summary>Stores a new request, status Submitted, in the caller's transaction.</summary>
     Task<PaymentRequestRef> SubmitAsync(NewPaymentRequest request, SharedTransaction transaction, CancellationToken cancellationToken);
 

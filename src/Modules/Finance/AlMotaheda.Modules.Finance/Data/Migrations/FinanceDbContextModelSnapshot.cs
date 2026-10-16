@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AlMotaheda.Modules.Finance.Data.Migrations
 {
     [DbContext(typeof(FinanceDbContext))]
-    internal partial class FinanceDbContextModelSnapshot : ModelSnapshot
+    partial class FinanceDbContextModelSnapshot : ModelSnapshot
     {
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
@@ -281,11 +281,11 @@ namespace AlMotaheda.Modules.Finance.Data.Migrations
 
                             t.HasCheckConstraint("CK_PaymentRequest_Paid", "[Status] NOT IN ('Paid', 'Reversed') OR ([PaidOn] IS NOT NULL AND [SourcePaymentId] IS NOT NULL)");
 
-                            t.HasCheckConstraint("CK_PaymentRequest_PayeeType", "[PayeeType] IN ('Supplier', 'Worker', 'Subcontractor')");
+                            t.HasCheckConstraint("CK_PaymentRequest_PayeeType", "[PayeeType] IN ('Supplier', 'Worker', 'Subcontractor', 'Employees')");
 
-                            t.HasCheckConstraint("CK_PaymentRequest_Purpose", "[Purpose] IN ('SupplierInvoices', 'WorkerWages', 'SubcontractWork', 'SubcontractAdvance', 'EquipmentCost')");
+                            t.HasCheckConstraint("CK_PaymentRequest_Purpose", "[Purpose] IN ('SupplierInvoices', 'WorkerWages', 'SubcontractWork', 'SubcontractAdvance', 'EquipmentCost', 'Salaries')");
 
-                            t.HasCheckConstraint("CK_PaymentRequest_SourceType", "[SourceType] IN ('SupplierPayment', 'WorkerPayment', 'SubcontractPayment', 'EquipmentCostPayment')");
+                            t.HasCheckConstraint("CK_PaymentRequest_SourceType", "[SourceType] IN ('SupplierPayment', 'WorkerPayment', 'SubcontractPayment', 'EquipmentCostPayment', 'SalarySheetPayment')");
 
                             t.HasCheckConstraint("CK_PaymentRequest_Status", "[Status] IN ('Submitted', 'Approved', 'SentToBank', 'Paid', 'Rejected', 'Failed', 'Cancelled', 'Reversed')");
                         });

@@ -3,6 +3,7 @@ using AlMotaheda.Modules.Access;
 using AlMotaheda.Modules.Archive;
 using AlMotaheda.Modules.Finance;
 using AlMotaheda.Modules.Fleet;
+using AlMotaheda.Modules.HR;
 using AlMotaheda.Modules.Platform;
 using AlMotaheda.Modules.Projects;
 using AlMotaheda.Modules.Subcontractors;
@@ -22,7 +23,7 @@ internal static class ModuleCatalog
     /// <summary>Creates a new instance of every module. Called once at startup.</summary>
     /// <remarks>
     /// The order is the migration order: Platform first (every save of every module writes its audit and outbox
-    /// tables), then Access, then Projects, then the modules whose tables point to <c>projects</c> tables, and Finance
+    /// tables), then Access, then Projects, then the modules whose tables point to <c>projects</c> tables, then HR, and Finance
     /// last (its first migration copies the payments already recorded in those modules into the ledger).
     /// </remarks>
     public static IReadOnlyList<IModule> CreateAll() =>
@@ -34,6 +35,7 @@ internal static class ModuleCatalog
         new SubcontractorsModule(),
         new FleetModule(),
         new ArchiveModule(),
+        new HrModule(),
         new FinanceModule(),
     ];
 }

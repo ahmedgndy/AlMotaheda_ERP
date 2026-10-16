@@ -22,7 +22,7 @@ internal sealed class LedgerEntry
 
     public int CounterpartyId { get; set; }
 
-    /// <summary><c>null</c> only for money not tied to a project (none yet; salaries later).</summary>
+    /// <summary><c>null</c> only for money not tied to a project: salaries (company overhead).</summary>
     public int? ProjectId { get; set; }
 
     /// <summary>One of <c>PaymentPurposes</c>.</summary>

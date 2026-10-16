@@ -44,6 +44,25 @@ internal sealed class PaymentRequestsContract(
             .ToDictionaryAsync(entry => entry.RecordId, entry => entry.Amount, cancellationToken);
     }
 
+    public async Task<IReadOnlyDictionary<int, decimal>> HeldForPayeesAsync(
+        string sourceType, string payeeType, IReadOnlyCollection<int> payeeIds, SharedTransaction transaction, CancellationToken cancellationToken)
+    {
+        if (payeeIds.Count == 0)
+        {
+            return new Dictionary<int, decimal>();
+        }
+
+        await using var joined = await JoinAsync(transaction, cancellationToken);
+        var open = PaymentRequestRules.Open;
+
+        return await joined.PaymentRequests.AsNoTracking()
+            .Where(request => request.SourceType == sourceType && request.PayeeType == payeeType
+                              && payeeIds.Contains(request.PayeeId) && open.Contains(request.Status))
+            .GroupBy(request => request.PayeeId)
+            .Select(group => new { PayeeId = group.Key, Amount = group.Sum(request => request.Amount) })
+            .ToDictionaryAsync(entry => entry.PayeeId, entry => entry.Amount, cancellationToken);
+    }
+
     public async Task<PaymentRequestRef> SubmitAsync(NewPaymentRequest draft, SharedTransaction transaction, CancellationToken cancellationToken)
     {
         Validate(draft);

@@ -7,7 +7,10 @@ public static class PayeeTypes
     public const string Worker = "Worker";
     public const string Subcontractor = "Subcontractor";
 
-    public static IReadOnlyList<string> All { get; } = [Supplier, Worker, Subcontractor];
+    /// <summary>The employees of one HR salary sheet, paid as one batch; the payee id is the sheet's id.</summary>
+    public const string Employees = "Employees";
+
+    public static IReadOnlyList<string> All { get; } = [Supplier, Worker, Subcontractor, Employees];
 }
 
 /// <summary>What a payment is for. Stored by name; reports group by it.</summary>
@@ -19,7 +22,10 @@ public static class PaymentPurposes
     public const string SubcontractAdvance = "SubcontractAdvance";
     public const string EquipmentCost = "EquipmentCost";
 
-    public static IReadOnlyList<string> All { get; } = [SupplierInvoices, WorkerWages, SubcontractWork, SubcontractAdvance, EquipmentCost];
+    /// <summary>A monthly salary sheet of office employees, engineers and staff (HR). Company overhead: no project.</summary>
+    public const string Salaries = "Salaries";
+
+    public static IReadOnlyList<string> All { get; } = [SupplierInvoices, WorkerWages, SubcontractWork, SubcontractAdvance, EquipmentCost, Salaries];
 }
 
 /// <summary>How money leaves. Cash is paid by hand; bank transfers and cheques go through the bank and wait for its confirmation.</summary>
@@ -41,8 +47,9 @@ public static class PaymentSourceTypes
     public const string WorkerPayment = "WorkerPayment";
     public const string SubcontractPayment = "SubcontractPayment";
     public const string EquipmentCostPayment = "EquipmentCostPayment";
+    public const string SalarySheetPayment = "SalarySheetPayment";
 
-    public static IReadOnlyList<string> All { get; } = [SupplierPayment, WorkerPayment, SubcontractPayment, EquipmentCostPayment];
+    public static IReadOnlyList<string> All { get; } = [SupplierPayment, WorkerPayment, SubcontractPayment, EquipmentCostPayment, SalarySheetPayment];
 }
 
 /// <summary>The records a request's lines point to (what each part of the money pays for).</summary>
