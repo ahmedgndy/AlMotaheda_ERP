@@ -113,6 +113,11 @@ No module reads another module's tables. Modules exchange data only through cont
 commit or roll back together with the change they describe. Only the Platform module creates and reads those
 tables (see its README).
 
+**Operations across two modules** (a payment request and the source module's payment) run in one database
+transaction: the module that starts it passes a `SharedTransaction` (BuildingBlocks.Data) through its contract,
+and the other module joins it with a short-lived context on the same connection. Each module still writes only its
+own tables.
+
 ## 5. How the host works
 
 ### Startup

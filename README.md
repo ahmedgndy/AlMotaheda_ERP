@@ -54,7 +54,7 @@ You need the .NET 10 SDK, a SQL Server you can reach, and Docker if you want to 
 
    Always Platform first (every save of every module writes its audit and outbox tables), then Access, then
    Projects, then the others: their tables point to `access.User`, `projects.Project`, `projects.ProjectItem` and
-   `projects.Supplier`.
+   `projects.Supplier`. Finance last: its second migration copies the payments already recorded into the ledger.
 
    Or, in development only, set `Database:ApplyMigrationsOnStartup` to `true` and let the API apply it at startup.
 
@@ -92,7 +92,8 @@ Docker Desktop settings.
 - Set `Archive__Storage__RootPath` to a folder on persistent storage that is backed up. It is required in
   Production; the API refuses to start without it.
 - Apply migrations with the reviewed scripts or migration bundles before starting a new version: Platform first,
-  then Access, Projects, Workforce, Subcontractors, Fleet and Archive. Without the Platform tables every save fails.
+  then Access, Projects, Workforce, Subcontractors, Fleet, Archive and Finance. Without the Platform tables every save
+  fails.
 - `Projects__TimeZone` is the company time zone (default `Africa/Cairo`). The server needs time zone data; on a
   minimal container image without it, install `tzdata` or set `UTC`.
 - Turn on `READ_COMMITTED_SNAPSHOT` for the database.
@@ -111,3 +112,4 @@ Docker Desktop settings.
 - [Fleet module](src/Modules/Fleet/AlMotaheda.Modules.Fleet/README.md): equipment, project assignment, equipment costs
 - [Archive module](src/Modules/Archive/AlMotaheda.Modules.Archive/README.md): project documents
 - [Platform module](src/Modules/Platform/AlMotaheda.Modules.Platform/README.md): audit trail, outbox, notifications
+- [Finance design](docs/modernization/07-finance-design.md): payment requests, the Executive's decision, bank, ledger

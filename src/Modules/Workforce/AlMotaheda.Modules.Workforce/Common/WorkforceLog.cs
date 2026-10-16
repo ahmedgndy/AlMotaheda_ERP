@@ -50,6 +50,9 @@ internal sealed partial class WorkforceLog(ILogger<WorkforceLog> logger)
     [LoggerMessage(EventId = 3042, Level = LogLevel.Information, Message = "User {ActorId} voided worker payment {PaymentId} of worker {WorkerId}")]
     public partial void PaymentVoided(int actorId, int workerId, int paymentId);
 
+    [LoggerMessage(EventId = 3043, Level = LogLevel.Information, Message = "User {ActorId} requested payment {RequestId} to worker {WorkerId} with {AllocationCount} allocation(s)")]
+    public partial void PaymentRequested(int actorId, int workerId, int requestId, int allocationCount);
+
     [LoggerMessage(EventId = 3091, Level = LogLevel.Warning, Message = "User {ActorId} was refused {Action}: {Reason}")]
     public partial void ActionRefused(int actorId, string action, string reason);
 }

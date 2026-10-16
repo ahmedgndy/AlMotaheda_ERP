@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    What other modules may ask the Finance module, and what Finance asks them back:
+    create a payment request (IPaymentRequests), and settle a paid request into the source module (IPaymentSource).
+    Interfaces, records and code lists only.
+  -->
+
+  <ItemGroup>
+    <!-- SharedTransaction: a request and the source module's payment are written in one transaction. -->
+    <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks.Data\AlMotaheda.BuildingBlocks.Data.csproj" />
+  </ItemGroup>
+
+</Project>

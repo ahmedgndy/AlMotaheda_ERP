@@ -1,5 +1,6 @@
 using AlMotaheda.BuildingBlocks.Modules;
 using AlMotaheda.BuildingBlocks.Time;
+using AlMotaheda.Modules.Finance.Contracts;
 using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Workforce.Common;
 using AlMotaheda.Modules.Workforce.Data;
@@ -39,6 +40,7 @@ public sealed class WorkforceModule : IModule
         services.AddScoped<ILaborItemCosts, LaborItemCosts>();
         services.AddScoped<IProjectCostSource, LaborCostSource>();
         services.AddScoped<IWorkInboxSource, WorkforceInboxSource>();
+        services.AddScoped<IPaymentSource, WorkerPaymentSource>();
         services.AddScoped<IProjectRecordOwnership, WorkforceRecordOwnership>();
         WorkforceFeatures.AddServices(services);
 

@@ -43,4 +43,7 @@ internal sealed partial class ProjectsLog
 
     [LoggerMessage(EventId = 2432, Level = LogLevel.Information, Message = "User {ActorId} voided supplier payment {PaymentId} on project {ProjectId}")]
     public partial void SupplierPaymentVoided(int actorId, int projectId, int paymentId);
+
+    [LoggerMessage(EventId = 2433, Level = LogLevel.Information, Message = "User {ActorId} requested payment {RequestId} to supplier {SupplierId} on project {ProjectId} with {AllocationCount} allocation(s)")]
+    public partial void SupplierPaymentRequested(int actorId, int projectId, int requestId, int supplierId, int allocationCount);
 }

@@ -44,6 +44,9 @@ internal sealed partial class FleetLog(ILogger<FleetLog> logger)
     [LoggerMessage(EventId = 5042, Level = LogLevel.Information, Message = "User {ActorId} voided the payment of equipment cost {CostId} on project {ProjectId}")]
     public partial void CostPaymentVoided(int actorId, int projectId, int costId);
 
+    [LoggerMessage(EventId = 5043, Level = LogLevel.Information, Message = "User {ActorId} requested payment {RequestId} of equipment cost {CostId} on project {ProjectId}")]
+    public partial void CostPaymentRequested(int actorId, int projectId, int costId, int requestId);
+
     [LoggerMessage(EventId = 5091, Level = LogLevel.Warning, Message = "User {ActorId} was refused {Action}: {Reason}")]
     public partial void ActionRefused(int? actorId, string action, string reason);
 }

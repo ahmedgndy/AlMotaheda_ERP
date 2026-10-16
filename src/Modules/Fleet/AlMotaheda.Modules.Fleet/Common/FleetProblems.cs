@@ -16,6 +16,8 @@ internal static class FleetProblems
     public const string EquipmentUnavailable = "equipment_unavailable";
     public const string NeverOnProject = "never_on_project";
     public const string AlreadyPaid = "already_paid";
+    public const string PaymentRequested = "payment_requested";
+    public const string IdempotencyKeyReused = "idempotency_key_reused";
     public const string NotPaid = "not_paid";
 
     public static ValidationProblem Validation(ValidationErrors errors) => ApiProblem.Validation(errors.ToDictionary());
@@ -61,6 +63,14 @@ internal static class FleetProblems
 
     public static ProblemHttpResult NotOnProject() =>
         Conflict(NeverOnProject, "This machine has never been on this project, so it can't have costs here.");
+
+    /// <summary>An open payment request already covers this cost; it is paid, rejected or cancelled first.</summary>
+    public static ProblemHttpResult PaymentAlreadyRequested() =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, PaymentRequested, "A payment request for this cost is already waiting.");
+
+    /// <summary>The same form (same cost and row version) was sent again with different details.</summary>
+    public static ProblemHttpResult KeyUsedElsewhere() =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, IdempotencyKeyReused, "This payment form was already sent with different details. Reload the cost and try again.");
 
     public static ProblemHttpResult PaymentAlreadyRecorded() =>
         Conflict(AlreadyPaid, "This cost is already paid. Void the payment first if it was wrong.");

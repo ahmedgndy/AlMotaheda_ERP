@@ -145,11 +145,17 @@ internal static class SubcontractsApi
     public static Task<HttpResponseMessage> PayAsync(this ProjectsApi api, Session session, int projectId, int contractId, object body) =>
         api.SendAsync(HttpMethod.Post, $"/api/projects/{projectId}/subcontracts/{contractId}/payments", session, body);
 
+    /// <summary>A subcontract payment taken all the way to Paid. Returns the payment as the contract detail shows it.</summary>
     public static async Task<JsonElement> PaidAsync(this ProjectsApi api, Session session, int projectId, int contractId, decimal amount, string paymentDate = "2026-03-10", string purpose = "Progress")
     {
         var response = await api.PayAsync(session, projectId, contractId, PaymentBody(amount, paymentDate, purpose));
         await EnsureStatus(response, HttpStatusCode.Created);
-        return await Json(response);
+
+        // Requested, then approved by the Executive, sent to the bank and confirmed: only then is it a payment.
+        var paid = await api.SettleAsync(session, await Json(response));
+        var detail = await api.ContractAsync(session, projectId, contractId);
+        return detail.GetProperty("payments").EnumerateArray()
+            .Single(payment => payment.Id() == paid.GetProperty("sourcePaymentId").GetInt32());
     }
 
     public static Task<HttpResponseMessage> VoidAsync(this ProjectsApi api, Session session, int projectId, JsonElement payment, string reason = "Entered twice") =>

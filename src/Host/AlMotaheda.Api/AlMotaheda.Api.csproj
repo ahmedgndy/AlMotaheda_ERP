@@ -28,6 +28,7 @@
     <ProjectReference Include="..\..\Modules\Subcontractors\AlMotaheda.Modules.Subcontractors\AlMotaheda.Modules.Subcontractors.csproj" />
     <ProjectReference Include="..\..\Modules\Fleet\AlMotaheda.Modules.Fleet\AlMotaheda.Modules.Fleet.csproj" />
     <ProjectReference Include="..\..\Modules\Archive\AlMotaheda.Modules.Archive\AlMotaheda.Modules.Archive.csproj" />
+    <ProjectReference Include="..\..\Modules\Finance\AlMotaheda.Modules.Finance\AlMotaheda.Modules.Finance.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -39,6 +40,7 @@
     <InternalsVisibleTo Include="AlMotaheda.Modules.Fleet.Tests" />
     <InternalsVisibleTo Include="AlMotaheda.Modules.Archive.Tests" />
     <InternalsVisibleTo Include="AlMotaheda.Modules.Platform.Tests" />
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Finance.Tests" />
   </ItemGroup>
 
 </Project>

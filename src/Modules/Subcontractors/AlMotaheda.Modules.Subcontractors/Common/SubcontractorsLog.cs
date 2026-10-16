@@ -56,6 +56,9 @@ internal sealed partial class SubcontractorsLog(ILogger<SubcontractorsLog> logge
     [LoggerMessage(EventId = 4052, Level = LogLevel.Information, Message = "User {ActorId} voided payment {PaymentId} on contract {ContractId} of project {ProjectId}; {AllocationCount} allocation change(s)")]
     public partial void PaymentVoided(int actorId, int projectId, int contractId, int paymentId, int allocationCount);
 
+    [LoggerMessage(EventId = 4053, Level = LogLevel.Information, Message = "User {ActorId} requested payment {RequestId} on contract {ContractId} of project {ProjectId}")]
+    public partial void PaymentRequested(int actorId, int projectId, int contractId, int requestId);
+
     [LoggerMessage(EventId = 4091, Level = LogLevel.Warning, Message = "User {ActorId} was refused {Action}: {Reason}")]
     public partial void ActionRefused(int? actorId, string action, string reason);
 }

@@ -6,7 +6,10 @@ using static AlMotaheda.Modules.Projects.Tests.Database.Core.CoreApi;
 
 namespace AlMotaheda.Modules.Projects.Tests.Database.Core;
 
-/// <summary>Supplier payments on SQL Server: allocation limits, scope, idempotency and void.</summary>
+/// <summary>
+/// Supplier payments on SQL Server: allocation limits, scope, idempotency, open requests holding money, and void.
+/// A payment is requested here and becomes a payment only once Finance has it approved and confirmed.
+/// </summary>
 [Collection(SqlServerCollection.Name)]
 public sealed class SupplierPaymentTests(SqlServerFixture database)
 {
@@ -59,7 +62,7 @@ public sealed class SupplierPaymentTests(SqlServerFixture database)
     }
 
     [DatabaseFact]
-    public async Task The_same_idempotency_key_returns_the_first_payment_and_a_different_payment_with_it_is_refused()
+    public async Task The_same_idempotency_key_returns_the_first_request_and_a_different_payment_with_it_is_refused()
     {
         await using var api = await ProjectsApi.StartAsync(database);
         var cast = await api.CastAsync("PROJ-A");
@@ -71,9 +74,11 @@ public sealed class SupplierPaymentTests(SqlServerFixture database)
         var first = await api.PayAsync(cast.Accountant, cast.ProjectId, PaymentBody(cemex, 300m, [(invoice.Id(), 300m)], key));
         await EnsureStatus(first, HttpStatusCode.Created);
         var created = await Json(first);
-        Assert.Equal($"/api/projects/{cast.ProjectId}/supplier-payments/{created.Id()}", first.Headers.Location?.OriginalString);
+        Assert.Equal($"/api/payment-requests/{created.Id()}", first.Headers.Location?.OriginalString);
+        Assert.Equal("Submitted", created.GetProperty("status").GetString());
+        Assert.StartsWith("PAY-", created.GetProperty("number").GetString());
 
-        // The same form sent again is answered with the same payment.
+        // The same form sent again is answered with the same request.
         var retry = await api.PayAsync(cast.Accountant, cast.ProjectId, PaymentBody(cemex, 300m, [(invoice.Id(), 300m)], key));
         await EnsureStatus(retry, HttpStatusCode.OK);
         Assert.Equal(created.Id(), (await Json(retry)).Id());
@@ -89,8 +94,37 @@ public sealed class SupplierPaymentTests(SqlServerFixture database)
         Assert.Equal(HttpStatusCode.Conflict, otherProject.StatusCode);
         Assert.Equal("idempotency_key_reused", await CodeOf(otherProject));
 
+        // Requested is not paid: no payment row yet, and the invoice is still unpaid.
+        Assert.Equal(0, await api.QueryAsync(db => db.SupplierPayments.CountAsync()));
+        Assert.Equal(0m, (await api.GetExpenseAsync(cast.Executive, cast.ProjectId, invoice.Id())).Money("paid"));
+    }
+
+    [DatabaseFact]
+    public async Task An_open_request_holds_its_money_until_it_is_paid_or_cancelled()
+    {
+        await using var api = await ProjectsApi.StartAsync(database);
+        var cast = await api.CastAsync();
+        var cemex = await api.CreateSupplierAsync(cast.Executive, "Cemex");
+        var invoice = await api.RecordApprovedAsync(cast.Engineer, cast.Accountant, cast.ProjectId, SupplyBody(cemex, 10m, 100m, "Credit"));
+
+        // 700 requested and waiting for the Executive: only 300 is left to request.
+        var waiting = await api.PayAsync(cast.Accountant, cast.ProjectId, PaymentBody(cemex, 700m, [(invoice.Id(), 700m)]));
+        await EnsureStatus(waiting, HttpStatusCode.Created);
+        var request = await Json(waiting);
+        var tooMuch = await api.PayAsync(cast.Accountant, cast.ProjectId, PaymentBody(cemex, 300.01m, [(invoice.Id(), 300.01m)]));
+        Assert.Equal(HttpStatusCode.Conflict, tooMuch.StatusCode);
+        Assert.Equal("over_allocation", await CodeOf(tooMuch));
+
+        // Cancelled by its creator, with a reason: the 700 is free again, and nothing was ever paid.
+        var cancelled = await api.SendAsync(HttpMethod.Post, $"/api/payment-requests/{request.Id()}/cancel", cast.Accountant,
+            new { reason = "Wrong amount", rowVersion = await api.RequestRowVersionAsync(cast.Accountant, request.Id()) });
+        await EnsureStatus(cancelled, HttpStatusCode.OK);
+        Assert.Equal("Cancelled", (await Json(cancelled)).GetProperty("request").GetProperty("status").GetString());
+
+        var paid = await api.PaidAsync(cast.Accountant, cast.ProjectId, cemex, 1_000m, (invoice.Id(), 1_000m));
+        Assert.Equal(1_000m, paid.Money("amount"));
+        Assert.Equal("Paid", (await api.GetExpenseAsync(cast.Executive, cast.ProjectId, invoice.Id())).GetProperty("paymentState").GetString());
         Assert.Equal(1, await api.QueryAsync(db => db.SupplierPayments.CountAsync()));
-        Assert.Equal(300m, (await api.GetExpenseAsync(cast.Executive, cast.ProjectId, invoice.Id())).Money("paid"));
     }
 
     [DatabaseFact]

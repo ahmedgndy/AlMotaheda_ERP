@@ -1,5 +1,6 @@
 using AlMotaheda.BuildingBlocks.Modules;
 using AlMotaheda.BuildingBlocks.Time;
+using AlMotaheda.Modules.Finance.Contracts;
 using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Subcontractors.Data;
 using AlMotaheda.Modules.Subcontractors.Features;
@@ -33,6 +34,7 @@ public sealed class SubcontractorsModule : IModule
         services.AddScoped<ISubcontractItemCosts, SubcontractItemCosts>();
         services.AddScoped<IProjectCostSource, SubcontractCostSource>();
         services.AddScoped<IWorkInboxSource, SubcontractorsInboxSource>();
+        services.AddScoped<IPaymentSource, SubcontractPaymentSource>();
         services.AddScoped<IProjectRecordOwnership, SubcontractRecordOwnership>();
         SubcontractorsFeatures.AddServices(services);
 

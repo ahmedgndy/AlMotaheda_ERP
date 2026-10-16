@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Finance module: payment requests for every payee, the Executive's decision, the bank step and the ledger.
+    Allowed references: BuildingBlocks and other modules' *.Contracts projects only.
+    Everything except FinanceModule stays internal.
+  -->
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The module owns its tables, so it owns its EF Core context and migrations (schema "finance"). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <!-- Design-time only: lets `dotnet ef` create migrations for this module. Not shipped with the application. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks\AlMotaheda.BuildingBlocks.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks.Data\AlMotaheda.BuildingBlocks.Data.csproj" />
+    <ProjectReference Include="..\AlMotaheda.Modules.Finance.Contracts\AlMotaheda.Modules.Finance.Contracts.csproj" />
+    <!-- The database re-check of money permissions, and user names. -->
+    <ProjectReference Include="..\..\Access\AlMotaheda.Modules.Access.Contracts\AlMotaheda.Modules.Access.Contracts.csproj" />
+    <!-- Which projects a caller may see. -->
+    <ProjectReference Include="..\..\Projects\AlMotaheda.Modules.Projects.Contracts\AlMotaheda.Modules.Projects.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Finance.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Shared input rules (ValidationErrors, Input, NumberInput, Paging, RowVersions) and SQL Server helpers
+         (SqlAppLock, SqlViolations, SqlList, ModuleMigrations), used by most slices. -->
+    <Using Include="AlMotaheda.BuildingBlocks.Validation" />
+    <Using Include="AlMotaheda.BuildingBlocks.Data" />
+  </ItemGroup>
+
+</Project>

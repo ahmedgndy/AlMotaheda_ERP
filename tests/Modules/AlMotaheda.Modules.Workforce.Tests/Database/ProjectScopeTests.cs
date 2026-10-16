@@ -27,7 +27,7 @@ public sealed class ProjectScopeTests(SqlServerFixture database)
         // 480 on each project; one payment of 960 settles the older day (other project) and then this one.
         await api.RecordApprovedSheetAsync(cast with { Manager = otherManager }, other.Id(), api.Today().AddDays(-1), Line(worker));
         await api.RecordApprovedSheetAsync(cast, cast.ProjectId, api.Today(), Line(worker));
-        await EnsureStatus(await api.PayAsync(cast.Executive, worker, 960m), HttpStatusCode.Created);
+        await api.PaidAsync(cast.Accountant, worker, 960m);
 
         var detail = await Json(await api.SendAsync(HttpMethod.Get, $"/api/workers/{worker}", cast.Manager));
         Assert.Equal([cast.ProjectId], detail.GetProperty("assignments").EnumerateArray().Select(row => row.GetProperty("projectId").GetInt32()));

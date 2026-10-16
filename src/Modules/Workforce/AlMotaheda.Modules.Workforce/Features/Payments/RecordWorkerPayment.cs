@@ -1,6 +1,7 @@
 using AlMotaheda.BuildingBlocks.Authorization;
 using AlMotaheda.BuildingBlocks.Http;
 using AlMotaheda.BuildingBlocks.Time;
+using AlMotaheda.Modules.Finance.Contracts;
 using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Workforce.Common;
 using AlMotaheda.Modules.Workforce.Data;
@@ -15,15 +16,17 @@ using Microsoft.EntityFrameworkCore;
 namespace AlMotaheda.Modules.Workforce.Features.Payments;
 
 /// <summary>
-/// <c>POST /api/workers/{id}/payments</c>: record money paid to a worker. The server decides which days it settles:
-/// the oldest approved, unpaid days first, across every project (<see cref="PaymentFifo"/>). One transaction under
-/// the worker's lock, so two payments can't both settle the same day.
+/// <c>POST /api/workers/{id}/payments</c>: ask to pay a worker. The server decides which days the money settles: the
+/// oldest approved, unpaid days first, across every project (<see cref="PaymentFifo"/>), skipping what open payment
+/// requests already hold. It creates a Finance payment request (status Submitted) for the Executive; the payment is
+/// written here only when the money has left (<c>WorkerPaymentSource</c>). One transaction under the worker's lock.
 /// </summary>
 /// <remarks>
 /// <list type="bullet">
-///   <item>Needs payments Create. A payment above what the worker is owed answers 409 <c>over_payment</c> (no advances, decision W2).</item>
-///   <item>The same <c>idempotencyKey</c> again returns the first payment with 200 and records nothing; the same key
-///   for another worker answers 409 <c>idempotency_key_reused</c>.</item>
+///   <item>Needs payments Create. More than what the worker is owed answers 409 <c>over_payment</c> (no advances, decision W2).</item>
+///   <item>The same <c>idempotencyKey</c> with the same content returns the first request with 200 and creates nothing;
+///   anything different answers 409 <c>idempotency_key_reused</c>.</item>
+///   <item>The request shows only the days on projects the caller may see (QA fix B4).</item>
 /// </list>
 /// </remarks>
 internal static class RecordWorkerPayment
@@ -42,12 +45,13 @@ internal static class RecordWorkerPayment
             .WithName("RecordWorkerPayment")
             .WithSummary("Record a payment to a worker; it settles the oldest approved unpaid days first (idempotent by idempotencyKey)");
 
-    internal static async Task<Results<Created<WorkerPaymentView>, Ok<WorkerPaymentView>, ValidationProblem, ProblemHttpResult>> HandleAsync(
+    internal static async Task<Results<Created<PaymentRequestRef>, Ok<PaymentRequestRef>, ValidationProblem, ProblemHttpResult>> HandleAsync(
         int workerId,
         Request request,
         HttpContext httpContext,
         WorkforceDbContext db,
         IProjectAccess access,
+        IPaymentRequests requests,
         CompanyClock clock,
         WorkforceLog log,
         CancellationToken cancellationToken)
@@ -87,7 +91,7 @@ internal static class RecordWorkerPayment
         var sent = new PaymentContent(paymentDate!.Value, amount!.Value, method);
 
         // A retried request: answer with the payment it already made.
-        if (await FindRepeatAsync(db, access, httpContext.User, workerId, idempotencyKey, sent, cancellationToken) is { } repeat)
+        if (await FindRepeatAsync(requests, access, httpContext.User, workerId, idempotencyKey, sent, cancellationToken) is { } repeat)
         {
             return repeat;
         }
@@ -106,14 +110,21 @@ internal static class RecordWorkerPayment
 
         // Checked again under the lock: a concurrent retry with the same key may have committed while this request
         // waited, and its payment must be the answer (not an over-payment error for pay already settled).
-        if (await FindRepeatAsync(db, access, httpContext.User, workerId, idempotencyKey, sent, cancellationToken) is { } committed)
+        if (await FindRepeatAsync(requests, access, httpContext.User, workerId, idempotencyKey, sent, cancellationToken) is { } committed)
         {
             return committed;
         }
 
         var payable = await WorkerPaymentQueries.PayableLines(db, workerId).ToListAsync(cancellationToken);
         var paidParts = await WorkerPaymentQueries.PaidParts(db, workerId).ToListAsync(cancellationToken);
-        var plan = PaymentFifo.Plan(amount.Value, PaymentFifo.Settle(payable, paidParts));
+
+        // Days held by open payment requests count as paid for this plan, so no day is requested twice.
+        var shared = SharedTransaction.Of(db);
+        var reserved = await requests.ReservedAsync(
+            PaidRecordTypes.AttendanceLine, payable.Select(line => line.LineId).ToList(), shared, cancellationToken);
+        var held = reserved.Select(entry => new PaidPart(entry.Key, entry.Value, PaymentVoided: false));
+
+        var plan = PaymentFifo.Plan(amount.Value, PaymentFifo.Settle(payable, paidParts.Concat(held)));
         if (!plan.Fits)
         {
             // The outstanding pay is named only when every project it comes from is visible to the caller.
@@ -122,38 +133,46 @@ internal static class RecordWorkerPayment
             return WorkforceProblems.PaysTooMuch(visible.Count == payableProjects.Count ? plan.Outstanding : null);
         }
 
-        var payment = new WorkerPayment
-        {
-            WorkerId = workerId,
-            PaymentDate = paymentDate!.Value,
-            Amount = amount.Value,
-            Method = method,
-            Reference = reference,
-            Notes = notes,
-            IdempotencyKey = idempotencyKey,
-            CreatedAt = clock.UtcNow,
-            CreatedBy = caller.UserId,
-        };
-        payment.Allocations.AddRange(plan.Allocations.Select(line => new WorkerPaymentAllocation { LineId = line.LineId, Amount = line.Amount }));
-        db.WorkerPayments.Add(payment);
+        var projectOf = payable.ToDictionary(line => line.LineId, line => line.ProjectId);
+        var lines = plan.Allocations
+            .Select(line => new PaymentLine(PaidRecordTypes.AttendanceLine, line.LineId, projectOf[line.LineId], line.Amount))
+            .ToList();
+        var projects = lines.Select(line => line.ProjectId).Distinct().ToList();
 
+        PaymentRequestRef created;
         try
         {
-            await db.SaveChangesAsync(cancellationToken);
+            created = await requests.SubmitAsync(
+                new NewPaymentRequest(
+                    PaymentSourceTypes.WorkerPayment,
+                    PayeeTypes.Worker,
+                    workerId,
+                    projects.Count == 1 ? projects[0] : null,
+                    PaymentPurposes.WorkerWages,
+                    amount.Value,
+                    method.ToString(),
+                    paymentDate!.Value,
+                    reference,
+                    notes,
+                    idempotencyKey,
+                    caller.UserId,
+                    lines),
+                shared,
+                cancellationToken);
         }
-        catch (DbUpdateException exception) when (SqlViolations.IsUnique(exception, WorkerPaymentConfiguration.IdempotencyKeyIndex))
+        catch (DbUpdateException exception) when (SqlViolations.IsUnique(exception, PaymentRequestIndexes.IdempotencyKey))
         {
-            // The same form was sent twice at the same moment: the other request won. Answer with its payment.
+            // The same form was sent twice at the same moment: the other request won. Answer with its request.
             await transaction.RollbackAsync(cancellationToken);
             db.ChangeTracker.Clear();
-            return await FindRepeatAsync(db, access, httpContext.User, workerId, idempotencyKey, sent, cancellationToken) ?? WorkforceProblems.KeyUsedElsewhere();
+            return await FindRepeatAsync(requests, access, httpContext.User, workerId, idempotencyKey, sent, cancellationToken)
+                ?? WorkforceProblems.KeyUsedElsewhere();
         }
 
         await transaction.CommitAsync(cancellationToken);
-        log.PaymentRecorded(caller.UserId, workerId, payment.Id, payment.Allocations.Count);
+        log.PaymentRequested(caller.UserId, workerId, created.Id, lines.Count);
 
-        var view = await WorkerPaymentVisibility.ViewForAsync(db, access, httpContext.User, payment.Id, cancellationToken);
-        return TypedResults.Created($"/api/workers/{workerId}/payments/{payment.Id}", view);
+        return TypedResults.Created($"/api/payment-requests/{created.Id}", await VisibleLinesAsync(access, httpContext.User, created, cancellationToken));
     }
 
     private sealed record PaymentContent(DateOnly PaymentDate, decimal Amount, WorkerPaymentMethod Method);
@@ -163,27 +182,32 @@ internal static class RecordWorkerPayment
     /// same payment; 409 <c>idempotency_key_reused</c> when the key was used for another worker or for a different
     /// payment (amount, date or method); <c>null</c> when the key is new.
     /// </summary>
-    private static async Task<Results<Created<WorkerPaymentView>, Ok<WorkerPaymentView>, ValidationProblem, ProblemHttpResult>?> FindRepeatAsync(
-        WorkforceDbContext db, IProjectAccess access, System.Security.Claims.ClaimsPrincipal caller, int workerId, Guid idempotencyKey,
+    private static async Task<Results<Created<PaymentRequestRef>, Ok<PaymentRequestRef>, ValidationProblem, ProblemHttpResult>?> FindRepeatAsync(
+        IPaymentRequests requests, IProjectAccess access, System.Security.Claims.ClaimsPrincipal caller, int workerId, Guid idempotencyKey,
         PaymentContent sent, CancellationToken cancellationToken)
     {
-        var existing = await WorkerPaymentQueries.ByKey(db, idempotencyKey)
-            .Select(payment => new { payment.Id, payment.WorkerId, payment.PaymentDate, payment.Amount, payment.Method })
-            .SingleOrDefaultAsync(cancellationToken);
-
-        if (existing is null)
+        if (await requests.FindByKeyAsync(idempotencyKey, cancellationToken) is not { } existing)
         {
             return null;
         }
 
-        if (existing.WorkerId != workerId
-            || existing.PaymentDate != sent.PaymentDate
+        if (existing.SourceType != PaymentSourceTypes.WorkerPayment
+            || existing.PayeeId != workerId
+            || existing.RequestedDate != sent.PaymentDate
             || existing.Amount != sent.Amount
-            || existing.Method != sent.Method)
+            || existing.Method != sent.Method.ToString())
         {
             return WorkforceProblems.KeyUsedElsewhere();
         }
 
-        return TypedResults.Ok(await WorkerPaymentVisibility.ViewForAsync(db, access, caller, existing.Id, cancellationToken));
+        return TypedResults.Ok(await VisibleLinesAsync(access, caller, existing, cancellationToken));
+    }
+
+    /// <summary>The request with only the days on projects the caller may see.</summary>
+    private static async Task<PaymentRequestRef> VisibleLinesAsync(
+        IProjectAccess access, System.Security.Claims.ClaimsPrincipal caller, PaymentRequestRef request, CancellationToken cancellationToken)
+    {
+        var visible = await ProjectVisibility.AmongAsync(access, caller, request.Lines.Select(line => line.ProjectId).Distinct().ToList(), cancellationToken);
+        return request with { Lines = request.Lines.Where(line => visible.Contains(line.ProjectId)).ToList() };
     }
 }

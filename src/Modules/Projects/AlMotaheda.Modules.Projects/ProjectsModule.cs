@@ -1,6 +1,7 @@
 using AlMotaheda.BuildingBlocks.Modules;
 using AlMotaheda.BuildingBlocks.Time;
 using AlMotaheda.Modules.Projects.Common;
+using AlMotaheda.Modules.Finance.Contracts;
 using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Projects.Data;
 using AlMotaheda.Modules.Projects.Features;
@@ -51,6 +52,8 @@ public sealed class ProjectsModule : IModule
         services.AddCompanyClock();
         services.AddScoped<WorkspaceAccess>();
         services.AddScoped<IProjectAccess, ProjectAccessContract>();
+        services.AddScoped<IVisibleProjects, VisibleProjectsContract>();
+        services.AddScoped<IPaymentSource, SupplierPaymentSource>();
         services.AddScoped<IProjectItems, ProjectItemsContract>();
         services.AddScoped<ISupplierDirectory, SupplierDirectoryContract>();
         services.AddScoped<IProjectRecordOwnership, ProjectRecordOwnership>();

@@ -125,5 +125,44 @@ internal sealed class ProjectsApi : IAsyncDisposable
         return await query(scope.ServiceProvider.GetRequiredService<ProjectsDbContext>());
     }
 
+    /// <summary>
+    /// Takes a submitted payment request (any module's) to Paid, the way it happens for real: the Executive approves
+    /// and pays, and for a bank transfer or cheque <paramref name="confirmer"/> (the Accountant) confirms the money left.
+    /// Returns the request's details, with <c>sourcePaymentId</c>: the payment row the module wrote.
+    /// </summary>
+    public async Task<JsonElement> SettleAsync(Session confirmer, JsonElement request)
+    {
+        var executive = await SignInExecutiveAsync();
+        var requestId = request.GetProperty("id").GetInt32();
+
+        var approved = await SendAsync(HttpMethod.Post, $"/api/payment-requests/{requestId}/approve-and-pay", executive,
+            new { paidOn = request.GetProperty("requestedDate").GetString(), rowVersion = await RequestRowVersionAsync(executive, requestId) });
+        await AccessApi.EnsureStatus(approved, HttpStatusCode.OK);
+
+        var details = await AccessApi.Json(approved);
+        if (details.GetProperty("request").GetProperty("status").GetString() == "Paid")
+        {
+            return details;
+        }
+
+        var confirmed = await SendAsync(HttpMethod.Post, $"/api/payment-requests/{requestId}/confirm-payment", confirmer,
+            new
+            {
+                // Paid on the day it was asked for, so tests that depend on payment dates keep their order.
+                paidOn = request.GetProperty("requestedDate").GetString(),
+                reference = "BANK-OK",
+                rowVersion = details.GetProperty("rowVersion").GetString(),
+            });
+        await AccessApi.EnsureStatus(confirmed, HttpStatusCode.OK);
+        return await AccessApi.Json(confirmed);
+    }
+
+    public async Task<string> RequestRowVersionAsync(Session session, int requestId)
+    {
+        var response = await SendAsync(HttpMethod.Get, $"/api/payment-requests/{requestId}", session);
+        await AccessApi.EnsureStatus(response, HttpStatusCode.OK);
+        return (await AccessApi.Json(response)).GetProperty("rowVersion").GetString()!;
+    }
+
     public ValueTask DisposeAsync() => Access.DisposeAsync();
 }

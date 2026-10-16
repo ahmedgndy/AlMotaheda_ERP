@@ -2,6 +2,7 @@ using AlMotaheda.BuildingBlocks.Authorization;
 using AlMotaheda.BuildingBlocks.Http;
 using AlMotaheda.BuildingBlocks.Time;
 using AlMotaheda.Modules.Projects.Common;
+using AlMotaheda.Modules.Finance.Contracts;
 using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Projects.Data;
 using AlMotaheda.Modules.Projects.Data.Configurations;
@@ -35,6 +36,7 @@ internal static class VoidSupplierPayment
         HttpContext httpContext,
         ProjectsDbContext db,
         IProjectAccess access,
+        IPaymentRequests requests,
         CompanyClock clock,
         ProjectsLog log,
         CancellationToken cancellationToken)
@@ -63,6 +65,9 @@ internal static class VoidSupplierPayment
             return ProjectProblems.CompletedProject();
         }
 
+        // The void and its ledger reversal (Finance) commit together.
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
         var payment = await db.SupplierPayments
             .SingleOrDefaultAsync(candidate => candidate.Id == paymentId && candidate.ProjectId == projectId, cancellationToken);
         if (payment is null)
@@ -90,6 +95,8 @@ internal static class VoidSupplierPayment
             return ApiProblem.ConcurrencyConflictResult();
         }
 
+        await requests.ReverseAsync(PaymentSourceTypes.SupplierPayment, payment.Id, reason!, caller.UserId, SharedTransaction.Of(db), cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         log.SupplierPaymentVoided(caller.UserId, projectId, payment.Id);
 
         var view = await PaymentQueries.One(db, projectId, payment.Id).SingleAsync(cancellationToken);

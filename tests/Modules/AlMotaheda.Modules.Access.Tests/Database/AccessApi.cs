@@ -60,7 +60,15 @@ internal sealed class AccessApi : IAsyncDisposable
     }
 
     /// <summary>Signs in the bootstrap Executive and completes the forced password change.</summary>
-    public async Task<Session> SignInExecutiveAsync()
+    private Session? _executive;
+
+    /// <summary>
+    /// The bootstrap Executive, signed in with their own password. Signed in once per test host and kept: the
+    /// bootstrap password works only until the first change, and later steps (approving payments) need the session.
+    /// </summary>
+    public async Task<Session> SignInExecutiveAsync() => _executive ??= await SignInExecutiveOnceAsync();
+
+    private async Task<Session> SignInExecutiveOnceAsync()
     {
         var first = await LoginAsync(ExecutiveEmail, BootstrapPassword);
         if (!first.MustChangePassword)

@@ -150,6 +150,22 @@ internal static class WorkforceApi
             idempotencyKey = (key ?? Guid.NewGuid()).ToString(),
         });
 
+    /// <summary>A worker payment taken all the way: requested by <paramref name="session"/>, approved and paid in cash by the Executive. Returns the payment row.</summary>
+    public static async Task<JsonElement> PaidAsync(this ProjectsApi api, Session session, int workerId, decimal amount, Guid? key = null)
+    {
+        var response = await api.PayAsync(session, workerId, amount, key);
+        await EnsureStatus(response, HttpStatusCode.Created);
+        return await api.PaymentOfAsync(session, workerId, await api.SettleAsync(session, await Json(response)));
+    }
+
+    /// <summary>The worker payment a paid request wrote.</summary>
+    public static async Task<JsonElement> PaymentOfAsync(this ProjectsApi api, Session session, int workerId, JsonElement paidRequest)
+    {
+        var payments = await Json(await api.SendAsync(HttpMethod.Get, $"/api/workers/{workerId}/payments?pageSize=100", session));
+        return payments.GetProperty("items").EnumerateArray()
+            .Single(payment => payment.Id() == paidRequest.GetProperty("sourcePaymentId").GetInt32());
+    }
+
     public static async Task<JsonElement> AccountAsync(this ProjectsApi api, Session session, int workerId)
     {
         var response = await api.SendAsync(HttpMethod.Get, $"/api/workers/{workerId}/account", session);

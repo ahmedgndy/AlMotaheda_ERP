@@ -1,6 +1,7 @@
 using AlMotaheda.BuildingBlocks.Modules;
 using AlMotaheda.BuildingBlocks.Time;
 using AlMotaheda.Modules.Projects.Contracts;
+using AlMotaheda.Modules.Finance.Contracts;
 using AlMotaheda.Modules.Fleet.Data;
 using AlMotaheda.Modules.Fleet.Features;
 using AlMotaheda.Modules.Fleet.Integration;
@@ -32,6 +33,7 @@ public sealed class FleetModule : IModule
         services.AddCompanyClock();
         services.AddScoped<IProjectCostSource, EquipmentCostSource>();
         services.AddScoped<IWorkInboxSource, FleetInboxSource>();
+        services.AddScoped<IPaymentSource, EquipmentCostPaymentSource>();
         services.AddScoped<IProjectRecordOwnership, FleetRecordOwnership>();
         FleetFeatures.AddServices(services);
 

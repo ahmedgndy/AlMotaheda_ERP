@@ -140,24 +140,38 @@ public sealed class LaborFlowTests(SqlServerFixture database)
         Assert.Equal(HttpStatusCode.Conflict, tooMuch.StatusCode);
         Assert.Equal("over_payment", await CodeOf(tooMuch));
 
+        // The request plans the oldest days first: all of day 1 (project 1), then 99 of day 2 (project 2).
         var key = Guid.NewGuid();
-        var paid = await api.PayAsync(cast.Accountant, worker, 600m, key);
-        await EnsureStatus(paid, HttpStatusCode.Created);
-        var payment = await Json(paid);
+        var requested = await api.PayAsync(cast.Accountant, worker, 600m, key);
+        await EnsureStatus(requested, HttpStatusCode.Created);
+        var request = await Json(requested);
+        Assert.Equal(
+            [(cast.ProjectId, 501m), (second, 99m)],
+            request.GetProperty("lines").EnumerateArray()
+                .Select(line => (line.GetProperty("projectId").GetInt32(), line.Money("amount"))));
+
+        // The same key again returns the first request and creates nothing.
+        var again = await api.PayAsync(cast.Accountant, worker, 600m, key);
+        Assert.Equal(HttpStatusCode.OK, again.StatusCode);
+        Assert.Equal(request.Id(), (await Json(again)).Id());
+
+        // A different amount with the same key is refused instead of being answered with the first request.
+        var different = await api.PayAsync(cast.Accountant, worker, 300m, key);
+        Assert.Equal(HttpStatusCode.Conflict, different.StatusCode);
+        Assert.Equal("idempotency_key_reused", await CodeOf(different));
+
+        // Requested is not paid, but the 600 is held: only 402 can still be requested.
+        Assert.Equal(0m, (await api.AccountAsync(cast.Accountant, worker)).Money("paid"));
+        var heldTooMuch = await api.PayAsync(cast.Accountant, worker, 402.01m);
+        Assert.Equal(HttpStatusCode.Conflict, heldTooMuch.StatusCode);
+        Assert.Equal("over_payment", await CodeOf(heldTooMuch));
+
+        // Approved and paid (cash): the payment is written exactly as planned.
+        var payment = await api.PaymentOfAsync(cast.Accountant, worker, await api.SettleAsync(cast.Accountant, request));
         Assert.Equal(
             [(cast.ProjectId, 501m), (second, 99m)],
             payment.GetProperty("allocations").EnumerateArray()
                 .Select(allocation => (allocation.GetProperty("projectId").GetInt32(), allocation.Money("amount"))));
-
-        // The same key again returns the first payment and creates nothing.
-        var again = await api.PayAsync(cast.Accountant, worker, 600m, key);
-        Assert.Equal(HttpStatusCode.OK, again.StatusCode);
-        Assert.Equal(payment.Id(), (await Json(again)).Id());
-
-        // A different amount with the same key is refused instead of being answered with the first payment.
-        var different = await api.PayAsync(cast.Accountant, worker, 300m, key);
-        Assert.Equal(HttpStatusCode.Conflict, different.StatusCode);
-        Assert.Equal("idempotency_key_reused", await CodeOf(different));
 
         var account = await api.AccountAsync(cast.Accountant, worker);
         Assert.Equal(1_002m, account.Money("approvedPay"));

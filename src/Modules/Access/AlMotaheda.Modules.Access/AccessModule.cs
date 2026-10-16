@@ -67,6 +67,7 @@ public sealed class AccessModule : IModule
         // What other modules may ask the Access module (AlMotaheda.Modules.Access.Contracts).
         services.AddScoped<IUserDirectory, UserDirectory>();
         services.AddScoped<IExecutiveCheck, ExecutiveCheck>();
+        services.AddScoped<IPermissionCheck, PermissionCheck>();
 
         services.AddHostedService<AccessStartup>();
     }

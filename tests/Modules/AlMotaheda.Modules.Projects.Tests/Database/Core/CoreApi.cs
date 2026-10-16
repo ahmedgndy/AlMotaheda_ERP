@@ -178,11 +178,19 @@ internal static class CoreApi
     public static Task<HttpResponseMessage> PayAsync(this ProjectsApi api, Session session, int projectId, object body) =>
         api.SendAsync(HttpMethod.Post, $"/api/projects/{projectId}/supplier-payments", session, body);
 
+    /// <summary>
+    /// A supplier payment that went all the way: requested by <paramref name="session"/> (the Accountant), approved and
+    /// sent to the bank by the Executive, and confirmed paid by <paramref name="session"/>. Returns the payment row.
+    /// </summary>
     public static async Task<JsonElement> PaidAsync(this ProjectsApi api, Session session, int projectId, int supplierId, decimal amount, params (int ExpenseId, decimal Amount)[] allocations)
     {
         var response = await api.PayAsync(session, projectId, PaymentBody(supplierId, amount, allocations));
         await EnsureStatus(response, HttpStatusCode.Created);
-        return await Json(response);
+        var paid = await api.SettleAsync(session, await Json(response));
+
+        var payments = await Json(await api.SendAsync(HttpMethod.Get, $"/api/projects/{projectId}/supplier-payments?pageSize=100", session));
+        return payments.GetProperty("items").EnumerateArray()
+            .Single(payment => payment.Id() == paid.GetProperty("sourcePaymentId").GetInt32());
     }
 
     public static Task<HttpResponseMessage> VoidAsync(this ProjectsApi api, Session session, int projectId, JsonElement payment, string reason = "Entered twice") =>

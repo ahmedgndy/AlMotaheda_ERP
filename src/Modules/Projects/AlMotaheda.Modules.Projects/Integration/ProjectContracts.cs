@@ -31,6 +31,25 @@ internal sealed class ProjectAccessContract(WorkspaceAccess workspace) : IProjec
     }
 }
 
+/// <summary>The Projects module's answer to <see cref="IVisibleProjects"/>, from the same scope rule as the project list.</summary>
+internal sealed class VisibleProjectsContract(ProjectAccess access) : IVisibleProjects
+{
+    public async Task<IReadOnlySet<int>?> IdsAsync(ClaimsPrincipal caller, CancellationToken cancellationToken)
+    {
+        if (ProjectCaller.From(caller) is not { } projectCaller)
+        {
+            return new HashSet<int>();
+        }
+
+        if (projectCaller.SeesAllProjects)
+        {
+            return null;
+        }
+
+        return (await access.VisibleProjects(projectCaller).Select(project => project.Id).ToListAsync(cancellationToken)).ToHashSet();
+    }
+}
+
 /// <summary>The Projects module's answer to <see cref="IProjectItems"/>.</summary>
 internal sealed class ProjectItemsContract(ProjectsDbContext db) : IProjectItems
 {

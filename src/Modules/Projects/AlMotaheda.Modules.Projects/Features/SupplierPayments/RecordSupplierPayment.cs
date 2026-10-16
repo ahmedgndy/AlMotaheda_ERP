@@ -2,6 +2,7 @@ using AlMotaheda.BuildingBlocks.Authorization;
 using AlMotaheda.BuildingBlocks.Http;
 using AlMotaheda.BuildingBlocks.Time;
 using AlMotaheda.Modules.Projects.Common;
+using AlMotaheda.Modules.Finance.Contracts;
 using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Projects.Data;
 using AlMotaheda.Modules.Projects.Data.Configurations;
@@ -16,17 +17,19 @@ using Microsoft.EntityFrameworkCore;
 namespace AlMotaheda.Modules.Projects.Features.SupplierPayments;
 
 /// <summary>
-/// <c>POST /api/projects/{pid}/supplier-payments</c>: record money paid to a supplier and say which approved
-/// credit records it settles. Checked in one transaction under the project lock, so two payments can't both
-/// settle the same invoice.
+/// <c>POST /api/projects/{pid}/supplier-payments</c>: ask to pay a supplier, saying which approved credit records the
+/// money settles. It creates a Finance payment request (status Submitted) for the Executive to decide; the payment
+/// itself is written here only when the money has left (<c>SupplierPaymentSource</c>). Checked in one transaction
+/// under the project lock, together with the request, so two requests can't both take the same invoice.
 /// </summary>
 /// <remarks>
 /// <list type="bullet">
 ///   <item>Needs payments Create and the project in scope. A completed project takes no payment except from an Executive.</item>
 ///   <item>At least one allocation, no record twice, every amount above zero, and the sum equal to the payment.</item>
-///   <item>Every record: this project, this supplier, approved, on credit; and the allocation fits in what is still unpaid.</item>
-///   <item>The same <c>idempotencyKey</c> again returns the first payment with 200 and records nothing; the same key
-///   on another project answers 409.</item>
+///   <item>Every record: this project, this supplier, approved, on credit; and the allocation fits in what is still
+///   unpaid and not already held by an open request.</item>
+///   <item>The same <c>idempotencyKey</c> with the same content returns the first request with 200 and creates
+///   nothing; the same key with anything different answers 409.</item>
 /// </list>
 /// </remarks>
 internal static class RecordSupplierPayment
@@ -47,14 +50,15 @@ internal static class RecordSupplierPayment
         projects.MapPost("/{projectId:int}/supplier-payments", HandleAsync)
             .RequirePermission(PaymentPermissions.Module, PermissionAction.Create)
             .WithName("RecordSupplierPayment")
-            .WithSummary("Record a payment to a supplier and allocate it to approved credit records (idempotent by idempotencyKey)");
+            .WithSummary("Request a payment to a supplier for approved credit records: creates a payment request for the Executive (idempotent by idempotencyKey)");
 
-    internal static async Task<Results<Created<SupplierPaymentView>, Ok<SupplierPaymentView>, ValidationProblem, ProblemHttpResult>> HandleAsync(
+    internal static async Task<Results<Created<PaymentRequestRef>, Ok<PaymentRequestRef>, ValidationProblem, ProblemHttpResult>> HandleAsync(
         int projectId,
         Request request,
         HttpContext httpContext,
         ProjectsDbContext db,
         IProjectAccess access,
+        IPaymentRequests requests,
         CompanyClock clock,
         ProjectsLog log,
         CancellationToken cancellationToken)
@@ -116,8 +120,8 @@ internal static class RecordSupplierPayment
         var supplierId = request.SupplierId!.Value;
         var sent = new PaymentContent(supplierId, paymentDate!.Value, amount!.Value, method, lines!.Select(line => (line.ExpenseId, line.Amount)).ToList());
 
-        // A retried request: answer with the payment it already made.
-        if (await FindRepeatAsync(db, projectId, idempotencyKey, sent, cancellationToken) is { } repeat)
+        // A retried request: answer with the request it already made.
+        if (await FindRepeatAsync(requests, projectId, idempotencyKey, sent, cancellationToken) is { } repeat)
         {
             return repeat;
         }
@@ -136,8 +140,8 @@ internal static class RecordSupplierPayment
         }
 
         // Checked again under the lock: a concurrent retry with the same key may have committed while this request
-        // waited, and its payment must be the answer (not an over-allocation error for money already settled).
-        if (await FindRepeatAsync(db, projectId, idempotencyKey, sent, cancellationToken) is { } committed)
+        // waited, and its request must be the answer (not an over-allocation error for money it already holds).
+        if (await FindRepeatAsync(requests, projectId, idempotencyKey, sent, cancellationToken) is { } committed)
         {
             return committed;
         }
@@ -166,50 +170,52 @@ internal static class RecordSupplierPayment
             }
         }
 
+        // What is still unpaid, less what open payment requests already hold, in this transaction.
+        var shared = SharedTransaction.Of(db);
+        var reserved = await requests.ReservedAsync(PaidRecordTypes.ProjectExpense, expenseIds, shared, cancellationToken);
         var remaining = targets.ToDictionary(
             row => row.ExpenseId,
-            row => new AllocationTarget(row.ExpenseId, row.Amount, row.Allocated));
+            row => new AllocationTarget(row.ExpenseId, row.Amount, row.Allocated + reserved.GetValueOrDefault(row.ExpenseId)));
 
         if (PaymentAllocations.FindOverAllocation(allocations, remaining) is { } overpaid)
         {
             return CoreProblems.Overallocated(overpaid);
         }
 
-        var payment = new SupplierPayment
-        {
-            ProjectId = projectId,
-            SupplierId = supplierId,
-            PaymentDate = paymentDate!.Value,
-            Amount = amount!.Value,
-            Method = method,
-            Reference = reference,
-            Notes = notes,
-            IdempotencyKey = idempotencyKey,
-            CreatedAt = clock.UtcNow,
-            CreatedBy = caller.UserId,
-        };
-        payment.Allocations.AddRange(allocations.Select(line => new SupplierPaymentAllocation { ExpenseId = line.ExpenseId, Amount = line.Amount }));
-        db.SupplierPayments.Add(payment);
-
+        PaymentRequestRef created;
         try
         {
-            await db.SaveChangesAsync(cancellationToken);
+            created = await requests.SubmitAsync(
+                new NewPaymentRequest(
+                    PaymentSourceTypes.SupplierPayment,
+                    PayeeTypes.Supplier,
+                    supplierId,
+                    projectId,
+                    PaymentPurposes.SupplierInvoices,
+                    amount!.Value,
+                    method.ToString(),
+                    paymentDate!.Value,
+                    reference,
+                    notes,
+                    idempotencyKey,
+                    caller.UserId,
+                    allocations.Select(line => new PaymentLine(PaidRecordTypes.ProjectExpense, line.ExpenseId, projectId, line.Amount)).ToList()),
+                shared,
+                cancellationToken);
         }
-        catch (DbUpdateException exception) when (SqlViolations.IsUnique(exception, SupplierPaymentConfiguration.IdempotencyKeyIndex))
+        catch (DbUpdateException exception) when (SqlViolations.IsUnique(exception, PaymentRequestIndexes.IdempotencyKey))
         {
-            // The same form was sent twice at the same moment: the other request won. Answer with its payment.
+            // The same form was sent twice at the same moment: the other request won. Answer with its request.
             await transaction.RollbackAsync(cancellationToken);
-            return await FindRepeatAsync(db, projectId, idempotencyKey, sent, cancellationToken) ?? CoreProblems.KeyUsedElsewhere();
+            return await FindRepeatAsync(requests, projectId, idempotencyKey, sent, cancellationToken) ?? CoreProblems.KeyUsedElsewhere();
         }
 
         await transaction.CommitAsync(cancellationToken);
-        log.SupplierPaymentRecorded(caller.UserId, projectId, payment.Id, supplierId, payment.Allocations.Count);
+        log.SupplierPaymentRequested(caller.UserId, projectId, created.Id, supplierId, allocations.Count);
 
-        var view = await PaymentQueries.One(db, projectId, payment.Id).SingleAsync(cancellationToken);
-        return TypedResults.Created($"/api/projects/{projectId}/supplier-payments/{payment.Id}", SupplierPaymentView.From(view));
+        return TypedResults.Created($"/api/payment-requests/{created.Id}", created);
     }
 
-    /// <summary>What a payment request asks for, to tell a retry from a different payment sent with the same key.</summary>
     private sealed record PaymentContent(int SupplierId, DateOnly PaymentDate, decimal Amount, PaymentMethod Method, IReadOnlyList<(int ExpenseId, decimal Amount)> Allocations);
 
     /// <summary>
@@ -217,40 +223,28 @@ internal static class RecordSupplierPayment
     /// same payment; 409 <c>idempotency_key_reused</c> when the key was used on another project or for a different
     /// payment (another supplier, amount, date, method or split); <c>null</c> when the key is new.
     /// </summary>
-    private static async Task<Results<Created<SupplierPaymentView>, Ok<SupplierPaymentView>, ValidationProblem, ProblemHttpResult>?> FindRepeatAsync(
-        ProjectsDbContext db, int projectId, Guid idempotencyKey, PaymentContent sent, CancellationToken cancellationToken)
+    private static async Task<Results<Created<PaymentRequestRef>, Ok<PaymentRequestRef>, ValidationProblem, ProblemHttpResult>?> FindRepeatAsync(
+        IPaymentRequests requests, int projectId, Guid idempotencyKey, PaymentContent sent, CancellationToken cancellationToken)
     {
-        var existing = await PaymentQueries.ByKey(db, idempotencyKey)
-            .Select(payment => new
-            {
-                payment.Id,
-                payment.ProjectId,
-                payment.SupplierId,
-                payment.PaymentDate,
-                payment.Amount,
-                payment.Method,
-                Allocations = payment.Allocations.Select(line => new { line.ExpenseId, line.Amount }).ToList(),
-            })
-            .SingleOrDefaultAsync(cancellationToken);
-
-        if (existing is null)
+        if (await requests.FindByKeyAsync(idempotencyKey, cancellationToken) is not { } existing)
         {
             return null;
         }
 
-        var sameSplit = existing.Allocations.Count == sent.Allocations.Count
-            && existing.Allocations.All(line => sent.Allocations.Any(other => other.ExpenseId == line.ExpenseId && other.Amount == line.Amount));
-        if (existing.ProjectId != projectId
-            || existing.SupplierId != sent.SupplierId
-            || existing.PaymentDate != sent.PaymentDate
+        var sameSplit = existing.Lines.Count == sent.Allocations.Count
+            && existing.Lines.All(line => line.RecordType == PaidRecordTypes.ProjectExpense
+                                          && sent.Allocations.Any(other => other.ExpenseId == line.RecordId && other.Amount == line.Amount));
+        if (existing.SourceType != PaymentSourceTypes.SupplierPayment
+            || existing.ProjectId != projectId
+            || existing.PayeeId != sent.SupplierId
+            || existing.RequestedDate != sent.PaymentDate
             || existing.Amount != sent.Amount
-            || existing.Method != sent.Method
+            || existing.Method != sent.Method.ToString()
             || !sameSplit)
         {
             return CoreProblems.KeyUsedElsewhere();
         }
 
-        var view = await PaymentQueries.One(db, projectId, existing.Id).SingleAsync(cancellationToken);
-        return TypedResults.Ok(SupplierPaymentView.From(view));
+        return TypedResults.Ok(existing);
     }
 }

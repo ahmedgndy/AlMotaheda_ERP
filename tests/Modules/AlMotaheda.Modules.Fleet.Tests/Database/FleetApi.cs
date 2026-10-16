@@ -137,6 +137,21 @@ internal static class FleetApi
         api.SendAsync(HttpMethod.Post, $"/api/projects/{projectId}/equipment-costs/{cost.Id()}/payment", session,
             new { paidOn = "2026-02-05", method = "BankTransfer", reference = "TRF-2201", rowVersion = cost.GetProperty("rowVersion").GetString() });
 
+    /// <summary>
+    /// An equipment cost paid all the way: requested by <paramref name="session"/>, approved and sent to the bank by
+    /// the Executive, confirmed by <paramref name="session"/>. Returns the cost as it reads now.
+    /// </summary>
+    public static async Task<JsonElement> PaidCostAsync(this ProjectsApi api, Session session, int projectId, JsonElement cost)
+    {
+        var response = await api.PayAsync(session, projectId, cost);
+        await EnsureStatus(response, HttpStatusCode.Created);
+        await api.SettleAsync(session, await Json(response));
+
+        var read = await api.SendAsync(HttpMethod.Get, $"/api/projects/{projectId}/equipment-costs/{cost.Id()}", session);
+        await EnsureStatus(read, HttpStatusCode.OK);
+        return await Json(read);
+    }
+
     public static Task<HttpResponseMessage> VoidPaymentAsync(this ProjectsApi api, Session session, int projectId, JsonElement cost) =>
         api.SendAsync(HttpMethod.Post, $"/api/projects/{projectId}/equipment-costs/{cost.Id()}/payment/void", session,
             new { reason = "Paid from the wrong account", rowVersion = cost.GetProperty("rowVersion").GetString() });

@@ -160,9 +160,24 @@ public sealed class EquipmentFlowTests(SqlServerFixture database)
         var managerPays = await api.PayAsync(cast.Manager, cast.ProjectA, approvedRental);
         Assert.Equal(HttpStatusCode.Forbidden, managerPays.StatusCode);
 
-        var paidResponse = await api.PayAsync(cast.Accountant, cast.ProjectA, approvedRental);
-        await EnsureStatus(paidResponse, HttpStatusCode.OK);
-        var paid = await Json(paidResponse);
+        // Requested first: not paid yet. The same form sent again is the same request; changed, it is refused.
+        var requested = await api.PayAsync(cast.Accountant, cast.ProjectA, approvedRental);
+        await EnsureStatus(requested, HttpStatusCode.Created);
+        var request = await Json(requested);
+        Assert.Equal(52_500m, request.Money("amount"));
+        var current = await Json(await api.SendAsync(HttpMethod.Get, $"/api/projects/{cast.ProjectA}/equipment-costs/{approvedRental.Id()}", cast.Accountant));
+        Assert.Equal(0m, current.Money("paid"));
+        var resent = await api.PayAsync(cast.Accountant, cast.ProjectA, current);
+        Assert.Equal(HttpStatusCode.OK, resent.StatusCode);
+        Assert.Equal(request.Id(), (await Json(resent)).Id());
+        var changed = await api.SendAsync(HttpMethod.Post, $"/api/projects/{cast.ProjectA}/equipment-costs/{approvedRental.Id()}/payment", cast.Accountant,
+            new { paidOn = "2026-02-05", method = "Cash", rowVersion = current.GetProperty("rowVersion").GetString() });
+        Assert.Equal(HttpStatusCode.Conflict, changed.StatusCode);
+        Assert.Equal("idempotency_key_reused", await CodeOf(changed));
+
+        // Approved by the Executive, sent to the bank and confirmed: now it is paid.
+        await api.SettleAsync(cast.Accountant, request);
+        var paid = await Json(await api.SendAsync(HttpMethod.Get, $"/api/projects/{cast.ProjectA}/equipment-costs/{approvedRental.Id()}", cast.Accountant));
         Assert.Equal(52_500m, paid.Money("paid"));
         Assert.Equal(0m, paid.Money("outstanding"));
         Assert.Equal("Paid", paid.GetProperty("paymentState").GetString());
@@ -185,7 +200,7 @@ public sealed class EquipmentFlowTests(SqlServerFixture database)
 
         // The cost is owed again, so the right payment can be recorded; a second void never overwrites the first:
         // every voided payment is kept whole, with who voided it and why (payments are never edited or deleted).
-        var repaid = await Json(await api.PayAsync(cast.Accountant, cast.ProjectA, voided));
+        var repaid = await api.PaidCostAsync(cast.Accountant, cast.ProjectA, voided);
         Assert.Equal(52_500m, repaid.Money("paid"));
         await EnsureStatus(await api.VoidPaymentAsync(cast.Executive, cast.ProjectA, repaid), HttpStatusCode.OK);
         var history = await api.FleetQueryAsync(db => db.VoidedEquipmentCostPayments

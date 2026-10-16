@@ -1,6 +1,7 @@
 using AlMotaheda.BuildingBlocks.Authorization;
 using AlMotaheda.BuildingBlocks.Http;
 using AlMotaheda.BuildingBlocks.Time;
+using AlMotaheda.Modules.Finance.Contracts;
 using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Workforce.Common;
 using AlMotaheda.Modules.Workforce.Data;
@@ -35,6 +36,7 @@ internal static class VoidWorkerPayment
         HttpContext httpContext,
         WorkforceDbContext db,
         IProjectAccess access,
+        IPaymentRequests requests,
         CompanyClock clock,
         WorkforceLog log,
         CancellationToken cancellationToken)
@@ -101,6 +103,8 @@ internal static class VoidWorkerPayment
             return ApiProblem.ConcurrencyConflictResult();
         }
 
+        // The ledger reversal (Finance) commits together with the void.
+        await requests.ReverseAsync(PaymentSourceTypes.WorkerPayment, payment.Id, reason!, caller.UserId, SharedTransaction.Of(db), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         log.PaymentVoided(caller.UserId, payment.WorkerId, payment.Id);
 

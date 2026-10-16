@@ -1,6 +1,7 @@
 using AlMotaheda.BuildingBlocks.Authorization;
 using AlMotaheda.BuildingBlocks.Http;
 using AlMotaheda.BuildingBlocks.Time;
+using AlMotaheda.Modules.Finance.Contracts;
 using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Subcontractors.Common;
 using AlMotaheda.Modules.Subcontractors.Data;
@@ -16,17 +17,18 @@ using Microsoft.EntityFrameworkCore;
 namespace AlMotaheda.Modules.Subcontractors.Features.Payments;
 
 /// <summary>
-/// <c>POST /api/projects/{pid}/subcontracts/{cid}/payments</c>: record money paid to the subcontractor under this
-/// contract. The server decides what it settles: the contract's oldest approved, unpaid work first; what is left
-/// is an unapplied advance (decision S3).
+/// <c>POST /api/projects/{pid}/subcontracts/{cid}/payments</c>: ask to pay the subcontractor under this contract. It
+/// creates a Finance payment request (status Submitted) for the Executive; the payment is written here only when the
+/// money has left (<c>SubcontractPaymentSource</c>). Then, as before, it settles the contract's oldest approved, unpaid
+/// work first, and what is left is an unapplied advance (decision S3).
 /// </summary>
 /// <remarks>
 /// <list type="bullet">
 ///   <item>Needs payments Create and the project in scope. A completed project takes no payment except from an Executive.</item>
-///   <item>Payments that are not voided, plus this one, must fit in the contract value (409 <c>exceeds_contract_value</c>).</item>
+///   <item>Payments that are not voided, open requests, and this one must fit in the contract value (409 <c>exceeds_contract_value</c>).</item>
 ///   <item>Allowed on a completed contract: the final and retention payments come after the work.</item>
-///   <item>The same <c>idempotencyKey</c> again returns the first payment with 200 and records nothing; the same
-///   key on another contract answers 409.</item>
+///   <item>The same <c>idempotencyKey</c> with the same content returns the first request with 200 and creates
+///   nothing; anything different answers 409.</item>
 /// </list>
 /// </remarks>
 internal static class RecordSubPayment
@@ -46,14 +48,14 @@ internal static class RecordSubPayment
             .WithName("RecordSubcontractPayment")
             .WithSummary("Record a payment to a subcontractor; it settles the oldest approved work first (idempotent by idempotencyKey)");
 
-    internal static async Task<Results<Created<SubPaymentView>, Ok<SubPaymentView>, ValidationProblem, ProblemHttpResult>> HandleAsync(
+    internal static async Task<Results<Created<PaymentRequestRef>, Ok<PaymentRequestRef>, ValidationProblem, ProblemHttpResult>> HandleAsync(
         int projectId,
         int contractId,
         Request request,
         HttpContext httpContext,
         SubcontractorsDbContext db,
         IProjectAccess access,
-        ContractDetails details,
+        IPaymentRequests requests,
         CompanyClock clock,
         SubcontractorsLog log,
         CancellationToken cancellationToken)
@@ -109,16 +111,16 @@ internal static class RecordSubPayment
         var sent = new PaymentContent(paymentDate!.Value, amount!.Value, method, purpose);
 
         // A retried request: answer with the payment it already made.
-        if (await FindRepeatAsync(db, details, projectId, contractId, idempotencyKey, sent, cancellationToken) is { } repeat)
+        if (await FindRepeatAsync(requests, projectId, contractId, idempotencyKey, sent, cancellationToken) is { } repeat)
         {
             return repeat;
         }
 
-        var contractValue = await db.SubContracts.AsNoTracking()
-            .Where(contract => contract.Id == contractId && contract.ProjectId == projectId)
-            .Select(contract => (decimal?)contract.Value)
+        var contract = await db.SubContracts.AsNoTracking()
+            .Where(candidate => candidate.Id == contractId && candidate.ProjectId == projectId)
+            .Select(candidate => new { candidate.Value, candidate.SubcontractorId })
             .SingleOrDefaultAsync(cancellationToken);
-        if (contractValue is null)
+        if (contract is null)
         {
             return SubcontractorsProblems.ContractNotFound();
         }
@@ -132,7 +134,7 @@ internal static class RecordSubPayment
 
         // Checked again under the lock: a concurrent retry with the same key may have committed while this request
         // waited, and its payment must be the answer (not an over-value error for money already recorded).
-        if (await FindRepeatAsync(db, details, projectId, contractId, idempotencyKey, sent, cancellationToken) is { } committed)
+        if (await FindRepeatAsync(requests, projectId, contractId, idempotencyKey, sent, cancellationToken) is { } committed)
         {
             return committed;
         }
@@ -141,49 +143,51 @@ internal static class RecordSubPayment
             .Where(payment => payment.ContractId == contractId && payment.VoidedAt == null)
             .SumAsync(payment => payment.Amount, cancellationToken);
 
-        if (!WorkRules.FitsContractValue(contractValue.Value, paid, amount.Value))
+        // Open payment requests on this contract count as paid here, so the contract value can't be requested twice.
+        var shared = SharedTransaction.Of(db);
+        var reserved = (await requests.ReservedAsync(PaidRecordTypes.SubContract, [contractId], shared, cancellationToken))
+            .GetValueOrDefault(contractId);
+
+        if (!WorkRules.FitsContractValue(contract.Value, paid + reserved, amount.Value))
         {
-            return SubcontractorsProblems.OverValue(Math.Max(0, contractValue.Value - paid));
+            return SubcontractorsProblems.OverValue(Math.Max(0, contract.Value - paid - reserved));
         }
 
-        var now = clock.UtcNow;
-        var payment = new SubPayment
-        {
-            ContractId = contractId,
-            PaymentDate = paymentDate.Value,
-            Amount = amount.Value,
-            Method = method,
-            Purpose = purpose,
-            Reference = reference,
-            Notes = notes,
-            IdempotencyKey = idempotencyKey,
-            CreatedAt = now,
-            CreatedBy = caller.UserId,
-        };
-        db.SubPayments.Add(payment);
-
+        PaymentRequestRef created;
         try
         {
-            await db.SaveChangesAsync(cancellationToken);
+            created = await requests.SubmitAsync(
+                new NewPaymentRequest(
+                    PaymentSourceTypes.SubcontractPayment,
+                    PayeeTypes.Subcontractor,
+                    contract.SubcontractorId,
+                    projectId,
+                    purpose == SubPaymentPurpose.Advance ? PaymentPurposes.SubcontractAdvance : PaymentPurposes.SubcontractWork,
+                    amount.Value,
+                    method.ToString(),
+                    paymentDate.Value,
+                    reference,
+                    notes,
+                    idempotencyKey,
+                    caller.UserId,
+                    [new PaymentLine(PaidRecordTypes.SubContract, contractId, projectId, amount.Value)],
+                    SubcontractPayload.Of(purpose)),
+                shared,
+                cancellationToken);
         }
-        catch (DbUpdateException exception) when (SqlViolations.IsUnique(exception, SubPaymentConfiguration.IdempotencyKeyIndex))
+        catch (DbUpdateException exception) when (SqlViolations.IsUnique(exception, PaymentRequestIndexes.IdempotencyKey))
         {
-            // The same form was sent twice at the same moment: the other request won. Answer with its payment.
+            // The same form was sent twice at the same moment: the other request won. Answer with its request.
             await transaction.RollbackAsync(cancellationToken);
             db.ChangeTracker.Clear();
-            return await FindRepeatAsync(db, details, projectId, contractId, idempotencyKey, sent, cancellationToken)
+            return await FindRepeatAsync(requests, projectId, contractId, idempotencyKey, sent, cancellationToken)
                 ?? SubcontractorsProblems.KeyUsedElsewhere();
         }
 
-        // Saved first, so the settlement sees the payment with its id and the oldest-first order is exact.
-        var allocations = await ContractSettlement.ApplyAsync(db, contractId, now, cancellationToken);
-        await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        log.PaymentRequested(caller.UserId, projectId, contractId, created.Id);
 
-        log.PaymentRecorded(caller.UserId, projectId, contractId, payment.Id, allocations);
-
-        var view = await details.PaymentAsync(projectId, payment.Id, cancellationToken);
-        return TypedResults.Created($"/api/projects/{projectId}/subcontract-payments/{payment.Id}", view!);
+        return TypedResults.Created($"/api/payment-requests/{created.Id}", created);
     }
 
     private sealed record PaymentContent(DateOnly PaymentDate, decimal Amount, SubPaymentMethod Method, SubPaymentPurpose Purpose);
@@ -193,36 +197,40 @@ internal static class RecordSubPayment
     /// same payment; 409 when the key was used on another contract or for a different payment (amount, date, method or
     /// purpose); <c>null</c> when the key is new.
     /// </summary>
-    private static async Task<Results<Created<SubPaymentView>, Ok<SubPaymentView>, ValidationProblem, ProblemHttpResult>?> FindRepeatAsync(
-        SubcontractorsDbContext db, ContractDetails details, int projectId, int contractId, Guid idempotencyKey, PaymentContent sent,
-        CancellationToken cancellationToken)
+    private static async Task<Results<Created<PaymentRequestRef>, Ok<PaymentRequestRef>, ValidationProblem, ProblemHttpResult>?> FindRepeatAsync(
+        IPaymentRequests requests, int projectId, int contractId, Guid idempotencyKey, PaymentContent sent, CancellationToken cancellationToken)
     {
-        var existing = await ContractQueries.ByKey(db, idempotencyKey)
-            .Select(payment => new { payment.Id, payment.ContractId, payment.Contract.ProjectId, payment.PaymentDate, payment.Amount, payment.Method, payment.Purpose })
-            .SingleOrDefaultAsync(cancellationToken);
-
-        if (existing is null)
+        if (await requests.FindByKeyAsync(idempotencyKey, cancellationToken) is not { } existing)
         {
             return null;
         }
 
-        if (existing.ContractId != contractId || existing.ProjectId != projectId
-            || existing.PaymentDate != sent.PaymentDate || existing.Amount != sent.Amount
-            || existing.Method != sent.Method || existing.Purpose != sent.Purpose)
+        var sameContract = existing.Lines.Count == 1
+            && existing.Lines[0].RecordType == PaidRecordTypes.SubContract
+            && existing.Lines[0].RecordId == contractId;
+        if (existing.SourceType != PaymentSourceTypes.SubcontractPayment || !sameContract || existing.ProjectId != projectId
+            || existing.RequestedDate != sent.PaymentDate || existing.Amount != sent.Amount
+            || existing.Method != sent.Method.ToString()
+            || existing.Purpose != (sent.Purpose == SubPaymentPurpose.Advance ? PaymentPurposes.SubcontractAdvance : PaymentPurposes.SubcontractWork))
         {
             return SubcontractorsProblems.KeyUsedElsewhere();
         }
 
-        var view = await details.PaymentAsync(projectId, existing.Id, cancellationToken);
-        return TypedResults.Ok(view!);
+        return TypedResults.Ok(existing);
     }
 }
 
-/// <summary>
-/// <c>POST /api/projects/{pid}/subcontract-payments/{id}/void</c>: cancel a wrong payment. The row stays, marked
-/// with who voided it, when and why. Its allocations stop counting, so the work it settled is open again, and the
-/// other unapplied money of the contract is applied to that work at once.
-/// </summary>
+/// <summary>What a subcontract payment request carries for this module: the payment's own purpose (Finance only knows advance or work).</summary>
+internal static class SubcontractPayload
+{
+    public static string Of(SubPaymentPurpose purpose) => purpose.ToString();
+
+    public static SubPaymentPurpose Read(string? payload) =>
+        Enum.TryParse<SubPaymentPurpose>(payload, out var purpose)
+            ? purpose
+            : throw new PaymentNotPayableException("The request doesn't say what the subcontract payment is for.");
+}
+
 internal static class VoidSubPayment
 {
     internal sealed record Request(string? Reason, string? RowVersion);
@@ -239,6 +247,7 @@ internal static class VoidSubPayment
         Request request,
         HttpContext httpContext,
         SubcontractorsDbContext db,
+        IPaymentRequests requests,
         IProjectAccess access,
         ContractDetails details,
         CompanyClock clock,
@@ -306,6 +315,9 @@ internal static class VoidSubPayment
         // The voided payment's work is open again: other unapplied money of the contract goes to it.
         var allocations = await ContractSettlement.ApplyAsync(db, payment.ContractId, now, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
+
+        // The ledger reversal (Finance) commits together with the void.
+        await requests.ReverseAsync(PaymentSourceTypes.SubcontractPayment, payment.Id, reason!, caller.UserId, SharedTransaction.Of(db), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         log.PaymentVoided(caller.UserId, projectId, payment.ContractId, payment.Id, allocations);

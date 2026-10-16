@@ -27,6 +27,8 @@
     <ProjectReference Include="..\..\Access\AlMotaheda.Modules.Access.Contracts\AlMotaheda.Modules.Access.Contracts.csproj" />
     <!-- Which projects a caller may see, project items, and the cost figures this module reports to the project screens. -->
     <ProjectReference Include="..\..\Projects\AlMotaheda.Modules.Projects.Contracts\AlMotaheda.Modules.Projects.Contracts.csproj" />
+    <!-- Subcontractor payments go through Finance payment requests; Finance writes them back here once paid. -->
+    <ProjectReference Include="..\..\Finance\AlMotaheda.Modules.Finance.Contracts\AlMotaheda.Modules.Finance.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

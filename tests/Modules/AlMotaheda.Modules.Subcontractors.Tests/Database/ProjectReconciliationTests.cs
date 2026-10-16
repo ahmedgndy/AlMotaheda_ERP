@@ -54,7 +54,8 @@ public sealed class ProjectReconciliationTests(SqlServerFixture database)
         var looseSupply = await ApprovedSupplyAsync(api, engineer, accountant, projectId, supplierId, 20m, 500m, itemId: null);
         await OkAsync(api, engineer, HttpMethod.Post, $"/api/projects/{projectId}/expenses",
             SupplyBody(supplierId, 5m, 1_000m, concrete), HttpStatusCode.Created); // waiting for review: never cost
-        await OkAsync(api, accountant, HttpMethod.Post, $"/api/projects/{projectId}/supplier-payments", new
+        // Requested by the accountant, then approved, sent to the bank and confirmed: only then is it paid.
+        var supplierRequest = await OkAsync(api, accountant, HttpMethod.Post, $"/api/projects/{projectId}/supplier-payments", new
         {
             supplierId,
             paymentDate = "2026-01-12",
@@ -64,6 +65,7 @@ public sealed class ProjectReconciliationTests(SqlServerFixture database)
             idempotencyKey = Guid.NewGuid().ToString(),
             allocations = new[] { new { expenseId = linkedSupply.Id(), amount = 60_000m } },
         }, HttpStatusCode.Created);
+        await api.SettleAsync(accountant, supplierRequest);
 
         // Subcontract side: the contract value is a commitment; only approved measured work is cost.
         var company = await api.CreateCompanyAsync(executive, "Delta Plumbing", "Plumbing");
@@ -91,7 +93,7 @@ public sealed class ProjectReconciliationTests(SqlServerFixture database)
         }, HttpStatusCode.Created);
         await OkAsync(api, manager, HttpMethod.Post, $"/api/projects/{projectId}/labor/sheets/{sheet.Id()}/approve",
             new { note = (string?)null, rowVersion = sheet.GetProperty("rowVersion").GetString() }, HttpStatusCode.OK);
-        await OkAsync(api, accountant, HttpMethod.Post, $"/api/workers/{plumber1}/payments", new
+        var wageRequest = await OkAsync(api, accountant, HttpMethod.Post, $"/api/workers/{plumber1}/payments", new
         {
             paymentDate = Iso(Today(api)),
             amount = 200m,
@@ -99,6 +101,7 @@ public sealed class ProjectReconciliationTests(SqlServerFixture database)
             reference = "Site cash",
             idempotencyKey = Guid.NewGuid().ToString(),
         }, HttpStatusCode.Created);
+        await api.SettleAsync(accountant, wageRequest);
 
         // The items table: every row is its sources, the footer is the rows, "not linked" is separate.
         var items = await OkAsync(api, executive, HttpMethod.Get, $"/api/projects/{projectId}/items", null, HttpStatusCode.OK);

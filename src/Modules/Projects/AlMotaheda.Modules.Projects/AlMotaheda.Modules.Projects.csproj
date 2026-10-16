@@ -27,6 +27,8 @@
     <ProjectReference Include="..\..\Access\AlMotaheda.Modules.Access.Contracts\AlMotaheda.Modules.Access.Contracts.csproj" />
     <!-- The module implements its own contracts (Integration folder) and consumes the cost figures other modules report through them. -->
     <ProjectReference Include="..\AlMotaheda.Modules.Projects.Contracts\AlMotaheda.Modules.Projects.Contracts.csproj" />
+    <!-- Supplier payments go through Finance payment requests; Finance writes them back here once paid. -->
+    <ProjectReference Include="..\..\Finance\AlMotaheda.Modules.Finance.Contracts\AlMotaheda.Modules.Finance.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -37,6 +39,7 @@
     <InternalsVisibleTo Include="AlMotaheda.Modules.Fleet.Tests" />
     <InternalsVisibleTo Include="AlMotaheda.Modules.Archive.Tests" />
     <InternalsVisibleTo Include="AlMotaheda.Modules.Platform.Tests" />
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Finance.Tests" />
   </ItemGroup>
 
   <ItemGroup>
