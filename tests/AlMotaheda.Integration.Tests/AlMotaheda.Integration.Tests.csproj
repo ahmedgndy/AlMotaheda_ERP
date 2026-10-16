@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Integration and consistency checks across modules (brief Phase 8): whole business chains on SQL Server
+    (Testcontainers), checking that the same number is the same on every screen, in every report and in the ledger,
+    and that every financial step is in the audit trail. Skipped when Docker isn't running.
+  -->
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Testcontainers.MsSql" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Host\AlMotaheda.Api\AlMotaheda.Api.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Access\AlMotaheda.Modules.Access\AlMotaheda.Modules.Access.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Projects\AlMotaheda.Modules.Projects\AlMotaheda.Modules.Projects.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Workforce\AlMotaheda.Modules.Workforce\AlMotaheda.Modules.Workforce.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Fleet\AlMotaheda.Modules.Fleet\AlMotaheda.Modules.Fleet.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The shared test host and the module test helpers, called the way the frontend calls the API. -->
+    <Compile Include="..\AlMotaheda.Api.Tests\TestApplication.cs" Link="Shared\TestApplication.cs" />
+    <Compile Include="..\AlMotaheda.Api.Tests\Shared\StandInDatabase.cs" Link="Shared\StandInDatabase.cs" />
+    <Compile Include="..\AlMotaheda.Api.Tests\Shared\ApiCalls.cs" Link="Shared\ApiCalls.cs" />
+    <Compile Include="..\Modules\AlMotaheda.Modules.Access.Tests\Database\SqlServerFixture.cs" Link="Shared\SqlServerFixture.cs" />
+    <Compile Include="..\Modules\AlMotaheda.Modules.Access.Tests\Database\AccessApi.cs" Link="Shared\AccessApi.cs" />
+    <Compile Include="..\Modules\AlMotaheda.Modules.Access.Tests\TestTokens.cs" Link="Shared\TestTokens.cs" />
+    <Compile Include="..\Modules\AlMotaheda.Modules.Projects.Tests\Database\ProjectsApi.cs" Link="Shared\ProjectsApi.cs" />
+    <Compile Include="..\Modules\AlMotaheda.Modules.Projects.Tests\Database\Core\CoreApi.cs" Link="Shared\CoreApi.cs" />
+    <Compile Include="..\Modules\AlMotaheda.Modules.Workforce.Tests\Database\WorkforceApi.cs" Link="Shared\WorkforceApi.cs" />
+    <Compile Include="..\Modules\AlMotaheda.Modules.Fleet.Tests\Database\FleetApi.cs" Link="Shared\FleetApi.cs" />
+  </ItemGroup>
+
+</Project>

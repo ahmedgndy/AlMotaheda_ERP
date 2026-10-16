@@ -35,6 +35,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="AlMotaheda.Modules.Fleet.Tests" />
+    <InternalsVisibleTo Include="AlMotaheda.Integration.Tests" />
   </ItemGroup>
 
   <ItemGroup>

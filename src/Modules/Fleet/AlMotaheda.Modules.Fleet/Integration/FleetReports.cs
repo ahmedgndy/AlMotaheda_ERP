@@ -74,10 +74,11 @@ internal sealed class FleetReports(FleetDbContext db, IVisibleProjects projects,
         var rows = new List<(int ProjectId, EquipmentCostSettlementRow Row)>();
         foreach (var id in projectIds.Order())
         {
-            var settled = await EquipmentCostQueries.SettlementRows(db, id, query.Date("from"), query.Date("to"))
+            // Filtered after loading: the settlement row is a projection (corrections included), which SQL can't filter on.
+            var settled = await EquipmentCostQueries.SettlementRows(db, id, query.Date("from"), query.Date("to")).ToListAsync(cancellationToken);
+            rows.AddRange(settled
                 .Where(row => row.Status == EquipmentCostStatus.Approved && (equipmentId == null || row.EquipmentId == equipmentId))
-                .ToListAsync(cancellationToken);
-            rows.AddRange(settled.Select(row => (id, row)));
+                .Select(row => (id, row)));
         }
 
         var equipmentIds = rows.Select(entry => entry.Row.EquipmentId).Distinct().ToList();
