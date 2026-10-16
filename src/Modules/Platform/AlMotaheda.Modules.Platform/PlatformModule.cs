@@ -1,3 +1,4 @@
+using AlMotaheda.BuildingBlocks.Data;
 using AlMotaheda.BuildingBlocks.Modules;
 using AlMotaheda.BuildingBlocks.Time;
 using AlMotaheda.Modules.Platform.Common;
@@ -45,6 +46,9 @@ public sealed class PlatformModule : IModule
         // Live updates: signals only (no amounts), sent after commit by the outbox dispatcher.
         services.AddSignalR(hub => hub.MaximumReceiveMessageSize = 4 * 1024);
         services.AddSingleton<ILiveUpdates, SignalRLiveUpdates>();
+
+        // Cache removal: the same dependency map as the live signals.
+        services.AddSingleton<IChangeObserver, CacheInvalidation>();
 
         // Order matters: hosted services start in registration order, so the migrations run before the dispatcher.
         services.AddHostedService<PlatformStartup>();

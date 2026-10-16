@@ -27,7 +27,7 @@ namespace AlMotaheda.BuildingBlocks.Data;
 /// Only the Access module uses them (sign-in bookkeeping, and removing permission overrides, which its
 /// security log records).</para>
 /// </remarks>
-public sealed class AuditTrailInterceptor(IHttpContextAccessor httpContextAccessor, TimeProvider time) : SaveChangesInterceptor
+public sealed class AuditTrailInterceptor(IHttpContextAccessor httpContextAccessor, TimeProvider time, IEnumerable<IChangeObserver> observers) : SaveChangesInterceptor
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -76,6 +76,8 @@ public sealed class AuditTrailInterceptor(IHttpContextAccessor httpContextAccess
             {
                 await owned.CommitAsync(cancellationToken);
             }
+
+            await NotifyAsync(pending.Captured, cancellationToken);
         }
 
         return result;
@@ -91,6 +93,7 @@ public sealed class AuditTrailInterceptor(IHttpContextAccessor httpContextAccess
             var (sql, parameters) = BuildInsert(pending.Captured);
             db.Database.ExecuteSqlRaw(sql, parameters);
             owned?.Commit();
+            NotifyAsync(pending.Captured, CancellationToken.None).GetAwaiter().GetResult();
         }
 
         return result;
@@ -103,6 +106,24 @@ public sealed class AuditTrailInterceptor(IHttpContextAccessor httpContextAccess
 
     public override async Task SaveChangesCanceledAsync(DbContextEventData eventData, CancellationToken cancellationToken = default) =>
         await DiscardAsync(eventData.Context);
+
+    /// <summary>
+    /// Tells the observers (cache removal) what changed. Right after the save: committed when this interceptor owned the
+    /// transaction; when the handler owns it, the outbox tells them again after its commit, which closes the gap.
+    /// </summary>
+    private async Task NotifyAsync(IReadOnlyList<CapturedChange> captured, CancellationToken cancellationToken)
+    {
+        if (!observers.Any())
+        {
+            return;
+        }
+
+        var changes = captured.Select(change => change.ToEntityChange()).ToList();
+        foreach (var observer in observers)
+        {
+            await observer.OnChangedAsync(changes, cancellationToken);
+        }
+    }
 
     /// <summary>The save failed: drop what was captured and roll back the transaction this interceptor opened.</summary>
     private async ValueTask DiscardAsync(DbContext? db)

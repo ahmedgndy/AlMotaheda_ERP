@@ -105,12 +105,14 @@ internal sealed class OutboxDispatcher(
 
         var live = new List<LiveMessage>();
         var stored = new List<Notification>();
+        var changed = new List<EntityChange>();
         foreach (var message in messages)
         {
             try
             {
                 var notifications = Handle(message, time.GetUtcNow().UtcDateTime).ToList();
                 var changes = Changes(message).ToList();
+                changed.AddRange(ChangedRecords(message));
                 db.Notifications.AddRange(notifications);
                 stored.AddRange(notifications);
                 live.AddRange(changes);
@@ -133,9 +135,21 @@ internal sealed class OutboxDispatcher(
             LiveScopes.User(notification.RecipientUserId),
             LiveMethods.Notification,
             new NotificationSignal(notification.Id, notification.Type, notification.EntityType, notification.EntityKey, notification.ProjectId))));
+        // The cache was already cleared right after each save; clearing again after the commit closes the gap
+        // between a save and its handler's commit.
+        foreach (var observer in scope.ServiceProvider.GetServices<IChangeObserver>())
+        {
+            await observer.OnChangedAsync(changed, cancellationToken);
+        }
+
         await PublishAsync(scope.ServiceProvider, live, cancellationToken);
         return messages.Count;
     }
+
+    private static IEnumerable<EntityChange> ChangedRecords(OutboxMessage message) =>
+        message.Type != PlatformTables.EntitiesChangedMessage
+            ? []
+            : JsonSerializer.Deserialize<EntitiesChangedPayload>(message.Payload, Json)?.Changes ?? [];
 
     /// <summary>The change signals of one message (no amounts). Unknown message types send none.</summary>
     internal static IEnumerable<LiveMessage> Changes(OutboxMessage message)

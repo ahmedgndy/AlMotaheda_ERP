@@ -1,3 +1,4 @@
+using AlMotaheda.BuildingBlocks.Data;
 using AlMotaheda.Api.Infrastructure.ApiDocumentation;
 using AlMotaheda.Api.Infrastructure.ErrorHandling;
 using AlMotaheda.Api.Infrastructure.HealthChecks;
@@ -30,6 +31,8 @@ internal static class ApiHost
         builder.Services.AddHealthChecks()
             .AddCheck<DatabaseHealthCheck>(DatabaseHealthCheck.Name, timeout: DatabaseHealthCheck.Timeout);
 
+        // One cache for every module (HybridCache); entries are removed by the dependency map when their data changes.
+        builder.Services.AddErpCache();
         builder.Services.AddModules(builder.Configuration, ModuleCatalog.CreateAll());
 
         return builder;

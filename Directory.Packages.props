@@ -32,6 +32,11 @@
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.1.1" />
   </ItemGroup>
 
+  <!-- One cache for every module: in-memory now, Redis later without code changes; tag removal; stampede protection. -->
+  <ItemGroup Label="Caching">
+    <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="10.7.0" />
+  </ItemGroup>
+
   <!-- Reports: Excel (.xlsx) files built on the server. MIT licence. -->
   <ItemGroup Label="Reports">
     <PackageVersion Include="ClosedXML" Version="0.105.0" />

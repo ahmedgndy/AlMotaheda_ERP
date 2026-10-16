@@ -1,7 +1,9 @@
 using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Projects.Data;
 using AlMotaheda.Modules.Projects.Features.Expenses;
+using AlMotaheda.BuildingBlocks.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Hybrid;
 
 namespace AlMotaheda.Modules.Projects.Features.Reports;
 
@@ -15,11 +17,35 @@ internal sealed record ProjectCostData(IReadOnlyList<ExpenseSettlementRow> Expen
 /// subcontract and equipment figures from the <see cref="IProjectCostSource"/> registered by the modules that own
 /// them. Any of those modules may be missing; then its group is zero and marked as having no source.
 /// </summary>
-internal sealed class ProjectCostLoader(ProjectsDbContext db, IEnumerable<IProjectCostSource> sources)
+/// <remarks>
+/// Cached (17-caching-changes.md): the result is the same for everyone who may see the project's money; the
+/// project-scope and See money checks run on every request before this is called. Every record change that moves a
+/// project's cost removes it (tag <c>agg:ProjectOverview</c>); never used to decide a payment or an approval.
+/// </remarks>
+internal sealed class ProjectCostLoader(ProjectsDbContext db, IEnumerable<IProjectCostSource> sources, HybridCache cache)
 {
+    private static readonly HybridCacheEntryOptions Lifetime = new()
+    {
+        Expiration = TimeSpan.FromSeconds(60),
+        LocalCacheExpiration = TimeSpan.FromSeconds(60),
+    };
+
     /// <param name="from">First business date included; <c>null</c> for no limit.</param>
     /// <param name="to">Last business date included; <c>null</c> for no limit.</param>
-    public async Task<ProjectCostData> LoadAsync(int projectId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken)
+    public ValueTask<ProjectCostData> LoadAsync(int projectId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken) =>
+        cache.GetOrCreateAsync(
+            Key(projectId, from, to),
+            (projectId, from, to, loader: this),
+            static (state, token) => state.loader.LoadFromDatabaseAsync(state.projectId, state.from, state.to, token),
+            Lifetime,
+            CacheTags.ForProject("ProjectOverview", projectId),
+            cancellationToken);
+
+    /// <summary><c>projects:costs:{project}:{from}:{to}:v1</c>.</summary>
+    internal static string Key(int projectId, DateOnly? from, DateOnly? to) =>
+        $"projects:costs:{projectId}:{from?.ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture) ?? "-"}:{to?.ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture) ?? "-"}:v1";
+
+    private async ValueTask<ProjectCostData> LoadFromDatabaseAsync(int projectId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken)
     {
         var expenses = await ReportQueries.SettlementRows(db, projectId, from, to).ToListAsync(cancellationToken);
 

@@ -27,8 +27,8 @@ internal static class LiveMethods
 
 /// <summary>
 /// The groups and the dependency map: which screens and figures each changed record affects, and which group
-/// hears about it. The one place derived numbers are listed (04-signalr-and-cache-maps.md §3); the cache will use
-/// the same map.
+/// hears about it. The one place derived numbers are listed (04-signalr-and-cache-maps.md §3): live signals
+/// (<see cref="For"/>) and cache removal (<see cref="CacheTagsFor"/>) both come from it, so they can't disagree.
 /// </summary>
 internal static class LiveScopes
 {
@@ -55,7 +55,8 @@ internal static class LiveScopes
         ["SupplierPayment"] = new(["SupplierPayments", "SupplierBalances", .. ProjectCost], true, [Finance]),
         ["DailySheet"] = new(["LaborSheets", "LaborSummary", .. ProjectCost], true, [Finance]),
         ["LaborAllocation"] = new(["LaborSheets", "LaborSummary", .. ProjectCost], true, [Finance]),
-        ["WorkerPayment"] = new(["WorkerAccount", "LaborSummary", "CompanyDashboard"], true, [Finance]),
+        // A worker payment settles days on several projects: it has no project, so the overview of every project is refreshed.
+        ["WorkerPayment"] = new(["WorkerAccount", "LaborSummary", "ProjectOverview", "CompanyDashboard"], true, [Finance]),
         ["SubContract"] = new(["Subcontracts", "Obligations", .. ProjectCost], true, [Finance]),
         ["ProgressMeasurement"] = new(["Subcontracts", "Obligations", .. ProjectCost], true, [Finance]),
         ["ManpowerSheet"] = new(["Subcontracts", "Obligations", .. ProjectCost], true, [Finance]),
@@ -127,6 +128,23 @@ internal static class LiveScopes
         {
             yield return Signal(change, version, route, group);
         }
+    }
+
+    /// <summary>
+    /// The cache tags one changed record removes: each aggregate it affects, for its project, or for every project when
+    /// the record has none (a worker payment, a labor allocation).
+    /// </summary>
+    public static IEnumerable<string> CacheTagsFor(EntityChange change)
+    {
+        if (Silent.Contains(change.Entity))
+        {
+            return [];
+        }
+
+        var route = Routes.GetValueOrDefault(change.Entity) ?? new Route([change.Entity], false, []);
+        return route.Aggregates.Select(aggregate => change.ProjectId is { } projectId
+            ? CacheTags.Aggregate(aggregate, projectId)
+            : CacheTags.Aggregate(aggregate));
     }
 
     private static LiveMessage Signal(EntityChange change, long version, Route route, string scope) =>
