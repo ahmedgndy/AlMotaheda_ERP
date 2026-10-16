@@ -1,6 +1,8 @@
+using AlMotaheda.BuildingBlocks.Data;
 using System.Text.Json;
 using AlMotaheda.Modules.Platform.Common;
 using AlMotaheda.Modules.Platform.Data;
+using AlMotaheda.Modules.Platform.Live;
 using AlMotaheda.Modules.Platform.Notifications;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -11,8 +13,9 @@ using Microsoft.Extensions.Options;
 namespace AlMotaheda.Modules.Platform.Outbox;
 
 /// <summary>
-/// Handles the outbox after the changes are committed: today it stores the notifications each change causes
-/// (<see cref="NotificationRules"/>). Live updates (SignalR) and cache invalidation will hang off the same loop.
+/// Handles the outbox after the changes are committed: it stores the notifications each change causes
+/// (<see cref="NotificationRules"/>) and, once that is committed too, sends the live signals: each notification to
+/// its recipient and each change to the groups of <see cref="LiveScopes"/>. Cache invalidation will hang off the same loop.
 /// </summary>
 /// <remarks>
 /// <para>Each batch runs in one transaction: the messages are locked (<c>UPDLOCK, READPAST</c>, so a second server
@@ -20,6 +23,7 @@ namespace AlMotaheda.Modules.Platform.Outbox;
 /// message is handled once, or not at all and then again; the unique source index stops duplicates either way.</para>
 /// <para>A message that fails is retried on later rounds and skipped after <see cref="OutboxOptions.MaxAttempts"/>.
 /// When the database is unreachable the loop waits longer each time (up to a minute) and logs once per outage.</para>
+/// <para>Live signals are best effort: if sending fails the data is still right, and clients refetch on reconnect.</para>
 /// </remarks>
 internal sealed class OutboxDispatcher(
     IServiceScopeFactory scopeFactory,
@@ -99,11 +103,17 @@ internal sealed class OutboxDispatcher(
                 new SqlParameter("@maxAttempts", settings.MaxAttempts))
             .ToListAsync(cancellationToken);
 
+        var live = new List<LiveMessage>();
+        var stored = new List<Notification>();
         foreach (var message in messages)
         {
             try
             {
-                db.Notifications.AddRange(Handle(message, time.GetUtcNow().UtcDateTime));
+                var notifications = Handle(message, time.GetUtcNow().UtcDateTime).ToList();
+                var changes = Changes(message).ToList();
+                db.Notifications.AddRange(notifications);
+                stored.AddRange(notifications);
+                live.AddRange(changes);
                 message.ProcessedAt = time.GetUtcNow().UtcDateTime;
                 message.LastError = null;
             }
@@ -117,7 +127,44 @@ internal sealed class OutboxDispatcher(
 
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+
+        // Only after the commit: a signal never announces something that could still roll back.
+        live.AddRange(stored.Select(notification => new LiveMessage(
+            LiveScopes.User(notification.RecipientUserId),
+            LiveMethods.Notification,
+            new NotificationSignal(notification.Id, notification.Type, notification.EntityType, notification.EntityKey, notification.ProjectId))));
+        await PublishAsync(scope.ServiceProvider, live, cancellationToken);
         return messages.Count;
+    }
+
+    /// <summary>The change signals of one message (no amounts). Unknown message types send none.</summary>
+    internal static IEnumerable<LiveMessage> Changes(OutboxMessage message)
+    {
+        if (message.Type != PlatformTables.EntitiesChangedMessage)
+        {
+            return [];
+        }
+
+        var payload = JsonSerializer.Deserialize<EntitiesChangedPayload>(message.Payload, Json)
+                      ?? throw new JsonException("The outbox payload is empty.");
+        return payload.Changes.SelectMany(change => LiveScopes.For(change, message.Id)).ToList();
+    }
+
+    private async Task PublishAsync(IServiceProvider services, IReadOnlyList<LiveMessage> live, CancellationToken cancellationToken)
+    {
+        if (live.Count == 0 || services.GetService<ILiveUpdates>() is not { } updates)
+        {
+            return;
+        }
+
+        try
+        {
+            await updates.PublishAsync(live, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            log.LiveUpdatesFailed(exception, live.Count);
+        }
     }
 
     /// <summary>The notifications one message causes. Unknown message types cause none.</summary>

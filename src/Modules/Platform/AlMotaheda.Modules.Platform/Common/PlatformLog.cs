@@ -18,4 +18,7 @@ internal sealed partial class PlatformLog(ILogger<PlatformLog> logger)
 
     [LoggerMessage(EventId = 7011, Level = LogLevel.Information, Message = "User {ActorId} marked {Count} notification(s) as read")]
     public partial void NotificationsRead(int actorId, int count);
+
+    [LoggerMessage(EventId = 7021, Level = LogLevel.Warning, Message = "Live updates could not be sent for {Count} messages; clients catch up when they refetch")]
+    public partial void LiveUpdatesFailed(Exception exception, int count);
 }

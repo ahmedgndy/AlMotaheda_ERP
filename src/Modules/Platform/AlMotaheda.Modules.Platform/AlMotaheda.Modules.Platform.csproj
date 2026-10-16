@@ -27,6 +27,8 @@
     <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks.Data\AlMotaheda.BuildingBlocks.Data.csproj" />
     <!-- User names on the audit trail, and the Executive role code. -->
     <ProjectReference Include="..\..\Access\AlMotaheda.Modules.Access.Contracts\AlMotaheda.Modules.Access.Contracts.csproj" />
+    <!-- Who may join a project's live-update group (IProjectAccess). -->
+    <ProjectReference Include="..\..\Projects\AlMotaheda.Modules.Projects.Contracts\AlMotaheda.Modules.Projects.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

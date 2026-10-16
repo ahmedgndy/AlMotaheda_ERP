@@ -52,7 +52,11 @@ public sealed class AccessModule : IModule
                 // Keep the token's own claim names ("sub", "role", "perm") instead of the long WS-* names.
                 bearer.MapInboundClaims = false;
                 bearer.TokenValidationParameters = AccessTokenIssuer.CreateValidationParameters(tokens.Value);
-                bearer.Events = new JwtBearerEvents { OnChallenge = WriteUnauthenticatedProblemAsync };
+                bearer.Events = new JwtBearerEvents
+                {
+                    OnChallenge = WriteUnauthenticatedProblemAsync,
+                    OnMessageReceived = ReadHubTokenFromQuery,
+                };
             });
 
         services.TryAddSingleton(TimeProvider.System);
@@ -96,6 +100,21 @@ public sealed class AccessModule : IModule
         var roles = endpoints.MapGroup("/roles").WithTags("Roles").RequireAuthorization();
         ListRoles.Map(roles);
         UpdateRolePermissions.Map(roles);
+    }
+
+    /// <summary>
+    /// Browsers can't send headers on a WebSocket, so the live-update hub (and only it) takes the access token from
+    /// the <c>access_token</c> query string, as SignalR does. Request logs record the path, never the query string.
+    /// </summary>
+    private static Task ReadHubTokenFromQuery(MessageReceivedContext context)
+    {
+        if (context.HttpContext.Request.Path.StartsWithSegments("/api/hubs")
+            && context.Request.Query["access_token"].ToString() is { Length: > 0 } token)
+        {
+            context.Token = token;
+        }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>401 as ProblemDetails with <c>code: "unauthenticated"</c>, the same shape as every other error.</summary>

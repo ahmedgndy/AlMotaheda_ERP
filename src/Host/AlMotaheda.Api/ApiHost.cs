@@ -51,6 +51,9 @@ internal static class ApiHost
             app.UseApiDocumentation();
         }
 
+        // The live-update hub (/api/hubs/erp) prefers WebSockets; without them SignalR falls back to slower transports.
+        app.UseWebSockets();
+
         app.UseSecurity();
 
         app.MapHealthCheckEndpoints();

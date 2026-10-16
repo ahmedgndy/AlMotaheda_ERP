@@ -4,6 +4,7 @@ using AlMotaheda.Modules.Platform.Common;
 using AlMotaheda.Modules.Platform.Data;
 using AlMotaheda.Modules.Platform.Features.Audit;
 using AlMotaheda.Modules.Platform.Features.Notifications;
+using AlMotaheda.Modules.Platform.Live;
 using AlMotaheda.Modules.Platform.Outbox;
 using AlMotaheda.Modules.Platform.Startup;
 using Microsoft.AspNetCore.Builder;
@@ -16,7 +17,8 @@ using Microsoft.Extensions.Options;
 namespace AlMotaheda.Modules.Platform;
 
 /// <summary>
-/// Entry point of the Platform module: the audit trail, the outbox and the stored notifications.
+/// Entry point of the Platform module: the audit trail, the outbox, the stored notifications and the live-update hub
+/// (SignalR, docs/modernization/16-signalr-changes.md).
 /// This is the only public type in the module.
 /// </summary>
 /// <remarks>
@@ -40,6 +42,10 @@ public sealed class PlatformModule : IModule
         services.AddCompanyClock();
         services.AddSingleton<PlatformLog>();
 
+        // Live updates: signals only (no amounts), sent after commit by the outbox dispatcher.
+        services.AddSignalR(hub => hub.MaximumReceiveMessageSize = 4 * 1024);
+        services.AddSingleton<ILiveUpdates, SignalRLiveUpdates>();
+
         // Order matters: hosted services start in registration order, so the migrations run before the dispatcher.
         services.AddHostedService<PlatformStartup>();
         services.AddHostedService<OutboxDispatcher>();
@@ -54,5 +60,9 @@ public sealed class PlatformModule : IModule
         GetUnreadNotificationCount.Map(api);
         MarkNotificationsRead.Map(api);
         ListAuditEntries.Map(api);
+
+        // The connection closes when its access token expires: the client reconnects with a fresh token and every
+        // join is checked again, so a removed permission or project stops the signals within the token's lifetime.
+        api.MapHub<ErpHub>("/hubs/erp", hub => hub.CloseOnAuthenticationExpiration = true);
     }
 }

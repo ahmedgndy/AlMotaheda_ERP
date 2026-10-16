@@ -39,6 +39,9 @@ public sealed class PasswordChangeGateTests
         var endpoints = app.Services.GetRequiredService<EndpointDataSource>().Endpoints
             .OfType<RouteEndpoint>()
             .Where(endpoint => endpoint.RoutePattern.RawText?.StartsWith("/api", StringComparison.Ordinal) == true)
+            // The live-update hub's transport routes take several methods; its refusal of a pending password change
+            // is tested over a real connection (Platform tests, LiveHubTests).
+            .Where(endpoint => !endpoint.RoutePattern.RawText!.StartsWith("/api/hubs/", StringComparison.Ordinal))
             .Select(endpoint => (
                 Method: endpoint.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods.Single(),
                 Route: endpoint.RoutePattern.RawText!))
