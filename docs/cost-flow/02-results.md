@@ -13,8 +13,8 @@ On `feature/backend-cost-flow-integrity` (on top of `main` 96ceae9):
 
 | Commit | Contents |
 |---|---|
-| COMMIT1 | Cost-flow integrity: code, migrations, tests and this report |
-| (the commit that fills in this table) | Report: commit hash |
+| `2785f44` | Cost-flow integrity: code, migrations, tests and this report |
+| (the next commit) | This table only |
 
 ## 3. Modules inspected
 
