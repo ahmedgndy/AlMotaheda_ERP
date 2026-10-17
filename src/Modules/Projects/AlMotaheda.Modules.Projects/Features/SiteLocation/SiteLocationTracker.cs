@@ -49,7 +49,8 @@ internal sealed record TrackedProject(int ProjectId, string Code, string NameAr,
 /// <remarks>
 /// <para>Each position keeps the time the phone took it. A queue sent twice stores each position once (by the id
 /// the phone gave it). Positions sent late go into the history; only live ones (see
-/// <see cref="SiteLocationRules.IsLive"/>) open or close alerts, with the time the phone took them.</para>
+/// <see cref="SiteLocationRules.IsLive"/>) open or close alerts. Leaving and coming back to the site carry the time the
+/// phone took the position; an outage ("location unavailable") ends when the server receives positions again.</para>
 /// <para>Battery: a live heartbeat at or below the low level, not charging, alerts once until it charges or
 /// recovers. Nothing is ever said about the battery of a phone that stopped reporting.</para>
 /// </remarks>
@@ -238,8 +239,10 @@ internal sealed class SiteLocationTracker(
 
                     if (sharing.UnavailableSince is not null)
                     {
+                        // An outage is the server hearing nothing; it ends when positions arrive again (now), not at
+                        // the capture time of a queued position, which can be earlier than the moment it was detected.
                         sharing.UnavailableSince = null;
-                        await alerts.CloseAsync<LocationUnavailableAlert>(sharing.ProjectId, userId, LocationAlertStatus.Recovered, point.RecordedAt, cancellationToken);
+                        await alerts.CloseAsync<LocationUnavailableAlert>(sharing.ProjectId, userId, LocationAlertStatus.Recovered, now, cancellationToken);
                         log.LocationBack(userId, sharing.ProjectId);
                     }
 

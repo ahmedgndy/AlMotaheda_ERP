@@ -294,8 +294,14 @@ public sealed class AutomaticTrackingTests(SqlServerFixture database)
         // The phone comes back and uploads its queue: an old position keeps the outage open, a live one ends it.
         await EnsureStatus(await BatchAsync(api, team.Engineer, [Point(Guid.NewGuid(), DateTime.UtcNow.AddMinutes(-18), SiteLatitude, SiteLongitude)]), HttpStatusCode.OK);
         Assert.All(await AlertsAsync(api, team.ProjectId), alert => Assert.Equal(LocationAlertStatus.Open, alert.Status));
-        await EnsureStatus(await BatchAsync(api, team.Engineer, [Point(Guid.NewGuid(), DateTime.UtcNow, SiteLatitude, SiteLongitude)]), HttpStatusCode.OK);
-        Assert.All(await AlertsAsync(api, team.ProjectId), alert => Assert.Equal(LocationAlertStatus.Recovered, alert.Status));
+        // A queued position taken before the outage was detected, arriving live: the outage ends when it arrives, never
+        // before it started (QA OFF-003).
+        await EnsureStatus(await BatchAsync(api, team.Engineer, [Point(Guid.NewGuid(), DateTime.UtcNow.AddMinutes(-2), SiteLatitude, SiteLongitude)]), HttpStatusCode.OK);
+        Assert.All(await AlertsAsync(api, team.ProjectId), alert =>
+        {
+            Assert.Equal(LocationAlertStatus.Recovered, alert.Status);
+            Assert.True(alert.EndedAt >= alert.StartedAt, "an outage can't end before it started");
+        });
         Assert.Equal("OnSite", (await EngineerOnMapAsync(api, team)).GetProperty("state").GetString());
         await WaitForNotificationAsync(api, team.Manager, "LocationAvailable");
     }
