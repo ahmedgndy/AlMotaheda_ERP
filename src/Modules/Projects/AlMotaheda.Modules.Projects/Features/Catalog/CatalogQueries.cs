@@ -16,6 +16,7 @@ internal sealed record CatalogItemHeader(
     string? SupplierNameEn,
     decimal EstimatedQuantity,
     CatalogItemStatus Status,
+    int? MasterItemId,
     DateTime CreatedAt,
     int CreatedBy,
     DateTime? UpdatedAt,
@@ -109,6 +110,30 @@ internal static class CatalogQueries
                 price.DecisionNote));
 
     /// <summary>
+    /// The approved master prices of the project's items that were selected from the master catalog (or of one item),
+    /// as rows of the project item (<see cref="PriceRow.CatalogItemId"/> is the project's catalog item). They apply
+    /// only while the project has no approved price of its own (<see cref="CatalogPricing.Reference"/>).
+    /// </summary>
+    public static IQueryable<PriceRow> MasterPrices(ProjectsDbContext db, int projectId, int? itemId = null) =>
+        from item in db.CatalogItems.AsNoTracking()
+        where item.ProjectId == projectId && item.MasterItemId != null && (itemId == null || item.Id == itemId)
+        from price in db.MasterItemPrices.AsNoTracking()
+        where price.MasterItemId == item.MasterItemId && price.Status == ItemPriceStatus.Approved
+        select new PriceRow(
+            price.Id,
+            item.Id,
+            price.Price,
+            price.PreviousPrice,
+            price.EffectiveFrom,
+            price.Status,
+            price.Reason,
+            price.RequestedAt,
+            price.RequestedBy,
+            price.DecidedAt,
+            price.DecidedBy,
+            price.DecisionNote);
+
+    /// <summary>
     /// The approved supplies of the project that name a catalog item (or one item): what was really bought.
     /// A recorded, returned or rejected supply was not bought yet, or not at all.
     /// </summary>
@@ -195,6 +220,7 @@ internal static class CatalogQueries
             item.Supplier != null ? item.Supplier.NameEn : null,
             item.EstimatedQuantity,
             item.Status,
+            item.MasterItemId,
             item.CreatedAt,
             item.CreatedBy,
             item.UpdatedAt,

@@ -23,7 +23,12 @@ internal static class CreateSupplier
         string? Phone,
         string? TaxNumber,
         string? Notes,
-        string? Status) : ISupplierFieldsRequest;
+        string? Status,
+        string? LegalName = null,
+        string? ContactPerson = null,
+        string? Email = null,
+        string? Address = null,
+        string? CommercialRegistrationNo = null) : ISupplierFieldsRequest;
 
     public static void Map(IEndpointRouteBuilder api) =>
         api.MapPost("/suppliers", HandleAsync)
@@ -47,6 +52,7 @@ internal static class CreateSupplier
 
         var errors = new ValidationErrors();
         var fields = SupplierFields.Validate(request, defaultStatus: SupplierStatus.Active, errors);
+        var profile = SupplierProfileFields.Validate(request, errors);
         if (errors.HasErrors)
         {
             return ProjectProblems.Validation(errors);
@@ -65,6 +71,7 @@ internal static class CreateSupplier
             CreatedBy = caller.UserId,
         };
         fields.ApplyTo(supplier);
+        profile.ApplyTo(supplier);
         db.Suppliers.Add(supplier);
 
         try

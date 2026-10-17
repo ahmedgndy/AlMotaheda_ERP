@@ -23,6 +23,43 @@ namespace AlMotaheda.Modules.HR.Data.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("AlMotaheda.Modules.HR.Data.CostAllocationPolicy", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("WorkingDaysPerMonth")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CostAllocationPolicy", "hr", t =>
+                        {
+                            t.HasCheckConstraint("CK_CostAllocationPolicy_Days", "[WorkingDaysPerMonth] IS NULL OR ([WorkingDaysPerMonth] BETWEEN 1 AND 31)");
+
+                            t.HasCheckConstraint("CK_CostAllocationPolicy_Singleton", "[Id] = 1");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            RowVersion = new byte[0]
+                        });
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.HR.Data.Department", b =>
                 {
                     b.Property<int>("Id")
@@ -359,6 +396,175 @@ namespace AlMotaheda.Modules.HR.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.HR.Data.ProjectWorkDays", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Days")
+                        .HasPrecision(4, 1)
+                        .HasColumnType("decimal(4,1)");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("Month")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ProjectItemId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("ReviewedBy")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "Month", "Status" }, "IX_ProjectWorkDays_Month_Status");
+
+                    b.HasIndex(new[] { "ProjectId" }, "IX_ProjectWorkDays_ProjectId");
+
+                    b.HasIndex(new[] { "EmployeeId", "ProjectId", "Month" }, "UX_ProjectWorkDays_Approved")
+                        .IsUnique()
+                        .HasFilter("[Status] = 'Approved'");
+
+                    b.HasIndex(new[] { "EmployeeId", "ProjectId", "Month" }, "UX_ProjectWorkDays_Pending")
+                        .IsUnique()
+                        .HasFilter("[Status] IN ('Recorded', 'Returned')");
+
+                    b.ToTable("ProjectWorkDays", "hr", t =>
+                        {
+                            t.HasCheckConstraint("CK_ProjectWorkDays_Days", "[Days] > 0 AND [Days] <= 31 AND [Days] * 2 = ROUND([Days] * 2, 0)");
+
+                            t.HasCheckConstraint("CK_ProjectWorkDays_Month", "DAY([Month]) = 1");
+
+                            t.HasCheckConstraint("CK_ProjectWorkDays_Status", "[Status] IN ('Recorded', 'Approved', 'Returned', 'Rejected', 'Superseded')");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.HR.Data.SalaryCostAllocation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Days")
+                        .HasPrecision(4, 1)
+                        .HasColumnType("decimal(4,1)");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("Month")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("MonthlyPay")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ProjectItemId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReverseReason")
+                        .HasMaxLength(300)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime?>("ReversedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("ReversedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<int>("WorkDaysId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("WorkingDays")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex(new[] { "ProjectId", "Month" }, "IX_SalaryCostAllocation_Project_Month");
+
+                    b.HasIndex(new[] { "WorkDaysId" }, "UX_SalaryCostAllocation_Active")
+                        .IsUnique()
+                        .HasFilter("[Status] = 'Active'");
+
+                    b.ToTable("SalaryCostAllocation", "hr", t =>
+                        {
+                            t.HasCheckConstraint("CK_SalaryCostAllocation_Amounts", "[Amount] >= 0 AND [MonthlyPay] >= 0 AND [Days] > 0 AND [WorkingDays] BETWEEN 1 AND 31");
+
+                            t.HasCheckConstraint("CK_SalaryCostAllocation_Reversal", "([Status] = 'Active' AND [ReversedAt] IS NULL AND [ReversedBy] IS NULL AND [ReverseReason] IS NULL) OR ([Status] = 'Reversed' AND [ReversedAt] IS NOT NULL AND [ReversedBy] IS NOT NULL AND [ReverseReason] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_SalaryCostAllocation_Status", "[Status] IN ('Active', 'Reversed')");
+                        });
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.HR.Data.SalarySheet", b =>
                 {
                     b.Property<int>("Id")
@@ -592,6 +798,30 @@ namespace AlMotaheda.Modules.HR.Data.Migrations
                     b.HasOne("AlMotaheda.Modules.HR.Data.Employee", null)
                         .WithMany()
                         .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.HR.Data.ProjectWorkDays", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.HR.Data.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.HR.Data.SalaryCostAllocation", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.HR.Data.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("AlMotaheda.Modules.HR.Data.ProjectWorkDays", null)
+                        .WithMany()
+                        .HasForeignKey("WorkDaysId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
                 });

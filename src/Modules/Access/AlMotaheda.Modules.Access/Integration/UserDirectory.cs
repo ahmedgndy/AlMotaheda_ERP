@@ -1,3 +1,4 @@
+using AlMotaheda.BuildingBlocks.Authorization;
 using AlMotaheda.Modules.Access.Contracts;
 using AlMotaheda.Modules.Access.Data;
 using Microsoft.EntityFrameworkCore;
@@ -61,5 +62,41 @@ internal sealed class UserDirectory(AccessDbContext db) : IUserDirectory
                 user.Role.Code,
                 true))
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<int>> ListActiveHoldingAsync(string module, string action, CancellationToken cancellationToken)
+    {
+        if (!PermissionActions.TryParse(action, out var wanted))
+        {
+            throw new ArgumentOutOfRangeException(nameof(action), action, "Unknown permission action.");
+        }
+
+        var permissionId = await db.Permissions.AsNoTracking()
+            .Where(permission => permission.Module == module && permission.Action == wanted)
+            .Select(permission => (int?)permission.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (permissionId is null)
+        {
+            return [];
+        }
+
+        // The same resolution as a sign-in (EffectivePermissions): an override on the module decides all of it;
+        // otherwise the role does. Executives have no overrides.
+        var active = db.Users.AsNoTracking().Where(user => user.Status == UserStatus.Active);
+
+        var throughRole = await active
+            .Where(user => db.RolePermissions.Any(link => link.RoleId == user.RoleId && link.PermissionId == permissionId)
+                           && (user.Role.Code == RoleCodes.Executive
+                               || !db.UserPermissionOverrides.Any(link => link.UserId == user.Id && link.Permission.Module == module)))
+            .Select(user => user.Id)
+            .ToListAsync(cancellationToken);
+
+        var throughOverride = await active
+            .Where(user => user.Role.Code != RoleCodes.Executive
+                           && db.UserPermissionOverrides.Any(link => link.UserId == user.Id && link.PermissionId == permissionId && link.IsGranted))
+            .Select(user => user.Id)
+            .ToListAsync(cancellationToken);
+
+        return throughRole.Concat(throughOverride).Distinct().Order().ToList();
     }
 }

@@ -41,3 +41,30 @@ public static class ProjectResponsibilities
     public const string SiteEngineer = "SiteEngineer";
     public const string TeamMember = "TeamMember";
 }
+
+/// <summary>
+/// Finds projects by id for modules that don't scope by caller (HR records employees' days on projects). It never
+/// grants access: callers that show project data still check <see cref="IProjectAccess"/>.
+/// </summary>
+public interface IProjectDirectory
+{
+    /// <summary>The projects with these ids, in one query. Unknown ids are left out.</summary>
+    Task<IReadOnlyDictionary<int, ProjectRef>> FindAsync(IReadOnlyCollection<int> projectIds, CancellationToken cancellationToken);
+
+    /// <summary>The projects that are not completed, by code: a picker for modules that record against projects.</summary>
+    Task<IReadOnlyList<ProjectRef>> ListOpenAsync(CancellationToken cancellationToken);
+
+    /// <summary>The active items of one project, by English name: a picker, with no money.</summary>
+    Task<IReadOnlyList<ProjectItemRef>> ListActiveItemsAsync(int projectId, CancellationToken cancellationToken);
+}
+
+public sealed record ProjectRef(int Id, string Code, string NameAr, string NameEn, bool IsCompleted);
+
+/// <summary>
+/// "Which of these users may see this project right now?", from the database: company-wide roles see every project,
+/// everyone else only the projects they are an active member of. Used to choose who hears about a project's records.
+/// </summary>
+public interface IProjectAudience
+{
+    Task<IReadOnlySet<int>> WhoSeeAsync(int projectId, IReadOnlyCollection<int> userIds, CancellationToken cancellationToken);
+}

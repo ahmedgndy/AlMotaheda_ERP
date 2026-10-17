@@ -23,24 +23,26 @@ public sealed class PermissionCatalogTests
     }
 
     [Fact]
-    public void Eight_roles_are_seeded_with_232_role_permissions()
+    public void Nine_roles_are_seeded_with_256_role_permissions()
     {
         var roles = PermissionCatalog.SeedRoles().ToList();
         var links = PermissionCatalog.SeedRolePermissions().ToList();
 
-        Assert.Equal(["executive", "manager", "engineer", "office_admin", "accountant", "staff", "hr", "purchasing"], roles.Select(role => role.Code));
-        Assert.Equal(232, links.Count);
-        Assert.Equal(232, links.Select(link => (link.RoleId, link.PermissionId)).Distinct().Count());
+        Assert.Equal(["executive", "manager", "engineer", "office_admin", "accountant", "staff", "hr", "purchasing", "financial_manager"], roles.Select(role => role.Code));
+        Assert.Equal(256, links.Count);
+        Assert.Equal(256, links.Select(link => (link.RoleId, link.PermissionId)).Distinct().Count());
 
         var countsByRole = links.GroupBy(link => link.RoleId).ToDictionary(group => group.Key, group => group.Count());
         Assert.Equal(92, countsByRole[PermissionCatalog.RoleId("executive")]);
         Assert.Equal(41, countsByRole[PermissionCatalog.RoleId("manager")]);
         Assert.Equal(18, countsByRole[PermissionCatalog.RoleId("engineer")]);
         Assert.Equal(8, countsByRole[PermissionCatalog.RoleId("office_admin")]);
-        Assert.Equal(56, countsByRole[PermissionCatalog.RoleId("accountant")]);
+        // Catalog Edit (docs/cost-flow §2.1): the Accountant asks for price changes.
+        Assert.Equal(57, countsByRole[PermissionCatalog.RoleId("accountant")]);
         Assert.Equal(9, countsByRole[PermissionCatalog.RoleId("staff")]);
         Assert.Equal(4, countsByRole[PermissionCatalog.RoleId("hr")]);
         Assert.Equal(4, countsByRole[PermissionCatalog.RoleId("purchasing")]);
+        Assert.Equal(23, countsByRole[PermissionCatalog.RoleId("financial_manager")]);
     }
 
     [Theory]
@@ -54,6 +56,11 @@ public sealed class PermissionCatalogTests
     [InlineData("staff", "fuel", "VC")]
     [InlineData("engineer", "payments", "")]
     [InlineData("hr", "hr", "VCEF")]
+    [InlineData("accountant", "catalog", "VEF")]
+    [InlineData("financial_manager", "catalog", "VAF")]
+    [InlineData("financial_manager", "payments", "VF")]
+    [InlineData("financial_manager", "accounts", "")]
+    [InlineData("financial_manager", "hr", "")]
     [InlineData("hr", "payments", "")]
     [InlineData("accountant", "hr", "VAF")]
     [InlineData("executive", "hr", "VCEAF")]

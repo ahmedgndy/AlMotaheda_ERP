@@ -19,7 +19,7 @@ public sealed class DatabaseSchemaTests
         using var db = CreateContext();
 
         Assert.False(db.Database.HasPendingModelChanges(), "The model changed without a migration. Run dotnet ef migrations add.");
-        Assert.Equal(["InitialFleet", "EquipmentCostAdjustments"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
+        Assert.Equal(["InitialFleet", "EquipmentCostAdjustments", "ItemLinksAndRepairRequests"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public sealed class DatabaseSchemaTests
     [InlineData("CONSTRAINT [CK_EquipmentAssignment_Dates] CHECK ([EndDate] IS NULL OR [EndDate] >= [StartDate])")]
     [InlineData("CONSTRAINT [CK_EquipmentCost_Amount] CHECK ([Amount] > 0)")]
     [InlineData("CONSTRAINT [CK_EquipmentCost_Status] CHECK ([Status] IN ('Recorded', 'Approved', 'Returned', 'Rejected'))")]
-    [InlineData("CONSTRAINT [CK_EquipmentCost_Type] CHECK ([Type] IN ('Rental', 'Fuel', 'Maintenance', 'Repair', 'Transport', 'Other'))")]
+    [InlineData("CONSTRAINT [CK_EquipmentCost_Type] CHECK ([Type] IN ('Rental', 'Fuel', 'Maintenance', 'Repair', 'SpareParts', 'Transport', 'Other'))")]
     [InlineData("CONSTRAINT [CK_EquipmentCost_RentalSupplier] CHECK ([Type] <> 'Rental' OR [SupplierId] IS NOT NULL)")]
     [InlineData("CONSTRAINT [CK_EquipmentCost_CreditSupplier] CHECK ([Channel] = 'Custody' OR [SupplierId] IS NOT NULL)")]
     [InlineData("CONSTRAINT [FK_EquipmentCost_Equipment_EquipmentId] FOREIGN KEY ([EquipmentId]) REFERENCES [fleet].[Equipment] ([Id])")]

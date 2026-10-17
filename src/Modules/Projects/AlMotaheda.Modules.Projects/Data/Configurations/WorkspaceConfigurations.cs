@@ -15,6 +15,8 @@ internal sealed class SupplierConfiguration : IEntityTypeConfiguration<Supplier>
     public const int PhoneMaxLength = 30;
     public const int TaxNumberMaxLength = 30;
     public const int NotesMaxLength = 1000;
+    public const int EmailMaxLength = 254;
+    public const int AddressMaxLength = 500;
 
     public void Configure(EntityTypeBuilder<Supplier> builder)
     {
@@ -34,6 +36,11 @@ internal sealed class SupplierConfiguration : IEntityTypeConfiguration<Supplier>
 
         builder.Property(supplier => supplier.Kind).HasConversion<string>().HasMaxLength(30).IsUnicode(false);
         builder.Property(supplier => supplier.Status).HasConversion<string>().HasMaxLength(30).IsUnicode(false);
+        builder.Property(supplier => supplier.LegalName).HasMaxLength(NameMaxLength).IsUnicode();
+        builder.Property(supplier => supplier.ContactPerson).HasMaxLength(NameMaxLength).IsUnicode();
+        builder.Property(supplier => supplier.Email).HasMaxLength(EmailMaxLength);
+        builder.Property(supplier => supplier.Address).HasMaxLength(AddressMaxLength).IsUnicode();
+        builder.Property(supplier => supplier.CommercialRegistrationNo).HasMaxLength(TaxNumberMaxLength);
         builder.Property(supplier => supplier.Phone).HasMaxLength(PhoneMaxLength);
         builder.Property(supplier => supplier.TaxNumber).HasMaxLength(TaxNumberMaxLength);
         builder.Property(supplier => supplier.Notes).HasMaxLength(NotesMaxLength).IsUnicode();
@@ -46,6 +53,7 @@ internal sealed class ProjectItemConfiguration : IEntityTypeConfiguration<Projec
     /// <summary>Item names are unique within a project. A lost race is answered with 409 <c>item_name_taken</c>.</summary>
     public const string NameArIndex = "UX_ProjectItem_NameAr";
     public const string NameEnIndex = "UX_ProjectItem_NameEn";
+    public const string MasterIndex = "UX_ProjectItem_Master";
 
     public const int NameMaxLength = 200;
     public const int TextMaxLength = 1000;
@@ -77,9 +85,20 @@ internal sealed class ProjectItemConfiguration : IEntityTypeConfiguration<Projec
         builder.HasIndex(item => new { item.ProjectId, item.NameAr }).IsUnique().HasDatabaseName(NameArIndex);
         builder.HasIndex(item => new { item.ProjectId, item.NameEn }).IsUnique().HasDatabaseName(NameEnIndex);
 
+        // A master definition is selected once per project.
+        builder.HasIndex(item => new { item.ProjectId, item.MasterItemId })
+            .IsUnique()
+            .HasFilter("[MasterItemId] IS NOT NULL")
+            .HasDatabaseName(MasterIndex);
+
         builder.HasOne(item => item.Project)
             .WithMany()
             .HasForeignKey(item => item.ProjectId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.HasOne(item => item.MasterItem)
+            .WithMany()
+            .HasForeignKey(item => item.MasterItemId)
             .OnDelete(DeleteBehavior.NoAction);
     }
 }
@@ -89,6 +108,7 @@ internal sealed class CatalogItemConfiguration : IEntityTypeConfiguration<Catalo
     /// <summary>Catalog item names are unique within a project. A lost race is answered with 409 <c>catalog_item_exists</c>.</summary>
     public const string NameIndex = "UX_CatalogItem_NameEn";
     public const string NameArIndex = "UX_CatalogItem_NameAr";
+    public const string MasterIndex = "UX_CatalogItem_Master";
 
     public const int NameMaxLength = 200;
 
@@ -112,6 +132,17 @@ internal sealed class CatalogItemConfiguration : IEntityTypeConfiguration<Catalo
 
         builder.HasIndex(item => new { item.ProjectId, item.NameEn }).IsUnique().HasDatabaseName(NameIndex);
         builder.HasIndex(item => new { item.ProjectId, item.NameAr }).IsUnique().HasDatabaseName(NameArIndex);
+
+        // A master definition is selected once per project.
+        builder.HasIndex(item => new { item.ProjectId, item.MasterItemId })
+            .IsUnique()
+            .HasFilter("[MasterItemId] IS NOT NULL")
+            .HasDatabaseName(MasterIndex);
+
+        builder.HasOne(item => item.MasterItem)
+            .WithMany()
+            .HasForeignKey(item => item.MasterItemId)
+            .OnDelete(DeleteBehavior.NoAction);
 
         builder.HasOne(item => item.Project)
             .WithMany()

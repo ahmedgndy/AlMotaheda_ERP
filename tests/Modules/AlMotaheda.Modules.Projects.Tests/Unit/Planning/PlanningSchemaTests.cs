@@ -32,7 +32,7 @@ public sealed class PlanningSchemaTests
     [InlineData("CREATE UNIQUE INDEX [UX_DailyReportLine_Report_LineNo] ON [projects].[DailyReportLine] ([ReportId], [LineNo])")]
     [InlineData("CREATE INDEX [IX_ReportRequest_Project_Status] ON [projects].[ReportRequest] ([ProjectId], [Status])")]
     [InlineData("CONSTRAINT [CK_Budget_Status] CHECK ([Status] IN ('Draft', 'Approved', 'Superseded'))")]
-    [InlineData("CONSTRAINT [CK_BudgetLine_CostGroup] CHECK ([CostGroup] IN ('Labor', 'Subcontractors', 'Materials', 'Equipment', 'SiteExpenses', 'Other'))")]
+    [InlineData("CONSTRAINT [CK_BudgetLine_CostGroup] CHECK ([CostGroup] IN ('Labor', 'Subcontractors', 'Materials', 'Equipment', 'SiteExpenses', 'Other', 'Staff'))")]
     [InlineData("CONSTRAINT [CK_BudgetLine_Amount] CHECK ([Amount] > 0)")]
     [InlineData("CONSTRAINT [CK_DailyReportLine_Quantity] CHECK ([Quantity] > 0)")]
     [InlineData("CONSTRAINT [CK_DailyReportMaterial_Quantity] CHECK ([Quantity] > 0)")]

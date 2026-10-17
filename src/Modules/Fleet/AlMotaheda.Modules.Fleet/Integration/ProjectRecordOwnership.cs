@@ -11,7 +11,7 @@ namespace AlMotaheda.Modules.Fleet.Integration;
 /// </remarks>
 internal sealed class FleetRecordOwnership(FleetDbContext db) : IProjectRecordOwnership
 {
-    public IReadOnlyCollection<string> Kinds { get; } = [ProjectRecordKinds.Equipment, ProjectRecordKinds.EquipmentCost];
+    public IReadOnlyCollection<string> Kinds { get; } = [ProjectRecordKinds.Equipment, ProjectRecordKinds.EquipmentCost, ProjectRecordKinds.RepairRequest];
 
     public async Task<IReadOnlySet<int>> FindOnProjectAsync(
         int projectId, string kind, IReadOnlyCollection<int> ids, CancellationToken cancellationToken)
@@ -31,6 +31,8 @@ internal sealed class FleetRecordOwnership(FleetDbContext db) : IProjectRecordOw
             .Where(stay => stay.ProjectId == projectId && ids.Contains(stay.EquipmentId)).Select(stay => stay.EquipmentId).Distinct(),
         ProjectRecordKinds.EquipmentCost => db.EquipmentCosts.AsNoTracking()
             .Where(cost => cost.ProjectId == projectId && ids.Contains(cost.Id)).Select(cost => cost.Id),
+        ProjectRecordKinds.RepairRequest => db.RepairRequests.AsNoTracking()
+            .Where(request => request.ProjectId == projectId && ids.Contains(request.Id)).Select(request => request.Id),
         _ => null,
     };
 }

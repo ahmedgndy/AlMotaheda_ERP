@@ -14,4 +14,11 @@ internal sealed partial class ProjectsDbContext
     public DbSet<DailyReportEquipment> DailyReportEquipment => Set<DailyReportEquipment>();
 
     public DbSet<ReportRequest> ReportRequests => Set<ReportRequest>();
+
+    // Cost-flow integrity (docs/cost-flow): the master catalog, price variances and item components.
+    public DbSet<MasterItem> MasterItems => Set<MasterItem>();
+    public DbSet<MasterItemPrice> MasterItemPrices => Set<MasterItemPrice>();
+    public DbSet<PricingPolicy> PricingPolicies => Set<PricingPolicy>();
+    public DbSet<PriceVariance> PriceVariances => Set<PriceVariance>();
+    public DbSet<ProjectItemComponent> ProjectItemComponents => Set<ProjectItemComponent>();
 }

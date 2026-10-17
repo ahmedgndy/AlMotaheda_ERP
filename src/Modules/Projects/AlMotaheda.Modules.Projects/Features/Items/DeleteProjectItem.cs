@@ -37,6 +37,7 @@ internal static class DeleteProjectItem
         IProjectAccess access,
         ILaborItemCosts labor,
         ISubcontractItemCosts subcontracts,
+        IEnumerable<IItemCostSource> otherSources,
         ProjectsLog log,
         CancellationToken cancellationToken)
     {
@@ -65,11 +66,14 @@ internal static class DeleteProjectItem
 
         if (await ItemQueries.LinkedExpenses(db, itemId).AnyAsync(cancellationToken)
             || await labor.HasLinksAsync(projectId, itemId, cancellationToken)
-            || await subcontracts.HasLinksAsync(projectId, itemId, cancellationToken))
+            || await subcontracts.HasLinksAsync(projectId, itemId, cancellationToken)
+            || await AnyLinkAsync(otherSources, projectId, itemId, cancellationToken))
         {
             return CoreProblems.ItemStillHasRecords();
         }
 
+        // Its planned components are a plan, not records: they go with it.
+        db.ProjectItemComponents.RemoveRange(await db.ProjectItemComponents.Where(component => component.ProjectItemId == itemId).ToListAsync(cancellationToken));
         db.ProjectItems.Remove(item);
 
         try
@@ -83,5 +87,18 @@ internal static class DeleteProjectItem
 
         log.ItemDeleted(caller.UserId, projectId, item.Id);
         return TypedResults.NoContent();
+    }
+
+    private static async Task<bool> AnyLinkAsync(IEnumerable<IItemCostSource> sources, int projectId, int itemId, CancellationToken cancellationToken)
+    {
+        foreach (var source in sources)
+        {
+            if (await source.HasLinksAsync(projectId, itemId, cancellationToken))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

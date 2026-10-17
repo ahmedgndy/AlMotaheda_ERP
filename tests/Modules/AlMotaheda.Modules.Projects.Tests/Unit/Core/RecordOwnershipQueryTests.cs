@@ -33,6 +33,6 @@ public sealed class RecordOwnershipQueryTests
         using var db = new ProjectsDbContextDesignTimeFactory().CreateDbContext([]);
 
         Assert.Null(ProjectRecordOwnership.Query(db, 3, ProjectRecordKinds.SubContract, [5]));
-        Assert.Equal(5, new ProjectRecordOwnership(db).Kinds.Count);
+        Assert.Equal(6, new ProjectRecordOwnership(db).Kinds.Count);
     }
 }

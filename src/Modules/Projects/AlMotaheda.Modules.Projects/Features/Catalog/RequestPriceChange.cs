@@ -80,13 +80,15 @@ internal static class RequestPriceChange
 
         var prices = await CatalogQueries.Prices(db, projectId, itemId).ToListAsync(cancellationToken);
         var position = CatalogPricing.Position(prices, clock.Today);
+        var masterPrices = await CatalogQueries.MasterPrices(db, projectId, itemId).ToListAsync(cancellationToken);
+        var reference = CatalogPricing.Reference(prices, masterPrices, clock.Today);
 
         if (position.Pending is not null)
         {
             return PlanningProblems.PendingChangeExists();
         }
 
-        if (position.Current?.Price == price)
+        if (reference.Current?.Price == price)
         {
             return PlanningProblems.PriceUnchanged();
         }
@@ -100,7 +102,7 @@ internal static class RequestPriceChange
         {
             CatalogItemId = item.Id,
             Price = price!.Value,
-            PreviousPrice = position.Current?.Price,
+            PreviousPrice = reference.Current?.Price,
             EffectiveFrom = effectiveFrom,
             Status = ItemPriceStatus.Pending,
             Reason = reason,

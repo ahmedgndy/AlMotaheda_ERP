@@ -4,6 +4,7 @@ using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Finance.Contracts;
 using AlMotaheda.Modules.Fleet.Data;
 using AlMotaheda.Modules.Fleet.Features;
+using AlMotaheda.Modules.Fleet.Features.Costs;
 using AlMotaheda.Modules.Fleet.Integration;
 using AlMotaheda.Modules.Fleet.Startup;
 using AlMotaheda.Modules.Reports.Contracts;
@@ -33,6 +34,7 @@ public sealed class FleetModule : IModule
 
         services.AddCompanyClock();
         services.AddScoped<IProjectCostSource, EquipmentCostSource>();
+        services.AddScoped<IItemCostSource, EquipmentItemCosts>();
         services.AddScoped<IWorkInboxSource, FleetInboxSource>();
         services.AddScoped<IPaymentSource, EquipmentCostPaymentSource>();
         services.AddScoped<IProjectRecordOwnership, FleetRecordOwnership>();

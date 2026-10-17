@@ -53,7 +53,7 @@ internal static class ProjectPermissions
 }
 
 /// <summary>
-/// The data scope of each role. Executive, Accountant and Purchasing see every project ("company" in the prototype;
+/// The data scope of each role. Executive, Accountant, Financial Manager and Purchasing see every project ("company" in the prototype;
 /// Purchasing serves every project but holds no <c>projects</c> permission, so this only scopes its procurement lists);
 /// Manager, Engineer and Staff see only projects where they have an active membership. Office administrators
 /// have no projects permission by default, so the scope never applies to them unless an Executive grants one.
@@ -64,7 +64,8 @@ internal static class ProjectPermissions
 /// </remarks>
 internal static class ProjectScopes
 {
-    public static bool IsCompanyWide(string role) => role is AccessRoles.Executive or AccessRoles.Accountant or AccessRoles.Purchasing;
+    public static bool IsCompanyWide(string role) =>
+        role is AccessRoles.Executive or AccessRoles.Accountant or AccessRoles.Purchasing or AccessRoles.FinancialManager;
 }
 
 /// <summary>Which roles may hold each responsibility (decision D6: the prototype's pickers).</summary>

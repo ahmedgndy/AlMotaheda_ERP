@@ -4,7 +4,8 @@ namespace AlMotaheda.Modules.Access.Data;
 
 /// <summary>
 /// The permission modules and the roles' default permissions, copied from the prototype's role definitions, plus the
-/// HR and Purchasing roles and modules (docs/modernization/10-hr-design.md, 12-procurement-design.md).
+/// HR and Purchasing roles and modules (docs/modernization/10-hr-design.md, 12-procurement-design.md) and the
+/// Financial Manager role (docs/cost-flow/01-inventory-and-design.md §2.1).
 /// </summary>
 /// <remarks>
 /// <para>This is the seed data of the migrations. Changing it later needs a new migration, and new roles and modules
@@ -31,11 +32,12 @@ internal static class PermissionCatalog
     /// <summary>The module that controls the users screens.</summary>
     public const string AccountsModule = "accounts";
 
-    /// <summary>The eight roles, in id order (executive = 1, hr = 7, purchasing = 8).</summary>
+    /// <summary>The nine roles, in id order (executive = 1, hr = 7, purchasing = 8, financial manager = 9).</summary>
     public static IReadOnlyList<string> Roles { get; } =
     [
         RoleCodes.Executive, RoleCodes.Manager, RoleCodes.Engineer,
         RoleCodes.OfficeAdmin, RoleCodes.Accountant, RoleCodes.Staff, RoleCodes.Hr, RoleCodes.Purchasing,
+        RoleCodes.FinancialManager,
     ];
 
     /// <summary>
@@ -68,7 +70,8 @@ internal static class PermissionCatalog
             {
                 ["projects"] = "VAF", ["subcontractors"] = "VCEF", ["workers"] = "VCEAF", ["site"] = "VF",
                 ["fuel"] = "VAF", ["fleet"] = "VAF", ["equipment"] = "VAF", ["office"] = "VCEAF", ["custody"] = "VAF",
-                ["income"] = "VCEF", ["catalog"] = "VF", ["reports"] = "VCEA", ["payments"] = "VCF",
+                // catalog E: asks for price changes, which the Financial Manager or an Executive decides.
+                ["income"] = "VCEF", ["catalog"] = "VEF", ["reports"] = "VCEA", ["payments"] = "VCF",
                 ["finance"] = "VCEAF", ["accounts"] = "V",
                 // Reviews the salary sheet (approve or return) and sees salaries; can't edit employees.
                 [HrModule] = "VAF",
@@ -89,6 +92,14 @@ internal static class PermissionCatalog
             [RoleCodes.Purchasing] = new Dictionary<string, string>
             {
                 [ProcurementModule] = "VCEF",
+            },
+            // Decides price changes and price variances (catalog A) and reads every project's money; never approves
+            // payments (the Executive does), never sees salaries or users.
+            [RoleCodes.FinancialManager] = new Dictionary<string, string>
+            {
+                ["projects"] = "VF", ["subcontractors"] = "VF", ["workers"] = "VF", ["site"] = "VF", ["fleet"] = "VF",
+                ["equipment"] = "VF", ["catalog"] = "VAF", ["reports"] = "VC", ["payments"] = "VF", ["finance"] = "VF",
+                [ProcurementModule] = "VF",
             },
         };
 

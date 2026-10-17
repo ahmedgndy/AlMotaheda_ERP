@@ -888,6 +888,13 @@ namespace AlMotaheda.Modules.Access.Data.Migrations
                             Code = "purchasing",
                             CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc),
                             RowVersion = new byte[0]
+                        },
+                        new
+                        {
+                            Id = 9,
+                            Code = "financial_manager",
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc),
+                            RowVersion = new byte[0]
                         });
                 });
 
@@ -2087,6 +2094,12 @@ namespace AlMotaheda.Modules.Access.Data.Migrations
                         new
                         {
                             RoleId = 5,
+                            PermissionId = 53,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 5,
                             PermissionId = 55,
                             CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
@@ -2303,6 +2316,144 @@ namespace AlMotaheda.Modules.Access.Data.Migrations
                         new
                         {
                             RoleId = 8,
+                            PermissionId = 95,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 1,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 5,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 6,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 10,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 11,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 15,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 16,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 20,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 26,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 30,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 31,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 35,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 51,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 54,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 55,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 56,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 57,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 66,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 70,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 71,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 75,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
+                            PermissionId = 91,
+                            CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            RoleId = 9,
                             PermissionId = 95,
                             CreatedAt = new DateTime(2026, 10, 11, 0, 0, 0, 0, DateTimeKind.Utc)
                         });

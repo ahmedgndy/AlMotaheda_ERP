@@ -28,12 +28,19 @@ internal sealed record ItemRow(
     decimal SubcontractorCost,
     decimal SupplierAndSubcontractorCost,
     decimal LaborCost,
+    int EquipmentRecordCount,
+    decimal EquipmentCost,
+    int StaffRecordCount,
+    decimal StaffCost,
     decimal TotalCost,
     decimal SupplierPaid,
     decimal SubcontractorPaid,
     decimal LaborPaid,
+    decimal EquipmentPaid,
+    decimal StaffPaid,
     decimal Paid,
     decimal Outstanding,
+    int? MasterItemId,
     DateTime CreatedAt,
     int CreatedBy,
     DateTime? UpdatedAt,
@@ -62,12 +69,19 @@ internal sealed record ItemRow(
         figures.SubcontractorCost,
         figures.SupplierAndSubcontractorCost,
         figures.LaborCost,
+        figures.EquipmentRecordCount,
+        figures.EquipmentCost,
+        figures.StaffRecordCount,
+        figures.StaffCost,
         figures.TotalCost,
         figures.SupplierPaid,
         figures.SubcontractorPaid,
         figures.LaborPaid,
+        figures.EquipmentPaid,
+        figures.StaffPaid,
         figures.Paid,
         figures.Outstanding,
+        item.MasterItemId,
         item.CreatedAt,
         item.CreatedBy,
         item.UpdatedAt,
@@ -77,7 +91,8 @@ internal sealed record ItemRow(
     public static ItemRow From(ProjectItem item, ItemFigures figures) => From(
         new ItemHeader(
             item.Id, item.NameAr, item.NameEn, item.Category, item.Unit, item.Description, item.Notes, item.Status,
-            item.DeactivatedAt, item.DeactivatedBy, item.CreatedAt, item.CreatedBy, item.UpdatedAt, item.UpdatedBy, item.RowVersion),
+            item.DeactivatedAt, item.DeactivatedBy, item.CreatedAt, item.CreatedBy, item.UpdatedAt, item.UpdatedBy, item.RowVersion,
+            item.MasterItemId),
         figures);
 }
 
@@ -94,10 +109,16 @@ internal sealed record ItemFiguresView(
     decimal SubcontractorCost,
     decimal SupplierAndSubcontractorCost,
     decimal LaborCost,
+    int EquipmentRecordCount,
+    decimal EquipmentCost,
+    int StaffRecordCount,
+    decimal StaffCost,
     decimal TotalCost,
     decimal SupplierPaid,
     decimal SubcontractorPaid,
     decimal LaborPaid,
+    decimal EquipmentPaid,
+    decimal StaffPaid,
     decimal Paid,
     decimal Outstanding)
 {
@@ -113,16 +134,22 @@ internal sealed record ItemFiguresView(
         figures.SubcontractorCost,
         figures.SupplierAndSubcontractorCost,
         figures.LaborCost,
+        figures.EquipmentRecordCount,
+        figures.EquipmentCost,
+        figures.StaffRecordCount,
+        figures.StaffCost,
         figures.TotalCost,
         figures.SupplierPaid,
         figures.SubcontractorPaid,
         figures.LaborPaid,
+        figures.EquipmentPaid,
+        figures.StaffPaid,
         figures.Paid,
         figures.Outstanding);
 }
 
 /// <summary>Where the project's recognized cost comes from, so the screen can show that the parts add up.</summary>
-/// <param name="OtherCosts">Site expenses outside the items screens plus equipment costs (Fleet).</param>
+/// <param name="OtherCosts">Site expenses outside the items screens.</param>
 internal sealed record ItemsReconciliation(decimal ItemsTotalCost, decimal UnallocatedTotalCost, decimal OtherCosts, decimal ProjectRecognizedCost);
 
 /// <summary>One supplier record on an item, or in the not-linked group.</summary>
@@ -183,10 +210,16 @@ internal sealed record SupplierLine(
 /// The detail of one item, or of the "not linked yet" group (<see cref="Item"/> is then <c>null</c>): the approved
 /// lines from the three sources, the lines still waiting for review, and the same figures as the table row.
 /// </summary>
+/// <param name="EquipmentLines">Approved equipment costs (Fleet) on the item.</param>
+/// <param name="StaffLines">Approved staff salary allocations (HR) on the item.</param>
+/// <param name="Components">The item's cost by planned component; <c>null</c> for the not-linked group.</param>
 internal sealed record ItemDetail(
     ItemRow? Item,
     IReadOnlyList<SupplierLine> SupplierLines,
     IReadOnlyList<SubcontractItemLine> SubcontractLines,
     IReadOnlyList<LaborItemLine> LaborLines,
     IReadOnlyList<SupplierLine> PendingSupplierLines,
-    ItemFiguresView Totals);
+    ItemFiguresView Totals,
+    IReadOnlyList<ItemSourceLine> EquipmentLines,
+    IReadOnlyList<ItemSourceLine> StaffLines,
+    ComponentBreakdownView? Components);

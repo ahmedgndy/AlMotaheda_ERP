@@ -5,6 +5,7 @@ using AlMotaheda.Modules.Access.Contracts;
 using AlMotaheda.Modules.Projects.Common;
 using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Projects.Data;
+using AlMotaheda.Modules.Projects.Features.PriceVariances;
 using AlMotaheda.Modules.Projects.Security;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -118,6 +119,9 @@ internal static class CreateExpense
 
         db.ProjectExpenses.Add(expense);
 
+        // A unit price outside the policy waits for a price review before the supply can be approved.
+        var variance = await PriceVarianceRules.RaiseIfNeededAsync(db, expense, caller.UserId, now, cancellationToken);
+
         try
         {
             await db.SaveChangesAsync(cancellationToken);
@@ -128,6 +132,10 @@ internal static class CreateExpense
             return CoreProblems.ItemRemoved();
         }
         log.ExpenseRecorded(caller.UserId, projectId, expense.Id, expense.Kind.ToString(), expense.Channel.ToString());
+        if (variance is not null)
+        {
+            log.PriceVarianceRaised(projectId, expense.Id, variance.Id, variance.Direction.ToString());
+        }
 
         var view = await ExpenseView.LoadAsync(db, users, projectId, expense.Id, caller.Can(PermissionAction.SeeMoney), cancellationToken);
         return TypedResults.Created($"/api/projects/{projectId}/expenses/{expense.Id}", view!);

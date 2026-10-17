@@ -68,7 +68,8 @@ internal static class LiveScopes
         ["ItemPrice"] = new(["Catalog", "PriceChanges"], false, [Procurement]),
         ["PaymentRequest"] = new(["PaymentRequests", "CompanyDashboard"], true, [Finance]),
         ["LedgerEntry"] = new(["Ledger", "CashMovement", "Reconciliation", "CompanyDashboard"], true, [Finance]),
-        ["SalarySheet"] = new(["SalarySheets"], false, [Hr]),
+        // A paid sheet pays the salaries charged to projects (docs/cost-flow §2.6), so every project's figures refresh.
+        ["SalarySheet"] = new(["SalarySheets", "ProjectOverview"], false, [Hr]),
         ["Employee"] = new(["Employees"], false, [Hr]),
         ["Department"] = new(["Departments"], false, [Hr]),
         ["EmployeeDocument"] = new(["Employees"], false, [Hr]),
@@ -80,6 +81,17 @@ internal static class LiveScopes
         ["GoodsReceipt"] = new(["Receipts", "PurchaseOrders"], false, [Procurement]),
         ["PurchaseOrder"] = new(["PurchaseOrders", "CommittedCost", "ProjectOverview"], true, [Procurement]),
         ["SupplierInvoice"] = new(["SupplierInvoices", "CommittedCost", .. ProjectCost], true, [Procurement, Finance]),
+
+        // docs/cost-flow: the master catalog, price variances, item components, repair requests and salary allocations.
+        ["MasterItem"] = new(["MasterCatalog", "Catalog"], false, [Procurement]),
+        ["MasterItemPrice"] = new(["MasterCatalog", "PriceChanges", "Catalog"], false, [Procurement, Finance]),
+        ["PricingPolicy"] = new(["PricingPolicy"], false, [Finance]),
+        ["PriceVariance"] = new(["PriceVariances", "Expenses"], true, [Finance]),
+        ["ProjectItemComponent"] = new(["ProjectItems"], true, []),
+        ["RepairRequest"] = new(["RepairRequests"], false, []),
+        ["ProjectWorkDays"] = new(["ProjectDays"], false, [Hr]),
+        ["SalaryCostAllocation"] = new(["SalaryAllocations", .. ProjectCost], true, [Hr, Finance]),
+        ["CostAllocationPolicy"] = new(["SalaryAllocations"], false, [Hr]),
     };
 
     /// <summary>Records that only add detail to a parent that changes in the same save; they send nothing alone.</summary>

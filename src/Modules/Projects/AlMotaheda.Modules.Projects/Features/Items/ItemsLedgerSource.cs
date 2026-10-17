@@ -21,7 +21,8 @@ internal sealed record ItemHeader(
     int CreatedBy,
     DateTime? UpdatedAt,
     int? UpdatedBy,
-    byte[] RowVersion);
+    byte[] RowVersion,
+    int? MasterItemId = null);
 
 /// <summary>Everything the items screens are computed from, loaded once per request.</summary>
 /// <param name="Items">Every item of the project, active and inactive, by English name.</param>
@@ -44,7 +45,8 @@ internal sealed record ItemsLedgerData(
 /// this module, and the per-item totals that Workforce and Subcontractors report through the contracts. Projects
 /// never reads their tables.
 /// </summary>
-internal sealed class ItemsLedgerSource(ProjectsDbContext db, ILaborItemCosts labor, ISubcontractItemCosts subcontracts)
+internal sealed class ItemsLedgerSource(
+    ProjectsDbContext db, ILaborItemCosts labor, ISubcontractItemCosts subcontracts, IEnumerable<IItemCostSource> otherSources)
 {
     public async Task<ItemsLedgerData> LoadAsync(int projectId, CancellationToken cancellationToken)
     {
@@ -53,7 +55,13 @@ internal sealed class ItemsLedgerSource(ProjectsDbContext db, ILaborItemCosts la
         var subcontractTotals = await subcontracts.TotalsByItemAsync(projectId, cancellationToken);
         var laborTotals = await labor.TotalsByItemAsync(projectId, cancellationToken);
 
-        var ledger = ItemsLedger.Compute(SupplierLedgerRow.From(expenses), subcontractTotals, laborTotals);
+        var others = new List<GroupItemTotal>();
+        foreach (var other in otherSources)
+        {
+            others.AddRange((await other.TotalsByItemAsync(projectId, cancellationToken)).Select(total => new GroupItemTotal(other.Group, total)));
+        }
+
+        var ledger = ItemsLedger.Compute(SupplierLedgerRow.From(expenses), subcontractTotals, laborTotals, others);
         return new ItemsLedgerData(items, expenses, ledger);
     }
 }
@@ -111,7 +119,8 @@ internal static class ItemQueries
                 item.CreatedBy,
                 item.UpdatedAt,
                 item.UpdatedBy,
-                item.RowVersion));
+                item.RowVersion,
+                item.MasterItemId));
 
     /// <summary>True when any record of this module, approved or not, is linked to the item.</summary>
     public static IQueryable<ProjectExpense> LinkedExpenses(ProjectsDbContext db, int itemId) =>

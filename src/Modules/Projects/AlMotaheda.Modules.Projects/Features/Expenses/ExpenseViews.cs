@@ -26,6 +26,19 @@ internal sealed record ExpenseAdjustmentView(
 }
 
 /// <summary>
+/// A supply's price variance requiring review (docs/cost-flow §2.3). While <see cref="Status"/> is <c>Open</c> or
+/// <c>Rejected</c> the supply can't be approved. The total variance is money: <c>null</c> without See money.
+/// </summary>
+internal sealed record ExpensePriceVarianceView(
+    int Id, string Status, decimal ReferencePrice, decimal ActualPrice, decimal UnitVariance, decimal? TotalVariance,
+    decimal VariancePercent, string Direction, string? DecisionNote)
+{
+    public static ExpensePriceVarianceView From(ExpensePriceVarianceRef variance, bool seesMoney) => new(
+        variance.Id, variance.Status.ToString(), variance.ReferencePrice, variance.ActualPrice, variance.UnitVariance,
+        seesMoney ? variance.TotalVariance : null, variance.VariancePercent, variance.Direction.ToString(), variance.DecisionNote);
+}
+
+/// <summary>
 /// One supply or site expense, as the list, the detail and every write return it. Money figures come from
 /// <see cref="ExpenseSettlement"/>: <see cref="Recognized"/> is zero until approved, <see cref="Paid"/> follows the
 /// channel, <see cref="PaymentState"/> is empty while nothing is owed.
@@ -77,6 +90,7 @@ internal sealed record ExpenseView(
     string? PaymentState,
     IReadOnlyList<ExpensePaymentView> Payments,
     IReadOnlyList<ExpenseAdjustmentView> Adjustments,
+    ExpensePriceVarianceView? PriceVariance,
     DateTime CreatedAt,
     PersonRef Recorder,
     DateTime? UpdatedAt,
@@ -129,6 +143,7 @@ internal sealed record ExpenseView(
             seesMoney ? ExpenseSettlement.PaymentState(settlement) : null,
             seesMoney ? row.Payments.Select(ExpensePaymentView.From).ToList() : [],
             row.Adjustments.Select(adjustment => ExpenseAdjustmentView.From(adjustment, people)).ToList(),
+            row.PriceVariance is { } variance ? ExpensePriceVarianceView.From(variance, seesMoney) : null,
             row.CreatedAt,
             PersonRef.From(row.CreatedBy, people),
             row.UpdatedAt,

@@ -53,6 +53,15 @@ internal sealed partial class FleetLog(ILogger<FleetLog> logger)
     [LoggerMessage(EventId = 5045, Level = LogLevel.Information, Message = "User {ActorId} decided adjustment {AdjustmentId} of equipment cost {CostId} on project {ProjectId}: {Outcome}")]
     public partial void CostAdjustmentDecided(int actorId, int projectId, int costId, int adjustmentId, string outcome);
 
+    [LoggerMessage(EventId = 5051, Level = LogLevel.Information, Message = "User {ActorId} linked equipment cost {CostId} on project {ProjectId} to item {ItemId}")]
+    public partial void CostItemLinked(int actorId, int projectId, int costId, int? itemId);
+
+    [LoggerMessage(EventId = 5061, Level = LogLevel.Information, Message = "User {ActorId} asked for repair {RequestId} of machine {EquipmentId} on project {ProjectId}")]
+    public partial void RepairRequested(int actorId, int projectId, int equipmentId, int requestId);
+
+    [LoggerMessage(EventId = 5062, Level = LogLevel.Information, Message = "User {ActorId} moved repair request {RequestId} on project {ProjectId} to {NewStatus}")]
+    public partial void RepairRequestMoved(int actorId, int projectId, int requestId, string newStatus);
+
     [LoggerMessage(EventId = 5091, Level = LogLevel.Warning, Message = "User {ActorId} was refused {Action}: {Reason}")]
     public partial void ActionRefused(int? actorId, string action, string reason);
 }

@@ -157,7 +157,7 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                         {
                             t.HasCheckConstraint("CK_BudgetLine_Amount", "[Amount] > 0");
 
-                            t.HasCheckConstraint("CK_BudgetLine_CostGroup", "[CostGroup] IN ('Labor', 'Subcontractors', 'Materials', 'Equipment', 'SiteExpenses', 'Other')");
+                            t.HasCheckConstraint("CK_BudgetLine_CostGroup", "[CostGroup] IN ('Labor', 'Subcontractors', 'Materials', 'Equipment', 'SiteExpenses', 'Other', 'Staff')");
 
                             t.HasCheckConstraint("CK_BudgetLine_LineNo", "[LineNo] >= 1");
 
@@ -190,6 +190,9 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                     b.Property<decimal>("EstimatedQuantity")
                         .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
+
+                    b.Property<int?>("MasterItemId")
+                        .HasColumnType("int");
 
                     b.Property<string>("NameAr")
                         .IsRequired()
@@ -235,7 +238,14 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("MasterItemId");
+
                     b.HasIndex("SupplierId");
+
+                    b.HasIndex("ProjectId", "MasterItemId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_CatalogItem_Master")
+                        .HasFilter("[MasterItemId] IS NOT NULL");
 
                     b.HasIndex("ProjectId", "NameAr")
                         .IsUnique()
@@ -818,6 +828,322 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.MasterItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NameAr")
+                        .IsUnique()
+                        .HasDatabaseName("UX_MasterItem_NameAr");
+
+                    b.HasIndex("NameEn")
+                        .IsUnique()
+                        .HasDatabaseName("UX_MasterItem_NameEn");
+
+                    b.ToTable("MasterItem", "projects", t =>
+                        {
+                            t.HasCheckConstraint("CK_MasterItem_Category", "([Kind] IN ('Work', 'Composite') AND [Category] IN ('Concrete', 'SteelFixing', 'Formwork', 'Brickwork', 'Plastering', 'Tiling', 'Painting', 'Excavation', 'Waterproofing', 'Piling', 'Mep', 'Guarding', 'EquipmentOperation', 'General')) OR ([Kind] NOT IN ('Work', 'Composite') AND [Category] IN ('CementAggregates', 'ReadyMix', 'Steel', 'Masonry', 'Finishing', 'Waterproofing', 'Piling', 'Formwork', 'Consumables', 'Services', 'Other'))");
+
+                            t.HasCheckConstraint("CK_MasterItem_Kind", "[Kind] IN ('Material', 'Service', 'Work', 'Composite', 'Labor', 'Equipment')");
+
+                            t.HasCheckConstraint("CK_MasterItem_Status", "[Status] IN ('Active', 'Inactive')");
+
+                            t.HasCheckConstraint("CK_MasterItem_Unit", "[Unit] IN ('Bag', 'Ton', 'M3', 'M2', 'M', 'Piece', 'Trip', 'Roll', 'Lot', 'Job', 'Day', 'Visit', 'Brick', 'Liter', 'Kg', 'Other')");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.MasterItemPrice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("DecidedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<int>("MasterItemId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("PreviousPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("RequestedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_MasterItemPrice_Status");
+
+                    b.HasIndex(new[] { "MasterItemId", "EffectiveFrom" }, "UX_MasterItemPrice_ApprovedFrom")
+                        .IsUnique()
+                        .HasFilter("[Status] = 'Approved'");
+
+                    b.HasIndex(new[] { "MasterItemId" }, "UX_MasterItemPrice_Pending")
+                        .IsUnique()
+                        .HasFilter("[Status] = 'Pending'");
+
+                    b.ToTable("MasterItemPrice", "projects", t =>
+                        {
+                            t.HasCheckConstraint("CK_MasterItemPrice_Decision", "([Status] = 'Pending' AND [DecidedAt] IS NULL AND [DecidedBy] IS NULL) OR ([Status] <> 'Pending' AND [DecidedAt] IS NOT NULL AND [DecidedBy] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_MasterItemPrice_Price", "[Price] > 0 AND ([PreviousPrice] IS NULL OR [PreviousPrice] > 0)");
+
+                            t.HasCheckConstraint("CK_MasterItemPrice_Status", "[Status] IN ('Pending', 'Approved', 'Rejected')");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.PriceVariance", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("ActualPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("CatalogItemId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("DecidedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(10)");
+
+                    b.Property<int>("ExpenseId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<DateTime>("RaisedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("RaisedBy")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("ReferencePrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("RoundingAllowance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<decimal>("TolerancePercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<decimal>("TotalVariance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("UnitVariance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("VariancePercent")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("decimal(9,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CatalogItemId");
+
+                    b.HasIndex("ProjectId", "Status")
+                        .HasDatabaseName("IX_PriceVariance_Project_Status");
+
+                    b.HasIndex(new[] { "ExpenseId" }, "UX_PriceVariance_Active")
+                        .IsUnique()
+                        .HasFilter("[Status] IN ('Open', 'Rejected')");
+
+                    b.ToTable("PriceVariance", "projects", t =>
+                        {
+                            t.HasCheckConstraint("CK_PriceVariance_Decision", "([Status] = 'Open' AND [DecidedAt] IS NULL AND [DecidedBy] IS NULL) OR ([Status] <> 'Open' AND [DecidedAt] IS NOT NULL AND [DecidedBy] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_PriceVariance_Direction", "[Direction] IN ('Above', 'Below')");
+
+                            t.HasCheckConstraint("CK_PriceVariance_Prices", "[ReferencePrice] > 0 AND [ActualPrice] > 0 AND [Quantity] > 0");
+
+                            t.HasCheckConstraint("CK_PriceVariance_Status", "[Status] IN ('Open', 'Accepted', 'Rejected', 'Superseded')");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.PricingPolicy", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("RoundingAllowance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("VarianceTolerancePercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PricingPolicy", "projects", t =>
+                        {
+                            t.HasCheckConstraint("CK_PricingPolicy_Rounding", "[RoundingAllowance] >= 0");
+
+                            t.HasCheckConstraint("CK_PricingPolicy_Singleton", "[Id] = 1");
+
+                            t.HasCheckConstraint("CK_PricingPolicy_Tolerance", "[VarianceTolerancePercent] >= 0 AND [VarianceTolerancePercent] <= 100");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            RoundingAllowance = 0.01m,
+                            RowVersion = new byte[0],
+                            VarianceTolerancePercent = 0m
+                        });
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.Project", b =>
                 {
                     b.Property<int>("Id")
@@ -1158,6 +1484,9 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                         .IsUnicode(true)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<int?>("MasterItemId")
+                        .HasColumnType("int");
+
                     b.Property<string>("NameAr")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -1204,6 +1533,13 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("MasterItemId");
+
+                    b.HasIndex("ProjectId", "MasterItemId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ProjectItem_Master")
+                        .HasFilter("[MasterItemId] IS NOT NULL");
+
                     b.HasIndex("ProjectId", "NameAr")
                         .IsUnique()
                         .HasDatabaseName("UX_ProjectItem_NameAr");
@@ -1221,6 +1557,67 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                             t.HasCheckConstraint("CK_ProjectItem_Status", "[Status] IN ('Active', 'Inactive')");
 
                             t.HasCheckConstraint("CK_ProjectItem_Unit", "[Unit] IN ('Bag', 'Ton', 'M3', 'M2', 'M', 'Piece', 'Trip', 'Roll', 'Lot', 'Job', 'Day', 'Visit', 'Brick', 'Liter', 'Kg', 'Other')");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.ProjectItemComponent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("CatalogItemId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal?>("PlannedQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<int>("ProjectItemId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("QuantityPerUnit")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CatalogItemId");
+
+                    b.HasIndex(new[] { "ProjectItemId", "Kind" }, "UX_ProjectItemComponent_Kind")
+                        .IsUnique()
+                        .HasFilter("[Kind] <> 'Material'");
+
+                    b.HasIndex(new[] { "ProjectItemId", "CatalogItemId" }, "UX_ProjectItemComponent_Material")
+                        .IsUnique()
+                        .HasFilter("[CatalogItemId] IS NOT NULL");
+
+                    b.ToTable("ProjectItemComponent", "projects", t =>
+                        {
+                            t.HasCheckConstraint("CK_ProjectItemComponent_Kind", "[Kind] IN ('Material', 'Labor', 'Equipment', 'Subcontract')");
+
+                            t.HasCheckConstraint("CK_ProjectItemComponent_Material", "([Kind] = 'Material' AND [CatalogItemId] IS NOT NULL) OR ([Kind] <> 'Material' AND [CatalogItemId] IS NULL)");
+
+                            t.HasCheckConstraint("CK_ProjectItemComponent_Quantities", "([PlannedQuantity] IS NULL OR [PlannedQuantity] > 0) AND ([QuantityPerUnit] IS NULL OR [QuantityPerUnit] > 0)");
                         });
                 });
 
@@ -1429,17 +1826,42 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("CommercialRegistrationNo")
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("ContactPerson")
+                        .HasMaxLength(200)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2(3)");
 
                     b.Property<int>("CreatedBy")
                         .HasColumnType("int");
 
+                    b.Property<string>("Email")
+                        .HasMaxLength(254)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(254)");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(30)
                         .IsUnicode(false)
                         .HasColumnType("varchar(30)");
+
+                    b.Property<string>("LegalName")
+                        .HasMaxLength(200)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("NameAr")
                         .IsRequired()
@@ -1693,6 +2115,11 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
 
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.CatalogItem", b =>
                 {
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.MasterItem", "MasterItem")
+                        .WithMany()
+                        .HasForeignKey("MasterItemId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("AlMotaheda.Modules.Projects.Data.Project", "Project")
                         .WithMany()
                         .HasForeignKey("ProjectId")
@@ -1703,6 +2130,8 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                         .WithMany()
                         .HasForeignKey("SupplierId")
                         .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("MasterItem");
 
                     b.Navigation("Project");
 
@@ -1818,6 +2247,40 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.MasterItemPrice", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.MasterItem", "MasterItem")
+                        .WithMany("Prices")
+                        .HasForeignKey("MasterItemId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("MasterItem");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.PriceVariance", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.CatalogItem", null)
+                        .WithMany()
+                        .HasForeignKey("CatalogItemId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.ProjectExpense", "Expense")
+                        .WithMany()
+                        .HasForeignKey("ExpenseId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Expense");
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.ProjectExpense", b =>
                 {
                     b.HasOne("AlMotaheda.Modules.Projects.Data.CatalogItem", "CatalogItem")
@@ -1852,13 +2315,38 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
 
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.ProjectItem", b =>
                 {
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.MasterItem", "MasterItem")
+                        .WithMany()
+                        .HasForeignKey("MasterItemId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("AlMotaheda.Modules.Projects.Data.Project", "Project")
                         .WithMany()
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
+                    b.Navigation("MasterItem");
+
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.ProjectItemComponent", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.CatalogItem", "CatalogItem")
+                        .WithMany()
+                        .HasForeignKey("CatalogItemId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.ProjectItem", "ProjectItem")
+                        .WithMany("Components")
+                        .HasForeignKey("ProjectItemId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("CatalogItem");
+
+                    b.Navigation("ProjectItem");
                 });
 
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.ProjectMember", b =>
@@ -1940,6 +2428,11 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                     b.Navigation("Materials");
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.MasterItem", b =>
+                {
+                    b.Navigation("Prices");
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.Project", b =>
                 {
                     b.Navigation("Members");
@@ -1948,6 +2441,11 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.ProjectExpense", b =>
                 {
                     b.Navigation("Adjustments");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.ProjectItem", b =>
+                {
+                    b.Navigation("Components");
                 });
 
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.SupplierPayment", b =>

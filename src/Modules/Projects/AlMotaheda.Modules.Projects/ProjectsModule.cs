@@ -49,6 +49,7 @@ public sealed class ProjectsModule : IModule
         services.AddSingleton<ProjectsLog>();
         services.AddScoped<ProjectAccess>();
         services.AddScoped<ExecutiveGate>();
+        services.AddScoped<PermissionGate>();
 
         // The project workspace: shared pieces first, then each feature area's own services.
         services.AddCompanyClock();
@@ -57,6 +58,8 @@ public sealed class ProjectsModule : IModule
         services.AddScoped<IVisibleProjects, VisibleProjectsContract>();
         services.AddScoped<IPaymentSource, SupplierPaymentSource>();
         services.AddScoped<IProjectItems, ProjectItemsContract>();
+        services.AddScoped<IProjectDirectory, ProjectDirectoryContract>();
+        services.AddScoped<IProjectAudience, ProjectAudienceContract>();
         services.AddScoped<ISupplierDirectory, SupplierDirectoryContract>();
         services.AddScoped<IProjectCatalog, ProjectCatalogContract>();
         services.AddScoped<IInvoicePosting, InvoicePostingContract>();
@@ -97,6 +100,7 @@ public sealed class ProjectsModule : IModule
         var api = endpoints.MapGroup("").WithTags(Name).RequireAuthorization();
         CoreFeatures.Map(api, projects);
         PlanningFeatures.Map(api, projects);
+        CostFlowFeatures.Map(api, projects);
         ReportingFeatures.Map(projects);
         SiteLocationEndpoints.Map(projects);
         GetWorkInbox.Map(api);

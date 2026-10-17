@@ -102,6 +102,7 @@ internal static class ListCatalogItems
         var headers = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
 
         var prices = await CatalogQueries.Prices(db, projectId).ToListAsync(cancellationToken);
+        var masterPrices = await CatalogQueries.MasterPrices(db, projectId).ToListAsync(cancellationToken);
         var purchases = await CatalogQueries.Purchases(db, projectId).ToListAsync(cancellationToken);
         var estimates = await CatalogQueries.Estimates(db, projectId).ToListAsync(cancellationToken);
 
@@ -111,8 +112,8 @@ internal static class ListCatalogItems
             PriceChangeView.People(prices.Where(price => pageIds.Contains(price.CatalogItemId) && price.Status == ItemPriceStatus.Pending)),
             cancellationToken);
 
-        var items = CatalogItemView.FromRows(headers, prices, purchases, today, seesMoney, people);
-        var summary = CatalogSummary.Compute(estimates, prices, purchases, today, seesMoney);
+        var items = CatalogItemView.FromRows(headers, prices, masterPrices, purchases, today, seesMoney, people);
+        var summary = CatalogSummary.Compute(estimates, prices, purchases, today, seesMoney, masterPrices);
 
         return TypedResults.Ok(new Response(items, page, pageSize, totalCount, summary));
     }

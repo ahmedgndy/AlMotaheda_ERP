@@ -56,6 +56,23 @@ internal static class DocumentQueries
     public static IQueryable<Document> Live(ArchiveDbContext db, int projectId) =>
         db.Documents.AsNoTracking().Where(document => document.ProjectId == projectId && document.DeletedAt == null);
 
+    /// <summary>
+    /// The live documents linked to a supplier, on the given projects (all when <paramref name="projectIds"/> is
+    /// <c>null</c>), newest first: the supplier profile's documents (docs/cost-flow §2.5).
+    /// </summary>
+    public static IQueryable<DocumentRow> OfSupplier(ArchiveDbContext db, int supplierId, IReadOnlySet<int>? projectIds)
+    {
+        var query = db.Documents.AsNoTracking()
+            .Where(document => document.DeletedAt == null
+                && document.Links.Any(link => link.EntityType == LinkedEntityType.Supplier && link.EntityId == supplierId));
+        if (projectIds is not null)
+        {
+            query = query.Where(document => projectIds.Contains(document.ProjectId));
+        }
+
+        return Project(query.OrderByDescending(document => document.UploadedAt).ThenByDescending(document => document.Id));
+    }
+
     /// <summary>The list screen, newest first. Every filter, the order and the paging run in SQL.</summary>
     public static IQueryable<DocumentRow> Filtered(ArchiveDbContext db, int projectId, DocumentFilter filter) =>
         Project(Matching(db, projectId, filter).OrderByDescending(document => document.UploadedAt).ThenByDescending(document => document.Id));

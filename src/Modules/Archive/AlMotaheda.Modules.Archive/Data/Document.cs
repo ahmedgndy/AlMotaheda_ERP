@@ -110,4 +110,10 @@ internal enum LinkedEntityType
     Equipment,
     EquipmentCost,
     Budget,
+
+    /// <summary>A supplier: the document shows on the supplier's profile too (one file, no copy).</summary>
+    Supplier,
+
+    /// <summary>A repair request of a machine (its photos and reports).</summary>
+    RepairRequest,
 }

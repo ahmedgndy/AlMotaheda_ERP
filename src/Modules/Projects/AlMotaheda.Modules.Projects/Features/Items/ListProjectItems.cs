@@ -76,20 +76,23 @@ internal static class ListProjectItems
 
     /// <summary>
     /// projectRecognizedCost = items + not linked + other costs, where other costs are the site expenses outside
-    /// the items screens and the equipment costs that Fleet reports. Equipment is never split over items (F1).
+    /// the items screens. Equipment costs and staff allocations are on the items screens (linked or not linked,
+    /// docs/cost-flow §2.4); should a group's cost source report more than its item source, the difference is shown
+    /// as other cost, so the parts always add up to the project's cost.
     /// </summary>
     internal static async Task<ItemsReconciliation> ReconcileAsync(
         int projectId, ItemsLedgerData data, IEnumerable<IProjectCostSource> costSources, CancellationToken cancellationToken)
     {
-        decimal equipment = 0;
-        foreach (var costSource in costSources.Where(candidate => candidate.Group == CostGroups.Equipment))
+        decimal outsideItems = 0;
+        foreach (var costSource in costSources.Where(candidate => candidate.Group is CostGroups.Equipment or CostGroups.Staff))
         {
-            equipment += (await costSource.SummarizeAsync(projectId, null, null, cancellationToken)).Recognized;
+            var recognized = (await costSource.SummarizeAsync(projectId, null, null, cancellationToken)).Recognized;
+            outsideItems += recognized - data.Ledger.Totals.CostOf(costSource.Group) - data.Ledger.Unallocated.CostOf(costSource.Group);
         }
 
         var items = data.Ledger.Totals.TotalCost;
         var unallocated = data.Ledger.Unallocated.TotalCost;
-        var other = data.OtherSiteExpenses + equipment;
+        var other = data.OtherSiteExpenses + outsideItems;
 
         return new ItemsReconciliation(items, unallocated, other, items + unallocated + other);
     }

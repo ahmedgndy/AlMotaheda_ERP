@@ -47,7 +47,11 @@ public sealed class AuditAndNotificationTests(SqlServerFixture database)
         Assert.Equal(cast.ProjectId, notification.GetProperty("projectId").GetInt32());
         Assert.Equal("Your expense or supply was returned for changes", notification.GetProperty("titleEn").GetString());
         Assert.Equal("تمت إعادة المصروف أو التوريد للتعديل", notification.GetProperty("titleAr").GetString());
-        Assert.Equal(0, await UnreadCountAsync(api, cast.Accountant));
+
+        // The reviewer heard only that the record arrived for review (docs/cost-flow §2.8), never about their own return.
+        var forReviewer = await WaitForSingleNotificationAsync(api, cast.Accountant);
+        Assert.Equal("ReviewRequested", forReviewer.GetProperty("type").GetString());
+        Assert.Equal("A new expense or supply waits for your review", forReviewer.GetProperty("titleEn").GetString());
 
         // Read: once, by its recipient only. Someone else's notification is 404, like one that doesn't exist.
         var id = notification.GetProperty("id").GetInt64();

@@ -5,6 +5,7 @@ using AlMotaheda.Modules.Access.Contracts;
 using AlMotaheda.Modules.Projects.Common;
 using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Projects.Data;
+using AlMotaheda.Modules.Projects.Features.PriceVariances;
 using AlMotaheda.Modules.Projects.Security;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -131,8 +132,16 @@ internal static class UpdateExpense
 
         db.Entry(expense).Property(candidate => candidate.RowVersion).OriginalValue = rowVersion!;
 
+        // The fixed supply is checked against its reference price again: its old variance is closed first and saved,
+        // so a new one never meets it on the "one waiting variance per supply" index.
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        await PriceVarianceRules.SupersedeActiveAsync(db, expense.Id, caller.UserId, now, cancellationToken);
+
+        PriceVariance? variance;
         try
         {
+            await db.SaveChangesAsync(cancellationToken);
+            variance = await PriceVarianceRules.RaiseIfNeededAsync(db, expense, caller.UserId, now, cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException)
@@ -145,7 +154,12 @@ internal static class UpdateExpense
             return CoreProblems.ItemRemoved();
         }
 
+        await transaction.CommitAsync(cancellationToken);
         log.ExpenseResubmitted(caller.UserId, projectId, expense.Id, oldStatus.ToString());
+        if (variance is not null)
+        {
+            log.PriceVarianceRaised(projectId, expense.Id, variance.Id, variance.Direction.ToString());
+        }
 
         var view = await ExpenseView.LoadAsync(db, users, projectId, expense.Id, caller.Can(PermissionAction.SeeMoney), cancellationToken);
         return view is null ? CoreProblems.ExpenseNotFound() : TypedResults.Ok(view);

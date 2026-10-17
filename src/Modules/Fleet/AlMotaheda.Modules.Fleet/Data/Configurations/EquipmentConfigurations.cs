@@ -136,6 +136,9 @@ internal sealed class EquipmentCostConfiguration : IEntityTypeConfiguration<Equi
     /// <summary>Written by hand in the migration: the supplier is a <c>projects.Supplier</c>.</summary>
     public const string SupplierForeignKey = "FK_EquipmentCost_Supplier_SupplierId";
 
+    /// <summary>Written by hand in the migration: projects.ProjectItem lives in another schema.</summary>
+    public const string ProjectItemForeignKey = "FK_EquipmentCost_ProjectItem_ProjectItemId";
+
     public const int DescriptionMaxLength = 500;
     public const int InvoiceNoMaxLength = 50;
     public const int ReviewNoteMaxLength = 500;
@@ -210,6 +213,11 @@ internal sealed class EquipmentCostConfiguration : IEntityTypeConfiguration<Equi
         builder.HasIndex(cost => new { cost.ProjectId, cost.Status }, "IX_EquipmentCost_Project_Status");
         builder.HasIndex(cost => cost.EquipmentId, "IX_EquipmentCost_EquipmentId");
         builder.HasIndex(cost => cost.SupplierId, "IX_EquipmentCost_SupplierId");
+        // The items screens read a project's costs by item (docs/cost-flow §2.4). The foreign key to
+        // projects.ProjectItem is written by hand in the migration, like the other cross-schema keys.
+        builder.HasIndex(cost => new { cost.ProjectId, cost.ProjectItemId }, "IX_EquipmentCost_Project_Item");
+        // The duplicate check of a new cost reads by machine and date.
+        builder.HasIndex(cost => new { cost.EquipmentId, cost.CostDate }, "IX_EquipmentCost_Equipment_Date");
 
         builder.HasOne(cost => cost.Equipment)
             .WithMany()
@@ -236,6 +244,54 @@ internal sealed class VoidedEquipmentCostPaymentConfiguration : IEntityTypeConfi
         builder.HasOne(payment => payment.Cost)
             .WithMany()
             .HasForeignKey(payment => payment.CostId)
+            .OnDelete(DeleteBehavior.NoAction);
+    }
+}
+
+internal sealed class RepairRequestConfiguration : IEntityTypeConfiguration<RepairRequest>
+{
+    /// <summary>Written by hand in the migration: projects.Project lives in another schema.</summary>
+    public const string ProjectForeignKey = "FK_RepairRequest_Project_ProjectId";
+
+    public const int ProblemMaxLength = 1000;
+    public const int NoteMaxLength = 500;
+
+    public void Configure(EntityTypeBuilder<RepairRequest> builder)
+    {
+        builder.ToTable(nameof(RepairRequest), table =>
+        {
+            table.HasCheckConstraint("CK_RepairRequest_Status", $"[Status] IN ({SqlList.Of(Enum.GetNames<RepairRequestStatus>())})");
+            table.HasCheckConstraint("CK_RepairRequest_Priority", $"[Priority] IN ({SqlList.Of(Enum.GetNames<RepairPriority>())})");
+            table.HasCheckConstraint(
+                "CK_RepairRequest_Review",
+                "([Status] = 'Open' AND [ReviewedAt] IS NULL AND [ReviewedBy] IS NULL) "
+                + "OR [Status] = 'Cancelled' "
+                + "OR ([Status] IN ('Approved', 'Rejected', 'Completed') AND [ReviewedAt] IS NOT NULL AND [ReviewedBy] IS NOT NULL)");
+            table.HasCheckConstraint(
+                "CK_RepairRequest_Completion",
+                "([Status] = 'Completed' AND [CompletedAt] IS NOT NULL AND [CompletedBy] IS NOT NULL AND [Result] IS NOT NULL) "
+                + "OR ([Status] <> 'Completed' AND [CompletedAt] IS NULL AND [EquipmentCostId] IS NULL)");
+        });
+
+        builder.Property(request => request.Problem).HasMaxLength(ProblemMaxLength).IsUnicode();
+        builder.Property(request => request.Priority).HasConversion<string>().HasMaxLength(20).IsUnicode(false);
+        builder.Property(request => request.Status).HasConversion<string>().HasMaxLength(20).IsUnicode(false);
+        builder.Property(request => request.ReviewNote).HasMaxLength(NoteMaxLength).IsUnicode();
+        builder.Property(request => request.Result).HasMaxLength(ProblemMaxLength).IsUnicode();
+        builder.Property(request => request.CancelReason).HasMaxLength(NoteMaxLength).IsUnicode();
+        builder.Property(request => request.RowVersion).IsRowVersion();
+
+        builder.HasIndex(request => new { request.ProjectId, request.Status }, "IX_RepairRequest_Project_Status");
+        builder.HasIndex(request => request.EquipmentId, "IX_RepairRequest_EquipmentId");
+
+        builder.HasOne(request => request.Equipment)
+            .WithMany()
+            .HasForeignKey(request => request.EquipmentId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.HasOne<EquipmentCost>()
+            .WithMany()
+            .HasForeignKey(request => request.EquipmentCostId)
             .OnDelete(DeleteBehavior.NoAction);
     }
 }

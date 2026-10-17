@@ -69,14 +69,14 @@ internal sealed record SourceFigures(string CostGroup, ProjectCostFigures Figure
 /// </summary>
 /// <remarks>
 /// <para><c>Materials</c>, <c>SiteExpenses</c> and <c>Other</c> come from this module's expense records
-/// (<see cref="BudgetComparison.GroupOf"/>). <c>Labor</c>, <c>Subcontractors</c> and <c>Equipment</c> come only from
+/// (<see cref="BudgetComparison.GroupOf"/>). <c>Labor</c>, <c>Subcontractors</c>, <c>Equipment</c> and <c>Staff</c> come only from
 /// the <see cref="IProjectCostSource"/> of the module that owns them; this module never reads their tables.</para>
 /// <para>Only approved records are cost. A returned or rejected record counts nowhere.</para>
 /// </remarks>
 internal static class ProjectCosts
 {
     /// <summary>The groups owned by other modules and reported through <see cref="IProjectCostSource"/>.</summary>
-    public static IReadOnlyList<string> SourceGroups { get; } = [CostGroups.Labor, CostGroups.Subcontractors, CostGroups.Equipment];
+    public static IReadOnlyList<string> SourceGroups { get; } = [CostGroups.Labor, CostGroups.Subcontractors, CostGroups.Equipment, CostGroups.Staff];
 
     /// <summary>
     /// The three groups of this module's expense records, in the order of <see cref="CostGroups.All"/>.

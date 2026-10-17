@@ -14,6 +14,7 @@ internal sealed class ProjectRecordOwnership(ProjectsDbContext db) : IProjectRec
         ProjectRecordKinds.DailyReport,
         ProjectRecordKinds.ReportRequest,
         ProjectRecordKinds.Budget,
+        ProjectRecordKinds.Supplier,
     ];
 
     public async Task<IReadOnlySet<int>> FindOnProjectAsync(
@@ -40,6 +41,9 @@ internal sealed class ProjectRecordOwnership(ProjectsDbContext db) : IProjectRec
             .Where(record => record.ProjectId == projectId && ids.Contains(record.Id)).Select(record => record.Id),
         ProjectRecordKinds.Budget => db.Budgets.AsNoTracking()
             .Where(record => record.ProjectId == projectId && ids.Contains(record.Id)).Select(record => record.Id),
+        // Suppliers are company-wide (overview 3.6): any supplier in the register may have documents on a project.
+        ProjectRecordKinds.Supplier => db.Suppliers.AsNoTracking()
+            .Where(record => ids.Contains(record.Id)).Select(record => record.Id),
         _ => null,
     };
 }

@@ -85,7 +85,8 @@ internal static class GetUnallocatedItems
 /// Builds an item detail, or the not-linked detail, from the same ledger run as the table, so the totals at the
 /// bottom of a detail always equal the row in the table.
 /// </summary>
-internal sealed class ItemDetails(ProjectsDbContext db, ItemsLedgerSource source, ILaborItemCosts labor, ISubcontractItemCosts subcontracts)
+internal sealed class ItemDetails(
+    ProjectsDbContext db, ItemsLedgerSource source, ILaborItemCosts labor, ISubcontractItemCosts subcontracts, IEnumerable<IItemCostSource> otherSources)
 {
     /// <returns><c>null</c> when <paramref name="itemId"/> is set and the item is not on this project.</returns>
     public async Task<ItemDetail?> LoadAsync(int projectId, int? itemId, CancellationToken cancellationToken)
@@ -109,12 +110,35 @@ internal sealed class ItemDetails(ProjectsDbContext db, ItemsLedgerSource source
         var subcontractLines = await subcontracts.LinesAsync(projectId, itemId, cancellationToken);
         var laborLines = await labor.LinesAsync(projectId, itemId, cancellationToken);
 
+        var equipmentLines = new List<ItemSourceLine>();
+        var staffLines = new List<ItemSourceLine>();
+        foreach (var other in otherSources)
+        {
+            (other.Group == CostGroups.Staff ? staffLines : equipmentLines).AddRange(await other.LinesAsync(projectId, itemId, cancellationToken));
+        }
+
+        ComponentBreakdownView? components = null;
+        if (itemId is { } componentsOf)
+        {
+            var plans = await ItemComponentQueries.PlansAsync(db, componentsOf, cancellationToken);
+            components = ComponentBreakdown.Compute(
+                plans,
+                approved.Select(row => new ComponentSupplyRow(
+                    row.CatalogItemId, row.Unit, row.Quantity, ExpenseSettlement.Recognized(row.Settlement), ExpenseSettlement.Paid(row.Settlement))).ToList(),
+                SourceTotal.Of(laborLines.Select(line => (line.Amount, line.Paid)).Concat(staffLines.Select(line => (line.Amount, line.Paid)))),
+                SourceTotal.Of(equipmentLines.Select(line => (line.Amount, line.Paid))),
+                SourceTotal.Of(subcontractLines.Select(line => (line.Amount, line.Paid))));
+        }
+
         return new ItemDetail(
             item is null ? null : ItemRow.From(item, figures),
             approved.Select(SupplierLine.From).ToList(),
             subcontractLines,
             laborLines,
             pending.Select(SupplierLine.From).ToList(),
-            ItemFiguresView.From(figures));
+            ItemFiguresView.From(figures),
+            equipmentLines,
+            staffLines,
+            components);
     }
 }

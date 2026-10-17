@@ -19,7 +19,7 @@ public sealed class DatabaseSchemaTests
         using var db = CreateContext();
 
         Assert.False(db.Database.HasPendingModelChanges(), "The model changed without a migration. Run dotnet ef migrations add.");
-        Assert.Equal(["InitialArchive"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
+        Assert.Equal(["InitialArchive", "SupplierAndRepairLinks"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
     }
 
     [Fact]
@@ -42,7 +42,7 @@ public sealed class DatabaseSchemaTests
     [InlineData("CONSTRAINT [CK_Document_Kind] CHECK ([Kind] IN ('Pdf', 'Image', 'Video', 'Office', 'Drawing'))")]
     [InlineData("CONSTRAINT [CK_Document_Size] CHECK ([SizeBytes] > 0)")]
     [InlineData("CONSTRAINT [CK_Document_Sha256] CHECK (LEN([Sha256]) = 64 AND [Sha256] COLLATE Latin1_General_BIN NOT LIKE '%[^0-9a-f]%')")]
-    [InlineData("CONSTRAINT [CK_DocumentLink_EntityType] CHECK ([EntityType] IN ('Expense', 'SupplierPayment', 'DailyReport', 'ReportRequest', 'LaborSheet', 'SubContract', 'SubPayment', 'Equipment', 'EquipmentCost', 'Budget'))")]
+    [InlineData("CONSTRAINT [CK_DocumentLink_EntityType] CHECK ([EntityType] IN ('Expense', 'SupplierPayment', 'DailyReport', 'ReportRequest', 'LaborSheet', 'SubContract', 'SubPayment', 'Equipment', 'EquipmentCost', 'Budget', 'Supplier', 'RepairRequest'))")]
     [InlineData("CONSTRAINT [CK_DocumentLink_EntityId] CHECK ([EntityId] > 0)")]
     [InlineData("CONSTRAINT [FK_DocumentLink_Document_DocumentId] FOREIGN KEY ([DocumentId]) REFERENCES [docs].[Document] ([Id])")]
     [InlineData("[Title] nvarchar(200) NOT NULL")]

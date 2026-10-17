@@ -66,6 +66,19 @@ internal sealed record PricePosition(
     PriceRow? Scheduled,
     string PriceStatus);
 
+/// <summary>Where the reference price of an item comes from.</summary>
+internal static class ReferencePriceSources
+{
+    /// <summary>The project's own approved price.</summary>
+    public const string Project = "Project";
+
+    /// <summary>The master catalog's approved price (the project has none of its own in force).</summary>
+    public const string Master = "Master";
+}
+
+/// <summary>The price that applies to an item today and where it comes from (<c>null</c> when none applies).</summary>
+internal sealed record ReferencePrice(PriceRow? Current, PriceRow? Previous, decimal? ChangePercent, string? Source);
+
 /// <summary>What was bought of one item: approved supplies only.</summary>
 /// <param name="Quantity">Only supplies in the item's own unit are added; other units can't be summed with it.</param>
 internal sealed record PurchaseTotals(decimal Quantity, decimal Amount, int Count)
@@ -105,6 +118,25 @@ internal static class CatalogPricing
             pending,
             scheduled,
             status);
+    }
+
+    /// <summary>
+    /// The reference price of a project catalog item: the project's own approved price when it has one in force,
+    /// otherwise the master catalog's approved price (docs/cost-flow §2.2). <paramref name="masterPrices"/> are the
+    /// master's approved rows; empty for an item not selected from the master catalog.
+    /// </summary>
+    public static ReferencePrice Reference(IEnumerable<PriceRow> projectPrices, IEnumerable<PriceRow> masterPrices, DateOnly today)
+    {
+        var own = Position(projectPrices, today);
+        if (own.Current is not null)
+        {
+            return new ReferencePrice(own.Current, own.Previous, own.ChangePercent, ReferencePriceSources.Project);
+        }
+
+        var master = Position(masterPrices, today);
+        return master.Current is null
+            ? new ReferencePrice(null, null, null, null)
+            : new ReferencePrice(master.Current, master.Previous, master.ChangePercent, ReferencePriceSources.Master);
     }
 
     /// <summary>(new − old) ÷ old × 100, to two decimals. Positive means the price went up.</summary>

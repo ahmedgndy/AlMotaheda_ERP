@@ -44,7 +44,7 @@ internal static class EquipmentCostGroups
     {
         EquipmentCostType.Rental => CostGroup.Rental,
         EquipmentCostType.Fuel => CostGroup.Fuel,
-        EquipmentCostType.Maintenance or EquipmentCostType.Repair => CostGroup.Maintenance,
+        EquipmentCostType.Maintenance or EquipmentCostType.Repair or EquipmentCostType.SpareParts => CostGroup.Maintenance,
         _ => CostGroup.Other,
     };
 }

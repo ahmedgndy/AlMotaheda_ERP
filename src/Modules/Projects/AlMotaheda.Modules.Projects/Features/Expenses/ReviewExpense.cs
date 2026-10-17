@@ -6,6 +6,7 @@ using AlMotaheda.Modules.Projects.Common;
 using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Projects.Data;
 using AlMotaheda.Modules.Projects.Data.Configurations;
+using AlMotaheda.Modules.Projects.Features.PriceVariances;
 using AlMotaheda.Modules.Projects.Security;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -130,6 +131,13 @@ internal static class ExpenseReview
                 return WorkspaceProblems.ReviewerIsRecorder();
             case ExpenseDecision.WrongStatus:
                 return WorkspaceProblems.WrongStatus($"Only a recorded record can be reviewed. This one is {expense.Status}.");
+        }
+
+        // A price outside the policy must be accepted first; returning or rejecting the supply stays possible.
+        if (target == ExpenseStatus.Approved && await PriceVarianceRules.BlocksApprovalAsync(db, expense.Id, cancellationToken))
+        {
+            log.ActionRefused(caller.UserId, $"Review{target}", "price variance waiting or rejected");
+            return CostFlowProblems.VarianceOpen();
         }
 
         expense.Review(target, caller.UserId, clock.UtcNow, note);

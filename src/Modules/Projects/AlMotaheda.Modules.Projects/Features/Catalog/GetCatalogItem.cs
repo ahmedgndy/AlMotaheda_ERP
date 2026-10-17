@@ -60,6 +60,7 @@ internal static class GetCatalogItem
         }
 
         var prices = await CatalogQueries.Prices(db, projectId, itemId).ToListAsync(cancellationToken);
+        var masterPrices = await CatalogQueries.MasterPrices(db, projectId, itemId).ToListAsync(cancellationToken);
         var purchases = await CatalogQueries.Purchases(db, projectId, itemId).ToListAsync(cancellationToken);
         var supplies = await CatalogQueries.RecentSupplies(db, projectId, itemId, RecentSupplyCount).ToListAsync(cancellationToken);
         var people = await PlanningPeople.FindAsync(users, PriceChangeView.People(prices), cancellationToken);
@@ -71,7 +72,7 @@ internal static class GetCatalogItem
             .ToList();
 
         return new Response(
-            CatalogItemView.From(header, prices, purchases, today, seesMoney, people),
+            CatalogItemView.From(header, prices, masterPrices, purchases, today, seesMoney, people),
             history,
             supplies.Select(supply => CatalogSupplyView.From(supply, seesMoney)).ToList());
     }

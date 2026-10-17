@@ -44,7 +44,7 @@ public sealed class RecordOwnershipQueryTests
         using var db = CreateContext();
 
         Assert.Null(FleetRecordOwnership.Query(db, 3, ProjectRecordKinds.Expense, [5]));
-        Assert.Equal([ProjectRecordKinds.Equipment, ProjectRecordKinds.EquipmentCost], new FleetRecordOwnership(db).Kinds);
+        Assert.Equal([ProjectRecordKinds.Equipment, ProjectRecordKinds.EquipmentCost, ProjectRecordKinds.RepairRequest], new FleetRecordOwnership(db).Kinds);
     }
 
     [Fact]

@@ -18,6 +18,7 @@ internal static class NotificationTypes
     public const string LocationAvailable = "LocationAvailable";
     public const string OutsideSite = "OutsideSite";
     public const string BackInsideSite = "BackInsideSite";
+    public const string ReviewRequested = "ReviewRequested";
 }
 
 /// <summary>A notification to store: who gets it, its type and its title in both languages.</summary>
@@ -58,6 +59,10 @@ internal static class NotificationRules
         ["ReportRun"] = ("report export", "تصدير التقرير"),
         ["LocationUnavailableAlert"] = ("location alert", "تنبيه الموقع"),
         ["OutsideSiteAlert"] = ("location alert", "تنبيه الموقع"),
+        ["MasterItemPrice"] = ("master price change request", "طلب تغيير السعر في القائمة الرئيسية"),
+        ["PriceVariance"] = ("price variance", "فرق السعر"),
+        ["RepairRequest"] = ("repair request", "طلب الإصلاح"),
+        ["ProjectWorkDays"] = ("project days", "أيام العمل على المشروع"),
     };
 
     /// <summary>StatusAfter <c>null</c> = the record was just added.</summary>
@@ -73,6 +78,15 @@ internal static class NotificationRules
         new("ItemPrice", "Approved", "RequestedBy", NotificationTypes.RecordApproved),
         new("ItemPrice", "Rejected", "RequestedBy", NotificationTypes.RecordRejected),
         new("Budget", "Approved", "CreatedBy", NotificationTypes.RecordApproved),
+        // docs/cost-flow: decisions on the new review flows go back to whoever asked.
+        new("MasterItemPrice", "Approved", "RequestedBy", NotificationTypes.RecordApproved),
+        new("MasterItemPrice", "Rejected", "RequestedBy", NotificationTypes.RecordRejected),
+        new("PriceVariance", "Accepted", "RaisedBy", NotificationTypes.RecordApproved),
+        new("PriceVariance", "Rejected", "RaisedBy", NotificationTypes.RecordRejected),
+        new("RepairRequest", "Approved", "RequestedBy", NotificationTypes.RecordApproved),
+        new("RepairRequest", "Rejected", "RequestedBy", NotificationTypes.RecordRejected),
+        new("RepairRequest", "Completed", "RequestedBy", NotificationTypes.RecordReviewed),
+        .. Reviewed("ProjectWorkDays", "CreatedBy", returns: true),
         new("ExpenseAdjustment", "Approved", "RequestedBy", NotificationTypes.RecordApproved),
         new("ExpenseAdjustment", "Rejected", "RequestedBy", NotificationTypes.RecordRejected),
         new("EquipmentCostAdjustment", "Approved", "RequestedBy", NotificationTypes.RecordApproved),

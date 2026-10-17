@@ -46,6 +46,8 @@ public static class WorkInboxRecordTypes
     public const string EquipmentCost = "EquipmentCost";
     public const string Measurement = "Measurement";
     public const string Manpower = "Manpower";
+    public const string PriceVariance = "PriceVariance";
+    public const string RepairRequest = "RepairRequest";
 }
 
 /// <param name="Reason">One of <see cref="WorkInboxReasons"/>.</param>

@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AlMotaheda.Modules.Fleet.Data.Migrations
 {
     [DbContext(typeof(FleetDbContext))]
-    internal partial class FleetDbContextModelSnapshot : ModelSnapshot
+    partial class FleetDbContextModelSnapshot : ModelSnapshot
     {
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
@@ -245,6 +245,12 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
                         .IsUnicode(true)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<DateTime?>("ItemLinkedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("ItemLinkedBy")
+                        .HasColumnType("int");
+
                     b.Property<decimal?>("Liters")
                         .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
@@ -284,6 +290,9 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ProjectItemId")
                         .HasColumnType("int");
 
                     b.Property<decimal?>("Quantity")
@@ -336,7 +345,11 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
 
                     b.HasIndex(new[] { "EquipmentId" }, "IX_EquipmentCost_EquipmentId");
 
+                    b.HasIndex(new[] { "EquipmentId", "CostDate" }, "IX_EquipmentCost_Equipment_Date");
+
                     b.HasIndex(new[] { "ProjectId", "CostDate" }, "IX_EquipmentCost_Project_Date");
+
+                    b.HasIndex(new[] { "ProjectId", "ProjectItemId" }, "IX_EquipmentCost_Project_Item");
 
                     b.HasIndex(new[] { "ProjectId", "Status" }, "IX_EquipmentCost_Project_Status");
 
@@ -364,7 +377,7 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
 
                             t.HasCheckConstraint("CK_EquipmentCost_Status", "[Status] IN ('Recorded', 'Approved', 'Returned', 'Rejected')");
 
-                            t.HasCheckConstraint("CK_EquipmentCost_Type", "[Type] IN ('Rental', 'Fuel', 'Maintenance', 'Repair', 'Transport', 'Other')");
+                            t.HasCheckConstraint("CK_EquipmentCost_Type", "[Type] IN ('Rental', 'Fuel', 'Maintenance', 'Repair', 'SpareParts', 'Transport', 'Other')");
 
                             t.HasCheckConstraint("CK_EquipmentCost_TypeColumns", "([Type] = 'Fuel' AND [Liters] IS NOT NULL AND [PricePerLiter] IS NOT NULL AND [Liters] > 0 AND [PricePerLiter] > 0 AND [Basis] IS NULL AND [Quantity] IS NULL AND [Rate] IS NULL AND ABS([Amount] - ROUND([Liters] * [PricePerLiter], 2)) < 0.01) OR ([Type] <> 'Fuel' AND [Liters] IS NULL AND [PricePerLiter] IS NULL AND [Basis] IS NOT NULL AND (([Basis] = 'Lump' AND [Quantity] IS NULL AND [Rate] IS NULL) OR ([Basis] <> 'Lump' AND [Quantity] IS NOT NULL AND [Rate] IS NOT NULL AND [Quantity] > 0 AND [Rate] > 0 AND ABS([Amount] - ROUND([Quantity] * [Rate], 2)) < 0.01)))");
                         });
@@ -498,6 +511,106 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.RepairRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("CancelledBy")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("CompletedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("EquipmentCostId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("EquipmentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("Problem")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("RequestedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Result")
+                        .HasMaxLength(1000)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("ReviewedBy")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EquipmentCostId");
+
+                    b.HasIndex(new[] { "EquipmentId" }, "IX_RepairRequest_EquipmentId");
+
+                    b.HasIndex(new[] { "ProjectId", "Status" }, "IX_RepairRequest_Project_Status");
+
+                    b.ToTable("RepairRequest", "fleet", t =>
+                        {
+                            t.HasCheckConstraint("CK_RepairRequest_Completion", "([Status] = 'Completed' AND [CompletedAt] IS NOT NULL AND [CompletedBy] IS NOT NULL AND [Result] IS NOT NULL) OR ([Status] <> 'Completed' AND [CompletedAt] IS NULL AND [EquipmentCostId] IS NULL)");
+
+                            t.HasCheckConstraint("CK_RepairRequest_Priority", "[Priority] IN ('Low', 'Normal', 'Urgent')");
+
+                            t.HasCheckConstraint("CK_RepairRequest_Review", "([Status] = 'Open' AND [ReviewedAt] IS NULL AND [ReviewedBy] IS NULL) OR [Status] = 'Cancelled' OR ([Status] IN ('Approved', 'Rejected', 'Completed') AND [ReviewedAt] IS NOT NULL AND [ReviewedBy] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_RepairRequest_Status", "[Status] IN ('Open', 'Approved', 'Rejected', 'Completed', 'Cancelled')");
+                        });
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VoidedEquipmentCostPayment", b =>
                 {
                     b.Property<int>("Id")
@@ -584,6 +697,22 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
 
             modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.EquipmentRental", b =>
                 {
+                    b.HasOne("AlMotaheda.Modules.Fleet.Data.Equipment", "Equipment")
+                        .WithMany()
+                        .HasForeignKey("EquipmentId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Equipment");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.RepairRequest", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Fleet.Data.EquipmentCost", null)
+                        .WithMany()
+                        .HasForeignKey("EquipmentCostId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("AlMotaheda.Modules.Fleet.Data.Equipment", "Equipment")
                         .WithMany()
                         .HasForeignKey("EquipmentId")

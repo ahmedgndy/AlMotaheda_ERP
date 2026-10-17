@@ -195,7 +195,7 @@ public sealed class BudgetComparisonTests
 
         Assert.Equal(CostGroups.All, totals.Select(total => total.CostGroup));
         Assert.Equal(
-            [50_000m, 200_000m, 100_000m, 30_000m, 10_000m, 0m],
+            [50_000m, 200_000m, 100_000m, 30_000m, 10_000m, 0m, 0m],
             totals.Select(total => total.Amount));
     }
 

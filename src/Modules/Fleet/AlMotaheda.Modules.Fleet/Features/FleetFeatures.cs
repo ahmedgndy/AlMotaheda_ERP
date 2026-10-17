@@ -2,6 +2,7 @@ using AlMotaheda.Modules.Fleet.Common;
 using AlMotaheda.Modules.Fleet.Features.Assignments;
 using AlMotaheda.Modules.Fleet.Features.Costs;
 using AlMotaheda.Modules.Fleet.Features.Register;
+using AlMotaheda.Modules.Fleet.Features.Repairs;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -47,5 +48,11 @@ internal static class FleetFeatures
         VoidEquipmentCostPayment.Map(api);
         ListVoidedEquipmentPayments.Map(api);
         GetEquipmentSummary.Map(api);
+
+        // docs/cost-flow §2.7: equipment costs on project items, and repair requests.
+        LinkEquipmentCostItem.Map(api);
+        CreateRepairRequest.Map(api);
+        ListRepairRequests.Map(api);
+        MoveRepairRequest.Map(api);
     }
 }

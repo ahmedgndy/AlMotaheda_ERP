@@ -22,6 +22,9 @@ internal static class FleetProblems
     public const string CostBeingPaid = "cost_being_paid";
     public const string IdempotencyKeyReused = "idempotency_key_reused";
     public const string NotPaid = "not_paid";
+    public const string DuplicateCost = "duplicate_cost";
+    public const string ItemInactive = "item_inactive";
+    public const string NotResponsible = "not_responsible";
 
     public static ValidationProblem Validation(ValidationErrors errors) => ApiProblem.Validation(errors.ToDictionary());
 
@@ -55,6 +58,17 @@ internal static class FleetProblems
             "This cost is paid or its payment is requested, so it can't be corrected. Void the payment or cancel the request first.");
 
     public static ProblemHttpResult CostNotFound() => NotFound("equipment cost");
+
+    public static ProblemHttpResult RepairRequestNotFound() => NotFound("repair request");
+
+    public static ProblemHttpResult Duplicate() =>
+        Conflict(DuplicateCost, "This cost is already recorded: same machine, date, type, amount and invoice number. Record it once.");
+
+    public static ProblemHttpResult InactiveItem() =>
+        Conflict(ItemInactive, "This project item is inactive or was removed. Choose an active item.");
+
+    public static ProblemHttpResult NotTheResponsible() =>
+        ApiProblem.ForbiddenResult("Only the machine's responsible engineer on this project, or someone with equipment Create or Edit, can ask for a repair.");
 
     public static ProblemHttpResult CompletedProject() =>
         ApiProblem.Create(StatusCodes.Status409Conflict, ProjectCompleted, "A completed project can only be changed by an Executive.");

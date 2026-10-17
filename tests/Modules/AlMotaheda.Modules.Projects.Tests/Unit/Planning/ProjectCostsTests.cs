@@ -236,10 +236,11 @@ public sealed class ProjectCostsTests
         Assert.Equal(new OwedFigures(66_200.50m, 50_000.50m, 16_200m), result.SupplierTotals);
         Assert.Equal(new OwedFigures(3_300m, 3_300m, 0m), result.WithoutSupplier);
 
-        Assert.Equal([CostGroups.Labor, CostGroups.Subcontractors, CostGroups.Equipment], result.Groups.Select(group => group.CostGroup));
+        Assert.Equal([CostGroups.Labor, CostGroups.Subcontractors, CostGroups.Equipment, CostGroups.Staff], result.Groups.Select(group => group.CostGroup));
         Assert.Equal(new OwedGroup(CostGroups.Labor, true, 55_000m, 40_000m, 15_000m), result.Groups[0]);
         Assert.Equal(new OwedGroup(CostGroups.Subcontractors, true, 120_000m, 100_000m, 20_000m), result.Groups[1]);
         Assert.Equal(new OwedGroup(CostGroups.Equipment, false, 0m, 0m, 0m), result.Groups[2]);
+        Assert.Equal(new OwedGroup(CostGroups.Staff, false, 0m, 0m, 0m), result.Groups[3]);
 
         // The same outstanding as the overview: one rule.
         Assert.Equal(51_200m, result.TotalOutstanding);

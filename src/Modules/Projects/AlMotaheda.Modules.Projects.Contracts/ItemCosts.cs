@@ -105,3 +105,43 @@ public sealed record SubcontractItemLine(
     decimal Paid,
     decimal Outstanding,
     string PaymentState);
+
+/// <summary>
+/// A module whose approved records can be linked to project items one by one, beyond suppliers, labor and subcontract
+/// work: equipment costs (Fleet) and allocated staff salaries (HR). Registered once per module.
+/// </summary>
+public interface IItemCostSource
+{
+    /// <summary>One of <see cref="CostGroups"/> (<see cref="CostGroups.Equipment"/> or <see cref="CostGroups.Staff"/>).</summary>
+    string Group { get; }
+
+    /// <summary>One total per item that has approved records, plus one with a <c>null</c> item for records not linked yet.</summary>
+    Task<IReadOnlyList<ItemCostTotal>> TotalsByItemAsync(int projectId, CancellationToken cancellationToken);
+
+    /// <summary>The approved records of one item, or of "not linked yet" when <paramref name="itemId"/> is <c>null</c>.</summary>
+    Task<IReadOnlyList<ItemSourceLine>> LinesAsync(int projectId, int? itemId, CancellationToken cancellationToken);
+
+    /// <summary>True when any record, approved or not, is linked to the item. Such an item can't be deleted.</summary>
+    Task<bool> HasLinksAsync(int projectId, int itemId, CancellationToken cancellationToken);
+}
+
+/// <summary>One approved record of an <see cref="IItemCostSource"/>, as the item detail lists it.</summary>
+/// <param name="RecordType">The record's kind, for example <c>EquipmentCost</c> or <c>SalaryAllocation</c>.</param>
+/// <param name="RecordId">The originating record.</param>
+/// <param name="Kind">A finer kind inside the group, for example <c>Fuel</c> or <c>SpareParts</c>.</param>
+/// <param name="PaymentState">One of <see cref="PaymentStates"/>.</param>
+public sealed record ItemSourceLine(
+    string RecordType,
+    int RecordId,
+    DateOnly Date,
+    string Kind,
+    string Description,
+    int? PartyId,
+    string? PartyNameAr,
+    string? PartyNameEn,
+    decimal? Quantity,
+    string? Unit,
+    decimal Amount,
+    decimal Paid,
+    decimal Outstanding,
+    string PaymentState);

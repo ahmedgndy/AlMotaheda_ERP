@@ -44,6 +44,9 @@ internal static class AppLock
     /// <summary>Everything that changes what a month pays: its sheet, its payroll inputs, the salary structures.</summary>
     public const string Payroll = "AlMotaheda.HR.Payroll";
 
+    /// <summary>Project days reviews and the salary allocation run: one at a time.</summary>
+    public const string Allocation = "AlMotaheda.HR.Allocation";
+
     /// <summary>Takes the lock called <paramref name="resource"/>. Must run inside a transaction. False on timeout.</summary>
     public static Task<bool> TryAcquireAsync(HrDbContext db, string resource, CancellationToken cancellationToken) =>
         SqlAppLock.TryAcquireAsync(db, resource, cancellationToken);

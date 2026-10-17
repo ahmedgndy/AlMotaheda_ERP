@@ -52,24 +52,29 @@ public sealed class DeviceAndPushTests(SqlServerFixture database)
         var recorded = await api.RecordAsync(cast.Engineer, cast.ProjectId, SupplyBody(cemex, 10m, 100m, "Credit"));
         await EnsureStatus(await api.ReviewAsync(cast.Accountant, cast.ProjectId, recorded, "return", "Attach the delivery note"), HttpStatusCode.OK);
 
-        await WaitUntilAsync(() => sender.Sent.Count >= 2);
+        // The accountant's phone heard the record arrive for review (docs/cost-flow §2.8); the recorder's two phones
+        // hear it was returned. The accountant did the return and is told nothing about it.
+        await WaitUntilAsync(() => sender.Sent.Count >= 3);
         var pushed = sender.Sent.ToList();
-        // The recorder's two phones; the accountant did the action and is told nothing.
-        Assert.Equal(["engineer-phone", DeadToken], pushed.Select(push => push.Token).Order(StringComparer.Ordinal));
-        var message = pushed[0].Message;
-        Assert.Equal("RecordReturned", message.Type);
+        Assert.Equal(["engineer-phone", DeadToken], pushed.Where(push => push.Message.Type == "RecordReturned").Select(push => push.Token).Order(StringComparer.Ordinal));
+        Assert.Equal(["accountant-phone"], pushed.Where(push => push.Message.Type == "ReviewRequested").Select(push => push.Token));
+        Assert.DoesNotContain(pushed, push => push.Token == "accountant-phone" && push.Message.Type != "ReviewRequested");
+        var message = pushed.First(push => push.Message.Type == "RecordReturned").Message;
         Assert.Equal("ProjectExpense", message.EntityType);
         Assert.Equal(recorded.Id().ToString(), message.EntityKey);
         Assert.Equal(cast.ProjectId, message.ProjectId);
 
-        // The dead token is disabled: the next notification only reaches the live phone.
+        // The dead token is disabled: the next notification only reaches the live phone. Fixing the record sends it
+        // back to the reviewer's phone; approving it tells the recorder.
         var fixedRecord = await Json(await api.SendAsync(HttpMethod.Put, $"/api/projects/{cast.ProjectId}/expenses/{recorded.Id()}", cast.Engineer,
             EditBody(await api.GetExpenseAsync(cast.Engineer, cast.ProjectId, recorded.Id()), new() { ["quantity"] = 11m })));
+        await WaitUntilAsync(() => sender.Sent.Count >= 4);
         await EnsureStatus(await api.ReviewAsync(cast.Accountant, cast.ProjectId, fixedRecord, "approve"), HttpStatusCode.OK);
-        await WaitUntilAsync(() => sender.Sent.Count >= 3);
+        await WaitUntilAsync(() => sender.Sent.Count >= 5);
         await Task.Delay(TimeSpan.FromSeconds(1));
-        Assert.Equal(["engineer-phone"], sender.Sent.Skip(2).Select(push => push.Token));
-        Assert.Equal("RecordApproved", sender.Sent.Last().Message.Type);
+        var later = sender.Sent.Skip(3).ToList();
+        Assert.Equal([("accountant-phone", "ReviewRequested"), ("engineer-phone", "RecordApproved")],
+            later.Select(push => (push.Token, push.Message.Type)).Order());
     }
 
     [DatabaseFact]

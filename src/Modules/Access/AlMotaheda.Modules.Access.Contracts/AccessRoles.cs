@@ -18,4 +18,10 @@ public static class AccessRoles
 
     /// <summary>Purchasing: requisitions it receives, quotations, purchase orders and suppliers (no payments, no receipts).</summary>
     public const string Purchasing = "purchasing";
+
+    /// <summary>
+    /// Financial Manager: decides price changes and price variances and sees every project's money; never approves
+    /// payments and never manages users.
+    /// </summary>
+    public const string FinancialManager = "financial_manager";
 }

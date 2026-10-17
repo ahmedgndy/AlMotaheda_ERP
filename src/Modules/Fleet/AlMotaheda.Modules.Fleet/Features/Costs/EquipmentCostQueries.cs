@@ -24,6 +24,7 @@ internal sealed class EquipmentCostRow
     public int? SupplierId { get; init; }
     public CostChannel Channel { get; init; }
     public string? InvoiceNo { get; init; }
+    public int? ProjectItemId { get; init; }
     public EquipmentCostStatus Status { get; init; }
     public DateTime? ReviewedAt { get; init; }
     public int? ReviewedBy { get; init; }
@@ -196,6 +197,7 @@ internal static class EquipmentCostQueries
             SupplierId = cost.SupplierId,
             Channel = cost.Channel,
             InvoiceNo = cost.InvoiceNo,
+            ProjectItemId = cost.ProjectItemId,
             Status = cost.Status,
             ReviewedAt = cost.ReviewedAt,
             ReviewedBy = cost.ReviewedBy,

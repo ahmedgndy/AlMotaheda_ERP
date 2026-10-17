@@ -1,4 +1,5 @@
 using AlMotaheda.Modules.HR.Common;
+using AlMotaheda.Modules.HR.Features.CostAllocation;
 using AlMotaheda.Modules.HR.Features.Employees;
 using AlMotaheda.Modules.HR.Features.Payroll;
 using Microsoft.AspNetCore.Routing;
@@ -30,5 +31,15 @@ internal static class HrFeatures
         PrepareSalarySheet.Map(api);
         ReviewSalarySheet.Map(api);
         RequestSalaryPayment.Map(api);
+
+        // Salaries charged to projects by approved working days (docs/cost-flow §2.6).
+        CostAllocationPolicyEndpoints.Map(api);
+        ListProjectDays.Map(api);
+        RecordProjectDays.Map(api);
+        FixProjectDays.Map(api);
+        ReviewProjectDays.Map(api);
+        RunSalaryAllocation.Map(api);
+        ListSalaryAllocations.Map(api);
+        ProjectOptions.Map(api);
     }
 }

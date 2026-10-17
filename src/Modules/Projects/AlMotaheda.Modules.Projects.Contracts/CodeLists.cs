@@ -72,7 +72,10 @@ public static class CostGroups
     public const string SiteExpenses = "SiteExpenses";
     public const string Other = "Other";
 
-    public static IReadOnlyList<string> All { get; } = [Labor, Subcontractors, Materials, Equipment, SiteExpenses, Other];
+    /// <summary>Engineers' and employees' salaries allocated to the project by approved working days (HR).</summary>
+    public const string Staff = "Staff";
+
+    public static IReadOnlyList<string> All { get; } = [Labor, Subcontractors, Materials, Equipment, SiteExpenses, Other, Staff];
 
     public static bool TryParse(string? value, out string group) => CodeList.TryParse(All, value, out group);
 }

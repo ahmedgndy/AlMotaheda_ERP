@@ -14,6 +14,13 @@ public interface IUserDirectory
 
     /// <summary>Active users whose role is one of <paramref name="roleCodes"/>, ordered by English name.</summary>
     Task<IReadOnlyList<UserSummary>> ListActiveAsync(IReadOnlyCollection<string> roleCodes, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The ids of the active users who hold <paramref name="action"/> (a <c>PermissionAction</c> name, for example
+    /// <c>Approve</c>) on <paramref name="module"/> right now, after their personal overrides. Used to choose who
+    /// hears that something waits for their review; the permission is still checked again when they act.
+    /// </summary>
+    Task<IReadOnlyList<int>> ListActiveHoldingAsync(string module, string action, CancellationToken cancellationToken);
 }
 
 /// <summary>A user account as other modules see it. Never includes a password hash or sign-in details.</summary>

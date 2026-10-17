@@ -44,5 +44,8 @@ internal static class ArchiveFeatures
         UpdateDocument.Map(projects);
         ReplaceDocumentLinks.Map(projects);
         DeleteDocument.Map(projects);
+
+        // The supplier profile's documents: links only, never a copy (docs/cost-flow §2.5).
+        ListSupplierDocuments.Map(api);
     }
 }

@@ -214,8 +214,25 @@ public sealed class PlanningApiSecurityTests
     [Theory]
     [InlineData("approve")]
     [InlineData("reject")]
-    public async Task Price_changes_are_decided_by_an_executive_only(string decision)
+    public async Task Price_changes_are_refused_without_catalog_approve(string decision)
     {
+        var (app, database) = await StartAsync(new VisibleProject(IsCompleted: false, ProjectResponsibilities.ProjectManager, Executive: false));
+        await using var _ = app;
+        var token = TestTokens.Create(role: Manager, permissions: [("catalog", "VCE")]);
+
+        var response = await Send(app, "POST", $"/api/projects/1/price-changes/2/{decision}", token, new { note = "Checked with the supplier" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(database.Commands);
+    }
+
+    [Theory]
+    [InlineData("approve")]
+    [InlineData("reject")]
+    public async Task Price_changes_recheck_catalog_approve_in_the_database(string decision)
+    {
+        // The token says catalog Approve, but the database no longer does (the fake database has no such user):
+        // refused before the price is read, and nothing is written.
         var (app, database) = await StartAsync(new VisibleProject(IsCompleted: false, ProjectResponsibilities.ProjectManager, Executive: false));
         await using var _ = app;
         var token = TestTokens.Create(role: Manager, permissions: [("catalog", "VCEA")]);
@@ -223,7 +240,10 @@ public sealed class PlanningApiSecurityTests
         var response = await Send(app, "POST", $"/api/projects/1/price-changes/2/{decision}", token, new { note = "Checked with the supplier" });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        Assert.Empty(database.Commands);
+        Assert.Equal("permission_revoked", await CodeOf(response));
+        var command = Assert.Single(database.Commands);
+        Assert.StartsWith("SELECT", command);
+        Assert.DoesNotContain("[ItemPrice]", command);
     }
 
     [Theory]
@@ -326,7 +346,7 @@ public sealed class PlanningApiSecurityTests
             group => Assert.False(group.GetProperty("hasSource").GetBoolean()));
 
         var owed = (await Json(obligations)).GetProperty("groups").EnumerateArray().ToList();
-        Assert.Equal(3, owed.Count);
+        Assert.Equal(4, owed.Count);
         Assert.All(owed, group => Assert.Equal(0m, group.GetProperty("outstanding").GetDecimal()));
     }
 
@@ -346,7 +366,7 @@ public sealed class PlanningApiSecurityTests
         Assert.Contains("[ProjectId] = @", sql);
     }
 
-    private static readonly string[] ProjectSourceGroups = [CostGroups.Labor, CostGroups.Subcontractors, CostGroups.Equipment];
+    private static readonly string[] ProjectSourceGroups = [CostGroups.Labor, CostGroups.Subcontractors, CostGroups.Equipment, CostGroups.Staff];
 
     /// <summary>A body that passes validation for each endpoint, so tests reach the checks after it.</summary>
     internal static object? ValidBody(string method, string path)

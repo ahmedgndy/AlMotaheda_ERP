@@ -16,6 +16,10 @@ public static class ProjectRecordKinds
     public const string SubPayment = "SubPayment";
     public const string Equipment = "Equipment";
     public const string EquipmentCost = "EquipmentCost";
+    public const string RepairRequest = "RepairRequest";
+
+    /// <summary>A supplier (company-wide): a project document may be one of its documents (docs/cost-flow §2.5).</summary>
+    public const string Supplier = "Supplier";
 }
 
 /// <summary>

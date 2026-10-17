@@ -111,6 +111,11 @@ internal static class UpdateEquipmentCost
         }
 
         var oldStatus = cost.Status;
+        if (await EquipmentCostDuplicates.ExistsAsync(db, fields!, cost.Id, cancellationToken))
+        {
+            return FleetProblems.Duplicate();
+        }
+
         fields!.ApplyTo(cost);
         cost.Resubmit(caller.UserId, clock.UtcNow);
         db.Entry(cost).Property(candidate => candidate.RowVersion).OriginalValue = rowVersion!;

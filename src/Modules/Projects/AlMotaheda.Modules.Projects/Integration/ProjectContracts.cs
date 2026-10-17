@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using AlMotaheda.Modules.Access.Contracts;
 using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Projects.Data;
 using AlMotaheda.Modules.Projects.Security;
@@ -93,5 +94,65 @@ internal sealed class SupplierDirectoryContract(ProjectsDbContext db) : ISupplie
             .ToListAsync(cancellationToken);
 
         return suppliers.ToDictionary(supplier => supplier.Id);
+    }
+}
+
+/// <summary>The Projects module's answer to <see cref="IProjectDirectory"/>: projects by id, with no caller scope.</summary>
+internal sealed class ProjectDirectoryContract(ProjectsDbContext db) : IProjectDirectory
+{
+    public async Task<IReadOnlyDictionary<int, ProjectRef>> FindAsync(IReadOnlyCollection<int> projectIds, CancellationToken cancellationToken)
+    {
+        if (projectIds.Count == 0)
+        {
+            return new Dictionary<int, ProjectRef>();
+        }
+
+        var ids = projectIds.Distinct().ToArray();
+        return await db.Projects.AsNoTracking()
+            .Where(project => ids.Contains(project.Id))
+            .Select(project => new ProjectRef(project.Id, project.Code, project.NameAr, project.NameEn, project.Status == ProjectStatus.Completed))
+            .ToDictionaryAsync(project => project.Id, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ProjectRef>> ListOpenAsync(CancellationToken cancellationToken) =>
+        await db.Projects.AsNoTracking()
+            .Where(project => project.Status != ProjectStatus.Completed)
+            .OrderBy(project => project.Code)
+            .Select(project => new ProjectRef(project.Id, project.Code, project.NameAr, project.NameEn, false))
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<ProjectItemRef>> ListActiveItemsAsync(int projectId, CancellationToken cancellationToken) =>
+        await db.ProjectItems.AsNoTracking()
+            .Where(item => item.ProjectId == projectId && item.Status == ProjectItemStatus.Active)
+            .OrderBy(item => item.NameEn)
+            .Select(item => new ProjectItemRef(item.Id, item.ProjectId, item.NameAr, item.NameEn, true))
+            .ToListAsync(cancellationToken);
+}
+
+/// <summary>
+/// The Projects module's answer to <see cref="IProjectAudience"/>: the same scope rule as the project list
+/// (<see cref="ProjectScopes"/>), read from the database for users who are not the caller.
+/// </summary>
+internal sealed class ProjectAudienceContract(ProjectsDbContext db, IUserDirectory users) : IProjectAudience
+{
+    public async Task<IReadOnlySet<int>> WhoSeeAsync(int projectId, IReadOnlyCollection<int> userIds, CancellationToken cancellationToken)
+    {
+        if (userIds.Count == 0)
+        {
+            return new HashSet<int>();
+        }
+
+        var found = await users.FindAsync(userIds, cancellationToken);
+        var companyWide = found.Values.Where(user => user.IsActive && ProjectScopes.IsCompanyWide(user.RoleCode)).Select(user => user.Id);
+
+        var others = found.Values.Where(user => user.IsActive && !ProjectScopes.IsCompanyWide(user.RoleCode)).Select(user => user.Id).ToArray();
+        var members = others.Length == 0
+            ? []
+            : await db.ProjectMembers.AsNoTracking()
+                .Where(member => member.ProjectId == projectId && member.EndDate == null && others.Contains(member.UserId))
+                .Select(member => member.UserId)
+                .ToListAsync(cancellationToken);
+
+        return companyWide.Concat(members).ToHashSet();
     }
 }

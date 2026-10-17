@@ -35,7 +35,7 @@ public sealed class CacheTests(SqlServerFixture database)
             var cached = await cache.GetOrCreateAsync<ProjectCostData>(
                 $"projects:costs:{cast.ProjectId}:-:-:v1",
                 _ => throw new InvalidOperationException("Not cached: the factory ran."));
-            Assert.Equal(6, cached.Groups.Count);
+            Assert.Equal(AlMotaheda.Modules.Projects.Contracts.CostGroups.All.Count, cached.Groups.Count);
         }
 
         // An approved expense removes the cached figures: the very next read shows it.

@@ -56,9 +56,6 @@ internal static class PlanningProblems
         ApiProblem.Create(StatusCodes.Status409Conflict, CatalogItemExists, "This project's catalog already has an item with this name.");
 
     /// <summary>Price changes are decided by an Executive only, never by the person who asked.</summary>
-    public static ProblemHttpResult PricesDecidedByExecutive() =>
-        ApiProblem.ForbiddenResult("Only an Executive can approve or reject a price change.");
-
     public static ProblemHttpResult PendingChangeExists() =>
         ApiProblem.Create(
             StatusCodes.Status409Conflict,

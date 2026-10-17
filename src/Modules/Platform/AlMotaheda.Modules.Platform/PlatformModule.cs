@@ -8,6 +8,7 @@ using AlMotaheda.Modules.Platform.Features.Audit;
 using AlMotaheda.Modules.Platform.Features.Devices;
 using AlMotaheda.Modules.Platform.Features.Notifications;
 using AlMotaheda.Modules.Platform.Live;
+using AlMotaheda.Modules.Platform.Notifications;
 using AlMotaheda.Modules.Platform.Outbox;
 using AlMotaheda.Modules.Platform.Push;
 using AlMotaheda.Modules.Platform.Startup;
@@ -45,6 +46,9 @@ public sealed class PlatformModule : IModule
 
         services.AddCompanyClock();
         services.AddSingleton<PlatformLog>();
+
+        // "Waits for your review" recipients: permission holders who may see the project (docs/cost-flow §2.8).
+        services.AddScoped<ReviewRecipients>();
 
         // Live updates: signals only (no amounts), sent after commit by the outbox dispatcher.
         services.AddSignalR(hub => hub.MaximumReceiveMessageSize = 4 * 1024);

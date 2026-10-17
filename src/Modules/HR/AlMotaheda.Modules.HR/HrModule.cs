@@ -5,6 +5,7 @@ using AlMotaheda.Modules.HR.Data;
 using AlMotaheda.Modules.HR.Features;
 using AlMotaheda.Modules.HR.Integration;
 using AlMotaheda.Modules.HR.Startup;
+using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Reports.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -33,6 +34,8 @@ public sealed class HrModule : IModule
         services.AddCompanyClock();
         services.AddScoped<IPaymentSource, SalarySheetPaymentSource>();
         services.AddScoped<IReportSource, HrReports>();
+        services.AddScoped<IProjectCostSource, StaffCostSource>();
+        services.AddScoped<IItemCostSource, StaffItemCosts>();
         HrFeatures.AddServices(services);
 
         services.AddHostedService<HrStartup>();

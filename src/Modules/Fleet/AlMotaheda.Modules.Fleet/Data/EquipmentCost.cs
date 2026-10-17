@@ -57,6 +57,15 @@ internal sealed class EquipmentCost
 
     public string? InvoiceNo { get; set; }
 
+    /// <summary>
+    /// The project item ("بند") this cost belongs to, or empty while it is "not linked to an item yet" (docs/cost-flow
+    /// §2.4, replacing decision F1). A link, not a copy: the cost stays one record, counted once.
+    /// </summary>
+    public int? ProjectItemId { get; set; }
+
+    public DateTime? ItemLinkedAt { get; set; }
+    public int? ItemLinkedBy { get; set; }
+
     private EquipmentCostStatus _status = EquipmentCostStatus.Recorded;
 
     /// <summary>Set when the record is created; afterwards only this class's methods change it, through <see cref="Flow"/>.</summary>
@@ -160,6 +169,9 @@ internal enum EquipmentCostType
     Fuel,
     Maintenance,
     Repair,
+
+    /// <summary>Spare parts and replacement components bought for the machine.</summary>
+    SpareParts,
     Transport,
     Other,
 }

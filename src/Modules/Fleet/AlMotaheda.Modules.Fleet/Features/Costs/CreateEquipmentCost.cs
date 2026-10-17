@@ -38,7 +38,8 @@ internal static class CreateEquipmentCost
         string? Description,
         int? SupplierId,
         string? Channel,
-        string? InvoiceNo) : IEquipmentCostFieldsRequest;
+        string? InvoiceNo,
+        int? ProjectItemId = null) : IEquipmentCostFieldsRequest;
 
     public static void Map(IEndpointRouteBuilder api) =>
         api.MapPost("/projects/{projectId:int}/equipment-costs", HandleAsync)
@@ -53,6 +54,7 @@ internal static class CreateEquipmentCost
         IProjectAccess access,
         IUserDirectory users,
         ISupplierDirectory suppliers,
+        IProjectItems projectItems,
         CompanyClock clock,
         FleetLog log,
         CancellationToken cancellationToken)
@@ -96,12 +98,36 @@ internal static class CreateEquipmentCost
             return FleetProblems.NotOnProject();
         }
 
+        if (await EquipmentCostDuplicates.ExistsAsync(db, fields!, exceptCostId: null, cancellationToken))
+        {
+            return FleetProblems.Duplicate();
+        }
+
+        if (request.ProjectItemId is { } itemId)
+        {
+            var found = await projectItems.FindAsync(projectId, [itemId], cancellationToken);
+            if (!found.TryGetValue(itemId, out var item))
+            {
+                errors.Add("projectItemId", "The project item was not found on this project.");
+                return FleetProblems.Validation(errors);
+            }
+
+            if (!item.IsActive)
+            {
+                return FleetProblems.InactiveItem();
+            }
+        }
+
+        var now = clock.UtcNow;
         var cost = new EquipmentCost
         {
             ProjectId = projectId,
             Status = EquipmentCostStatus.Recorded,
-            CreatedAt = clock.UtcNow,
+            CreatedAt = now,
             CreatedBy = caller.UserId,
+            ProjectItemId = request.ProjectItemId,
+            ItemLinkedAt = request.ProjectItemId is null ? null : now,
+            ItemLinkedBy = request.ProjectItemId is null ? null : caller.UserId,
         };
         fields!.ApplyTo(cost);
 

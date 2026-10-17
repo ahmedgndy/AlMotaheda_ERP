@@ -63,8 +63,23 @@ internal sealed class ExpenseRow
 
     public List<ExpenseAdjustmentRef> Adjustments { get; init; } = [];
 
+    /// <summary>The supply's latest price variance that still describes it (not superseded), if any.</summary>
+    public ExpensePriceVarianceRef? PriceVariance { get; init; }
+
     public ExpenseSettlementRow Settlement => new(Id, Kind, Status, Channel, Category, SupplierId, ProjectItemId, AdjustedAmount, Allocated);
 }
+
+/// <summary>The price variance of a supply, as the record's views show it.</summary>
+internal sealed record ExpensePriceVarianceRef(
+    int Id,
+    PriceVarianceStatus Status,
+    decimal ReferencePrice,
+    decimal ActualPrice,
+    decimal UnitVariance,
+    decimal TotalVariance,
+    decimal VariancePercent,
+    VarianceDirection Direction,
+    string? DecisionNote);
 
 /// <summary>One correction of a record, as loaded with it.</summary>
 internal sealed record ExpenseAdjustmentRef(
@@ -265,6 +280,13 @@ internal static class ExpenseQueries
                     adjustment.Id, adjustment.Amount, adjustment.Reason, adjustment.Status, adjustment.RequestedAt, adjustment.RequestedBy,
                     adjustment.DecidedAt, adjustment.DecidedBy, adjustment.DecisionNote, adjustment.RowVersion))
                 .ToList(),
+            PriceVariance = db.PriceVariances
+                .Where(variance => variance.ExpenseId == expense.Id && variance.Status != PriceVarianceStatus.Superseded)
+                .OrderByDescending(variance => variance.Id)
+                .Select(variance => new ExpensePriceVarianceRef(
+                    variance.Id, variance.Status, variance.ReferencePrice, variance.ActualPrice, variance.UnitVariance, variance.TotalVariance,
+                    variance.VariancePercent, variance.Direction, variance.DecisionNote))
+                .FirstOrDefault(),
             Channel = expense.Channel,
             InvoiceNo = expense.InvoiceNo,
             DeliveryNoteNo = expense.DeliveryNoteNo,

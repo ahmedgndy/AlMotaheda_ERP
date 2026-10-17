@@ -30,6 +30,18 @@ internal sealed class FleetInboxSource(FleetDbContext db) : IWorkInboxSource
             items.AddRange(recorded.Select(cost => new WorkInboxItem(
                 WorkInboxReasons.Review, WorkInboxRecordTypes.EquipmentCost, cost.ProjectId, cost.Id, null, cost.CostDate, cost.CreatedAt,
                 $"{cost.Type} · {Name(cost.NameAr, cost.NameEn)}", seesMoney ? cost.Amount : null, cost.CreatedBy, null)));
+
+            // Repair requests waiting for a decision (docs/cost-flow §2.7): no amount, a request is never a cost.
+            var repairs = await db.RepairRequests.AsNoTracking()
+                .Where(request => ids.Contains(request.ProjectId) && request.Status == RepairRequestStatus.Open && request.RequestedBy != me)
+                .OrderBy(request => request.RequestedAt)
+                .Take(query.Limit)
+                .Select(request => new { request.Id, request.ProjectId, request.EquipmentId, request.RequestedAt, request.RequestedBy, request.Priority, request.Equipment.NameAr, request.Equipment.NameEn })
+                .ToListAsync(cancellationToken);
+            items.AddRange(repairs.Select(request => new WorkInboxItem(
+                WorkInboxReasons.Review, WorkInboxRecordTypes.RepairRequest, request.ProjectId, request.Id, request.EquipmentId,
+                DateOnly.FromDateTime(request.RequestedAt), request.RequestedAt, $"{request.Priority} · {Name(request.NameAr, request.NameEn)}", null,
+                request.RequestedBy, null)));
         }
 
         var returned = await db.EquipmentCosts.AsNoTracking()

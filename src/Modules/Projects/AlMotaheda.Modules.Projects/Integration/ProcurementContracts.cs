@@ -37,12 +37,19 @@ internal sealed class ProjectCatalogContract(ProjectsDbContext db) : IProjectCat
                     .ThenByDescending(price => price.Id)
                     .Select(price => (decimal?)price.Price)
                     .FirstOrDefault(),
+                // No project price in force: the master catalog's price of the item it was selected from.
+                MasterPrice = db.MasterItemPrices
+                    .Where(price => price.MasterItemId == item.MasterItemId && price.Status == ItemPriceStatus.Approved && price.EffectiveFrom <= date)
+                    .OrderByDescending(price => price.EffectiveFrom)
+                    .ThenByDescending(price => price.Id)
+                    .Select(price => (decimal?)price.Price)
+                    .FirstOrDefault(),
             })
             .ToListAsync(cancellationToken);
 
         return items.ToDictionary(
             item => item.Id,
-            item => new CatalogItemRef(item.Id, projectId, item.NameAr, item.NameEn, item.Unit, item.Status == CatalogItemStatus.Active, item.Price));
+            item => new CatalogItemRef(item.Id, projectId, item.NameAr, item.NameEn, item.Unit, item.Status == CatalogItemStatus.Active, item.Price ?? item.MasterPrice));
     }
 }
 

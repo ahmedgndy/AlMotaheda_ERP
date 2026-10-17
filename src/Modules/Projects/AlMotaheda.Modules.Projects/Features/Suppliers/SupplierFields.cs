@@ -15,6 +15,48 @@ internal interface ISupplierFieldsRequest
     string? TaxNumber { get; }
     string? Notes { get; }
     string? Status { get; }
+
+    // Optional profile fields (docs/cost-flow §2.5). Left out (null) keeps the saved value; "" clears it, so an app
+    // that doesn't send them yet never wipes them.
+    string? LegalName { get; }
+    string? ContactPerson { get; }
+    string? Email { get; }
+    string? Address { get; }
+    string? CommercialRegistrationNo { get; }
+}
+
+/// <summary>The optional profile fields after validation. <c>null</c> = keep; "" = clear.</summary>
+internal sealed record SupplierProfileFields(string? LegalName, string? ContactPerson, string? Email, string? Address, string? CommercialRegistrationNo)
+{
+    public static SupplierProfileFields Validate(ISupplierFieldsRequest request, ValidationErrors errors)
+    {
+        string? Field(string? value, int max, string field, string label) =>
+            value is null ? null : Input.OptionalText(value, max, errors, field, label) ?? "";
+
+        var email = Field(request.Email, SupplierConfiguration.EmailMaxLength, "email", "The email");
+        if (email is { Length: > 0 } && (!email.Contains('@') || email.StartsWith('@') || email.EndsWith('@') || email.Contains(' ')))
+        {
+            errors.Add("email", "The email is not valid.");
+        }
+
+        return new SupplierProfileFields(
+            Field(request.LegalName, SupplierConfiguration.NameMaxLength, "legalName", "The legal name"),
+            Field(request.ContactPerson, SupplierConfiguration.NameMaxLength, "contactPerson", "The contact person"),
+            email,
+            Field(request.Address, SupplierConfiguration.AddressMaxLength, "address", "The address"),
+            Field(request.CommercialRegistrationNo, SupplierConfiguration.TaxNumberMaxLength, "commercialRegistrationNo", "The commercial registration number"));
+    }
+
+    public void ApplyTo(Supplier supplier)
+    {
+        static string? Keep(string? value, string? current) => value is null ? current : value.Length == 0 ? null : value;
+
+        supplier.LegalName = Keep(LegalName, supplier.LegalName);
+        supplier.ContactPerson = Keep(ContactPerson, supplier.ContactPerson);
+        supplier.Email = Keep(Email, supplier.Email);
+        supplier.Address = Keep(Address, supplier.Address);
+        supplier.CommercialRegistrationNo = Keep(CommercialRegistrationNo, supplier.CommercialRegistrationNo);
+    }
 }
 
 /// <summary>The supplier form after validation. One set of rules for create and edit.</summary>
@@ -84,7 +126,12 @@ internal sealed record SupplierView(
     int CreatedBy,
     DateTime? UpdatedAt,
     int? UpdatedBy,
-    string RowVersion)
+    string RowVersion,
+    string? LegalName,
+    string? ContactPerson,
+    string? Email,
+    string? Address,
+    string? CommercialRegistrationNo)
 {
     public static SupplierView From(Supplier supplier) => new(
         supplier.Id,
@@ -99,7 +146,12 @@ internal sealed record SupplierView(
         supplier.CreatedBy,
         supplier.UpdatedAt,
         supplier.UpdatedBy,
-        RowVersions.Format(supplier.RowVersion));
+        RowVersions.Format(supplier.RowVersion),
+        supplier.LegalName,
+        supplier.ContactPerson,
+        supplier.Email,
+        supplier.Address,
+        supplier.CommercialRegistrationNo);
 }
 
 /// <summary>The supplier queries, as <see cref="IQueryable{T}"/> so tests can prove they translate to SQL.</summary>

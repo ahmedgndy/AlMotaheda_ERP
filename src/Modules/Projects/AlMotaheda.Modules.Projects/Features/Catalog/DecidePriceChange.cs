@@ -28,12 +28,12 @@ internal static class ApprovePriceChange
         projects.MapPost("/{projectId:int}/price-changes/{priceId:int}/approve", HandleAsync)
             .RequirePermission(CatalogPermissions.Module, PermissionAction.Approve)
             .WithName("ApprovePriceChange")
-            .WithSummary("Approve a pending price change (Executive only, never your own request)");
+            .WithSummary("Approve a pending price change (catalog Approve, re-checked; never your own request)");
 
     internal static Task<Results<Ok<PriceChangeView>, ValidationProblem, ProblemHttpResult>> HandleAsync(
         int projectId, int priceId, PriceDecisionRequest request, HttpContext httpContext, ProjectsDbContext db, IProjectAccess access,
-        IUserDirectory users, CompanyClock clock, ProjectsLog log, CancellationToken cancellationToken) =>
-        PriceDecision.HandleAsync(ItemPriceStatus.Approved, projectId, priceId, request, httpContext, db, access, users, clock, log, cancellationToken);
+        IUserDirectory users, PermissionGate gate, CompanyClock clock, ProjectsLog log, CancellationToken cancellationToken) =>
+        PriceDecision.HandleAsync(ItemPriceStatus.Approved, projectId, priceId, request, httpContext, db, access, users, gate, clock, log, cancellationToken);
 }
 
 /// <summary><c>POST /api/projects/{pid}/price-changes/{priceId}/reject</c>: the request is closed; the price stays.</summary>
@@ -43,16 +43,17 @@ internal static class RejectPriceChange
         projects.MapPost("/{projectId:int}/price-changes/{priceId:int}/reject", HandleAsync)
             .RequirePermission(CatalogPermissions.Module, PermissionAction.Approve)
             .WithName("RejectPriceChange")
-            .WithSummary("Reject a pending price change with a note (Executive only, never your own request)");
+            .WithSummary("Reject a pending price change with a note (catalog Approve, re-checked; never your own request)");
 
     internal static Task<Results<Ok<PriceChangeView>, ValidationProblem, ProblemHttpResult>> HandleAsync(
         int projectId, int priceId, PriceDecisionRequest request, HttpContext httpContext, ProjectsDbContext db, IProjectAccess access,
-        IUserDirectory users, CompanyClock clock, ProjectsLog log, CancellationToken cancellationToken) =>
-        PriceDecision.HandleAsync(ItemPriceStatus.Rejected, projectId, priceId, request, httpContext, db, access, users, clock, log, cancellationToken);
+        IUserDirectory users, PermissionGate gate, CompanyClock clock, ProjectsLog log, CancellationToken cancellationToken) =>
+        PriceDecision.HandleAsync(ItemPriceStatus.Rejected, projectId, priceId, request, httpContext, db, access, users, gate, clock, log, cancellationToken);
 }
 
 /// <summary>
-/// The one decision flow behind approve and reject: catalog Approve and the Executive role, never on your own
+/// The one decision flow behind approve and reject: catalog Approve re-checked in the database (the Financial
+/// Manager or an Executive by default, docs/cost-flow §2.1), never on your own
 /// request, only while pending. A price row changes exactly once, here. It runs under the project lock, so two
 /// Executives can't both decide the same request (the row has no row version: it is insert-only).
 /// </summary>
@@ -67,6 +68,7 @@ internal static class PriceDecision
         ProjectsDbContext db,
         IProjectAccess access,
         IUserDirectory users,
+        PermissionGate gate,
         CompanyClock clock,
         ProjectsLog log,
         CancellationToken cancellationToken)
@@ -91,10 +93,9 @@ internal static class PriceDecision
             return ProjectProblems.ProjectNotFound();
         }
 
-        if (!caller.IsExecutive)
+        if (await gate.CheckAsync(httpContext.User, CatalogPermissions.Module, PermissionAction.Approve, $"PriceChange{target}", cancellationToken) is { } refused)
         {
-            log.ActionRefused(caller.UserId, $"PriceChange{target}", "not an Executive");
-            return PlanningProblems.PricesDecidedByExecutive();
+            return refused;
         }
 
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);

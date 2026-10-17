@@ -35,6 +35,13 @@ internal sealed class CatalogItem
 
     public CatalogItemStatus Status { get; set; } = CatalogItemStatus.Active;
 
+    /// <summary>
+    /// The master catalog definition this item was selected from, or empty for an item made on the project only.
+    /// When the project has no approved price of its own on a date, the master's approved price applies.
+    /// </summary>
+    public int? MasterItemId { get; set; }
+    public MasterItem? MasterItem { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public int CreatedBy { get; set; }
     public DateTime? UpdatedAt { get; set; }

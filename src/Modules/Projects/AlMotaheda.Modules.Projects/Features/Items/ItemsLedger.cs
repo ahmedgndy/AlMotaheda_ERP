@@ -19,8 +19,8 @@ internal sealed record SupplierLedgerRow(int ExpenseId, int? ItemId, int? Suppli
 
 /// <summary>
 /// The figures of one project item, of the whole project, or of the "not linked yet" group. Every number is a sum
-/// of approved source records from three sources that never overlap: supplier records (this module), subcontract
-/// work (Subcontractors) and internal labor (Workforce).
+/// of approved source records from sources that never overlap: supplier records (this module), subcontract work
+/// (Subcontractors), internal labor (Workforce), equipment costs (Fleet) and allocated staff salaries (HR).
 /// </summary>
 internal sealed record ItemFigures(
     int SupplierRecordCount,
@@ -34,7 +34,13 @@ internal sealed record ItemFigures(
     decimal LaborCost,
     decimal SupplierPaid,
     decimal SubcontractorPaid,
-    decimal LaborPaid)
+    decimal LaborPaid,
+    int EquipmentRecordCount = 0,
+    decimal EquipmentCost = 0,
+    decimal EquipmentPaid = 0,
+    int StaffRecordCount = 0,
+    decimal StaffCost = 0,
+    decimal StaffPaid = 0)
 {
     public static ItemFigures Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
@@ -43,13 +49,13 @@ internal sealed record ItemFigures(
 
     public decimal SupplierAndSubcontractorCost => SupplierCost + SubcontractorCost;
 
-    public decimal TotalCost => SupplierAndSubcontractorCost + LaborCost;
+    public decimal TotalCost => SupplierAndSubcontractorCost + LaborCost + EquipmentCost + StaffCost;
 
-    public decimal Paid => SupplierPaid + SubcontractorPaid + LaborPaid;
+    public decimal Paid => SupplierPaid + SubcontractorPaid + LaborPaid + EquipmentPaid + StaffPaid;
 
     public decimal Outstanding => TotalCost - Paid;
 
-    public int RecordCount => SupplierRecordCount + SubcontractRecordCount + LaborRecordCount;
+    public int RecordCount => SupplierRecordCount + SubcontractRecordCount + LaborRecordCount + EquipmentRecordCount + StaffRecordCount;
 
     public ItemFigures Add(ItemFigures other) => new(
         SupplierRecordCount + other.SupplierRecordCount,
@@ -63,8 +69,25 @@ internal sealed record ItemFigures(
         LaborCost + other.LaborCost,
         SupplierPaid + other.SupplierPaid,
         SubcontractorPaid + other.SubcontractorPaid,
-        LaborPaid + other.LaborPaid);
+        LaborPaid + other.LaborPaid,
+        EquipmentRecordCount + other.EquipmentRecordCount,
+        EquipmentCost + other.EquipmentCost,
+        EquipmentPaid + other.EquipmentPaid,
+        StaffRecordCount + other.StaffRecordCount,
+        StaffCost + other.StaffCost,
+        StaffPaid + other.StaffPaid);
+
+    /// <summary>The cost of one group (<c>CostGroups</c> name) inside these figures.</summary>
+    public decimal CostOf(string group) => group switch
+    {
+        CostGroups.Equipment => EquipmentCost,
+        CostGroups.Staff => StaffCost,
+        _ => 0,
+    };
 }
+
+/// <summary>One per-item total of an <see cref="IItemCostSource"/>, tagged with its group.</summary>
+internal sealed record GroupItemTotal(string Group, ItemCostTotal Total);
 
 /// <summary>What <see cref="ItemsLedger"/> computed for one project.</summary>
 /// <param name="ByItem">The figures of every item that has at least one record. Items without records are absent.</param>
@@ -85,10 +108,12 @@ internal static class ItemsLedger
     /// <param name="supplierRows">Approved supplier-side records of the project, linked or not.</param>
     /// <param name="subcontract">One total per item from Subcontractors, plus one with a <c>null</c> item.</param>
     /// <param name="labor">One total per item from Workforce, plus one with a <c>null</c> item.</param>
+    /// <param name="others">Per-item totals of the other item cost sources: equipment (Fleet) and staff (HR).</param>
     public static ItemsLedgerResult Compute(
         IReadOnlyList<SupplierLedgerRow> supplierRows,
         IReadOnlyList<ItemCostTotal> subcontract,
-        IReadOnlyList<ItemCostTotal> labor)
+        IReadOnlyList<ItemCostTotal> labor,
+        IReadOnlyList<GroupItemTotal>? others = null)
     {
         var byItem = new Dictionary<int, ItemFigures>();
         var unallocated = ItemFigures.Empty;
@@ -136,6 +161,16 @@ internal static class ItemsLedger
                 WorkerCount = total.PartyCount,
                 LaborCost = total.Cost,
                 LaborPaid = total.Paid,
+            });
+        }
+
+        foreach (var (group, total) in others ?? [])
+        {
+            Put(total.ItemId, group switch
+            {
+                CostGroups.Equipment => ItemFigures.Empty with { EquipmentRecordCount = total.RecordCount, EquipmentCost = total.Cost, EquipmentPaid = total.Paid },
+                CostGroups.Staff => ItemFigures.Empty with { StaffRecordCount = total.RecordCount, StaffCost = total.Cost, StaffPaid = total.Paid },
+                _ => throw new ArgumentOutOfRangeException(nameof(others), group, "Only equipment and staff are item cost sources."),
             });
         }
 

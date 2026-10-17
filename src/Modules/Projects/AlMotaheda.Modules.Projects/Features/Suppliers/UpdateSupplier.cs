@@ -27,7 +27,12 @@ internal static class UpdateSupplier
         string? TaxNumber,
         string? Notes,
         string? Status,
-        string? RowVersion) : ISupplierFieldsRequest;
+        string? RowVersion,
+        string? LegalName = null,
+        string? ContactPerson = null,
+        string? Email = null,
+        string? Address = null,
+        string? CommercialRegistrationNo = null) : ISupplierFieldsRequest;
 
     public static void Map(IEndpointRouteBuilder api) =>
         api.MapPut("/suppliers/{supplierId:int}", HandleAsync)
@@ -52,6 +57,7 @@ internal static class UpdateSupplier
         var errors = new ValidationErrors();
         // The form shows the current status, so it is always sent on edit.
         var fields = SupplierFields.Validate(request, defaultStatus: null, errors);
+        var profile = SupplierProfileFields.Validate(request, errors);
         var rowVersion = RowVersions.Parse(request.RowVersion, errors);
         if (errors.HasErrors)
         {
@@ -72,6 +78,7 @@ internal static class UpdateSupplier
 
         var oldStatus = supplier.Status;
         fields.ApplyTo(supplier);
+        profile.ApplyTo(supplier);
         supplier.UpdatedAt = clock.UtcNow;
         supplier.UpdatedBy = caller.UserId;
 

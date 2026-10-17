@@ -112,6 +112,7 @@ internal sealed class OutboxDispatcher(
             try
             {
                 var notifications = Handle(message, time.GetUtcNow().UtcDateTime).ToList();
+                notifications.AddRange(await ReviewNotificationsAsync(scope.ServiceProvider, message, notifications, time.GetUtcNow().UtcDateTime, cancellationToken));
                 var changes = Changes(message).ToList();
                 changed.AddRange(ChangedRecords(message));
                 db.Notifications.AddRange(notifications);
@@ -159,6 +160,49 @@ internal sealed class OutboxDispatcher(
         }
 
         return messages.Count;
+    }
+
+    /// <summary>
+    /// "Waits for your review" notifications (docs/cost-flow §2.8): their recipients are read from Access and
+    /// Projects, so they are found here, in the batch's transaction, rather than by the pure rules.
+    /// </summary>
+    private static async Task<IReadOnlyList<Notification>> ReviewNotificationsAsync(
+        IServiceProvider services, OutboxMessage message, IReadOnlyList<Notification> already, DateTime now, CancellationToken cancellationToken)
+    {
+        if (services.GetService<ReviewRecipients>() is not { } recipients)
+        {
+            return [];
+        }
+
+        var notifications = new List<Notification>();
+        foreach (var change in ChangedRecords(message))
+        {
+            foreach (var draft in await recipients.DraftsAsync(change, message.UserId, cancellationToken))
+            {
+                if (already.Any(existing => existing.RecipientUserId == draft.RecipientUserId && existing.EntityType == change.Entity
+                        && existing.EntityKey == change.Key && existing.Type == draft.Type)
+                    || notifications.Any(existing => existing.RecipientUserId == draft.RecipientUserId && existing.EntityType == change.Entity
+                        && existing.EntityKey == change.Key))
+                {
+                    continue;
+                }
+
+                notifications.Add(new Notification
+                {
+                    RecipientUserId = draft.RecipientUserId,
+                    Type = draft.Type,
+                    TitleAr = draft.TitleAr,
+                    TitleEn = draft.TitleEn,
+                    EntityType = change.Entity,
+                    EntityKey = change.Key,
+                    ProjectId = change.ProjectId,
+                    SourceMessageId = message.MessageId,
+                    CreatedAt = now,
+                });
+            }
+        }
+
+        return notifications;
     }
 
     private static IEnumerable<EntityChange> ChangedRecords(OutboxMessage message) =>

@@ -29,6 +29,10 @@ internal static class ProjectProblems
     public static ProblemHttpResult ExecutiveOnly() =>
         ApiProblem.ForbiddenResult("Only an Executive can do this.");
 
+    /// <summary>The token still says yes, but the database says the permission was removed or the sign-in ended.</summary>
+    public static ProblemHttpResult PermissionRevoked() =>
+        ApiProblem.Create(StatusCodes.Status403Forbidden, "permission_revoked", "Your permission for this changed. Sign in again.");
+
     public static ProblemHttpResult EditNotAllowed() =>
         ApiProblem.ForbiddenResult("Only an Executive or this project's manager can edit it.");
 

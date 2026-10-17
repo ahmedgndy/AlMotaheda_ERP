@@ -16,7 +16,19 @@ internal sealed class Supplier
 
     public SupplierKind Kind { get; set; } = SupplierKind.Materials;
 
+    /// <summary>The registered (legal) company name, when it differs from the display names. Optional.</summary>
+    public string? LegalName { get; set; }
+
+    public string? ContactPerson { get; set; }
+
     public string? Phone { get; set; }
+
+    public string? Email { get; set; }
+
+    public string? Address { get; set; }
+
+    /// <summary>Commercial registration number. Optional.</summary>
+    public string? CommercialRegistrationNo { get; set; }
     public string? TaxNumber { get; set; }
     public string? Notes { get; set; }
 

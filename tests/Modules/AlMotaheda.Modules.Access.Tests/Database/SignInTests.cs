@@ -20,9 +20,9 @@ public sealed class SignInTests(SqlServerFixture database)
             Executive = await db.Users.Include(user => user.Role).SingleAsync(),
         });
 
-        Assert.Equal(8, counts.Roles);
+        Assert.Equal(9, counts.Roles);
         Assert.Equal(95, counts.Permissions);
-        Assert.Equal(232, counts.RolePermissions);
+        Assert.Equal(256, counts.RolePermissions);
         Assert.Equal(AccessApi.ExecutiveEmail, counts.Executive.Email);
         Assert.Equal("executive", counts.Executive.Role.Code);
         Assert.True(counts.Executive.MustChangePassword);

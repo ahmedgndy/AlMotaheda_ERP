@@ -29,6 +29,8 @@
     <ProjectReference Include="..\..\Access\AlMotaheda.Modules.Access.Contracts\AlMotaheda.Modules.Access.Contracts.csproj" />
     <!-- Salary sheets are paid through Finance payment requests; Finance marks the sheet paid once the money left. -->
     <ProjectReference Include="..\..\Finance\AlMotaheda.Modules.Finance.Contracts\AlMotaheda.Modules.Finance.Contracts.csproj" />
+    <!-- Salaries charged to projects (docs/cost-flow §2.6): project lookups and the project cost contracts. -->
+    <ProjectReference Include="..\..\Projects\AlMotaheda.Modules.Projects.Contracts\AlMotaheda.Modules.Projects.Contracts.csproj" />
     <!-- The module's reports (IReportSource). -->
     <ProjectReference Include="..\..\Reports\AlMotaheda.Modules.Reports.Contracts\AlMotaheda.Modules.Reports.Contracts.csproj" />
   </ItemGroup>

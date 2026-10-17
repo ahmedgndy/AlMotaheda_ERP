@@ -34,6 +34,13 @@ internal sealed class ProjectItem
 
     public ProjectItemStatus Status { get; set; } = ProjectItemStatus.Active;
 
+    /// <summary>The master catalog definition this item was selected from, or empty for an item made on the project only.</summary>
+    public int? MasterItemId { get; set; }
+    public MasterItem? MasterItem { get; set; }
+
+    /// <summary>The planned components of an item assembled from several costs (docs/cost-flow §2.4).</summary>
+    public List<ProjectItemComponent> Components { get; } = [];
+
     /// <summary>Set, with <see cref="DeactivatedBy"/>, only while the item is inactive.</summary>
     public DateTime? DeactivatedAt { get; set; }
     public int? DeactivatedBy { get; set; }

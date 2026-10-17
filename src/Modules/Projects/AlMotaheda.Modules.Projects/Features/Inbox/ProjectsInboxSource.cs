@@ -1,5 +1,4 @@
 using AlMotaheda.BuildingBlocks.Authorization;
-using AlMotaheda.Modules.Access.Contracts;
 using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Projects.Data;
 using AlMotaheda.Modules.Projects.Features.Catalog;
@@ -94,8 +93,9 @@ internal sealed class ProjectsInboxSource(ProjectsDbContext db) : IWorkInboxSour
             });
         }
 
-        // Price changes are decided by an Executive only, never on their own request.
-        if (query.Caller.GetRoleCode() == AccessRoles.Executive && query.Caller.HasPermission(CatalogPermissions.Module, PermissionAction.Approve))
+        // Price changes and price variances are decided with catalog Approve (the Financial Manager or an Executive),
+        // never on one's own request or supply.
+        if (query.Caller.HasPermission(CatalogPermissions.Module, PermissionAction.Approve))
         {
             var prices = await db.ItemPrices.AsNoTracking()
                 .Where(price => ids.Contains(price.CatalogItem.ProjectId) && price.Status == ItemPriceStatus.Pending && price.RequestedBy != me)
@@ -107,6 +107,22 @@ internal sealed class ProjectsInboxSource(ProjectsDbContext db) : IWorkInboxSour
                 WorkInboxReasons.Review, WorkInboxRecordTypes.PriceChange, price.ProjectId, price.Id, price.CatalogItemId, price.EffectiveFrom,
                 price.RequestedAt, string.IsNullOrWhiteSpace(price.NameEn) ? price.NameAr : $"{price.NameAr} / {price.NameEn}",
                 price.Price, price.RequestedBy, null)));
+
+            var variances = await db.PriceVariances.AsNoTracking()
+                .Where(variance => ids.Contains(variance.ProjectId) && variance.Status == PriceVarianceStatus.Open
+                    && variance.RaisedBy != me && variance.Expense.CreatedBy != me)
+                .OrderBy(variance => variance.RaisedAt)
+                .Take(query.Limit)
+                .Select(variance => new
+                {
+                    variance.Id, variance.ProjectId, variance.ExpenseId, variance.Expense.ExpenseDate, variance.RaisedAt, variance.RaisedBy,
+                    variance.Expense.ItemName, variance.TotalVariance,
+                })
+                .ToListAsync(cancellationToken);
+            var seesCatalogMoney = query.Caller.HasPermission(CatalogPermissions.Module, PermissionAction.SeeMoney);
+            items.AddRange(variances.Select(variance => new WorkInboxItem(
+                WorkInboxReasons.Review, WorkInboxRecordTypes.PriceVariance, variance.ProjectId, variance.Id, variance.ExpenseId, variance.ExpenseDate,
+                variance.RaisedAt, variance.ItemName ?? "", seesCatalogMoney ? variance.TotalVariance : null, variance.RaisedBy, null)));
         }
 
         return items;

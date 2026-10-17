@@ -20,7 +20,8 @@ public sealed class PermissionTests(SqlServerFixture database)
 
         Assert.Equal(19, body.GetProperty("modules").GetArrayLength());
         Assert.Equal(["View", "Create", "Edit", "Approve", "SeeMoney"], body.GetProperty("actions").EnumerateArray().Select(action => action.GetString()));
-        Assert.Equal(8, roles.Count);
+        Assert.Equal(9, roles.Count);
+        Assert.Equal(["View", "Approve", "SeeMoney"], Actions(roles["financial_manager"], "catalog"));
         Assert.Equal(["View", "Create", "Edit", "SeeMoney"], Actions(roles["hr"], "hr"));
         Assert.Equal(["View", "Create", "Edit", "SeeMoney"], Actions(roles["purchasing"], "procurement"));
         Assert.False(roles["executive"].GetProperty("isEditable").GetBoolean());

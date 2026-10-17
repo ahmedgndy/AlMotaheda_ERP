@@ -24,6 +24,9 @@ internal static class HrProblems
     public const string PaymentRequested = "payment_requested";
     public const string IdempotencyKeyReused = "idempotency_key_reused";
     public const string Busy = "busy";
+    public const string DaysOverMonthCode = "days_over_month";
+    public const string DaysPendingCode = "days_pending";
+    public const string AllocationPolicyNotSetCode = "allocation_policy_not_set";
 
     public static ValidationProblem Validation(ValidationErrors errors) => ApiProblem.Validation(errors.ToDictionary());
 
@@ -81,6 +84,18 @@ internal static class HrProblems
 
     public static ProblemHttpResult KeyUsedElsewhere() =>
         Conflict(IdempotencyKeyReused, "This form was already sent with different details. Reload and try again.");
+
+    public static ProblemHttpResult ReviewerIsRecorder() =>
+        Conflict(OwnRecord, "You recorded these days, so someone else must review them.");
+
+    public static ProblemHttpResult DaysOverMonth(int limit) =>
+        Conflict(DaysOverMonthCode, $"The employee's days on all projects in this month would be more than the month's {limit} working days.");
+
+    public static ProblemHttpResult DaysPending() =>
+        Conflict(DaysPendingCode, "These days are already waiting for review for this employee, project and month. Fix that entry instead.");
+
+    public static ProblemHttpResult AllocationPolicyNotSet() =>
+        Conflict(AllocationPolicyNotSetCode, "The working days per month are not set yet. An Executive must set them before salaries are charged to projects.");
 
     public static ProblemHttpResult TryAgainLater() =>
         ApiProblem.Create(StatusCodes.Status503ServiceUnavailable, Busy, "The payroll is being changed by someone else. Try again in a moment.");

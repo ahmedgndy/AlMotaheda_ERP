@@ -26,6 +26,9 @@ internal sealed class FleetDbContext(DbContextOptions<FleetDbContext> options) :
     /// <summary>Every voided payment of an equipment cost: written at the void, never changed.</summary>
     public DbSet<VoidedEquipmentCostPayment> VoidedEquipmentCostPayments => Set<VoidedEquipmentCostPayment>();
 
+    /// <summary>Repair requests: never costs (docs/cost-flow §2.7).</summary>
+    public DbSet<RepairRequest> RepairRequests => Set<RepairRequest>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(Schema);

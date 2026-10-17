@@ -48,4 +48,16 @@ internal sealed partial class HrLog(ILogger<HrLog> logger)
 
     [LoggerMessage(EventId = 9054, Level = LogLevel.Information, Message = "User {ActorId} confirmed payment request {RequestId}: salary sheet {SheetId} paid")]
     public partial void SheetPaid(int actorId, int sheetId, int requestId);
+
+    [LoggerMessage(EventId = 9061, Level = LogLevel.Information, Message = "User {ActorId} recorded project days {EntryId} for employee {EmployeeId} on project {ProjectId}")]
+    public partial void ProjectDaysRecorded(int actorId, int entryId, int employeeId, int projectId);
+
+    [LoggerMessage(EventId = 9062, Level = LogLevel.Information, Message = "User {ActorId} moved project days {EntryId} to {Status}")]
+    public partial void ProjectDaysMoved(int actorId, int entryId, string status);
+
+    [LoggerMessage(EventId = 9063, Level = LogLevel.Information, Message = "User {ActorId} ran the salary allocation of {Month}: {Created} created, {Reversed} reversed, {Unchanged} unchanged, {Skipped} skipped")]
+    public partial void AllocationRun(int actorId, string month, int created, int reversed, int unchanged, int skipped);
+
+    [LoggerMessage(EventId = 9064, Level = LogLevel.Information, Message = "User {ActorId} changed the salary allocation policy")]
+    public partial void AllocationPolicyChanged(int actorId);
 }

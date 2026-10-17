@@ -21,6 +21,11 @@ internal sealed class HrDbContext(DbContextOptions<HrDbContext> options) : DbCon
     public DbSet<SalarySheet> SalarySheets => Set<SalarySheet>();
     public DbSet<SalarySheetLine> SalarySheetLines => Set<SalarySheetLine>();
 
+    // Salaries charged to projects by approved working days (docs/cost-flow §2.6).
+    public DbSet<CostAllocationPolicy> CostAllocationPolicies => Set<CostAllocationPolicy>();
+    public DbSet<ProjectWorkDays> ProjectWorkDays => Set<ProjectWorkDays>();
+    public DbSet<SalaryCostAllocation> SalaryCostAllocations => Set<SalaryCostAllocation>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(Schema);

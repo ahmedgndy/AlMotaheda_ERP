@@ -7,7 +7,7 @@ namespace AlMotaheda.Modules.Projects.Features.Catalog;
 
 /// <summary>
 /// The permission module of the price catalog: View to see items and prices, Create to add and edit items, Edit to
-/// request a price change, Approve (with the Executive role) to decide one, See money for estimated values and
+/// request a price change, Approve to decide one (re-checked in the database), See money for estimated values and
 /// amounts bought.
 /// </summary>
 internal static class CatalogPermissions
@@ -75,7 +75,9 @@ internal sealed record CatalogItemView(
     string? SupplierNameAr,
     string? SupplierNameEn,
     string Status,
+    int? MasterItemId,
     decimal? CurrentPrice,
+    string? PriceSource,
     DateOnly? CurrentPriceFrom,
     decimal? PreviousPrice,
     decimal? ChangePercent,
@@ -96,12 +98,15 @@ internal sealed record CatalogItemView(
     public static CatalogItemView From(
         CatalogItemHeader header,
         IEnumerable<PriceRow> prices,
+        IEnumerable<PriceRow> masterPrices,
         IEnumerable<PurchaseRow> purchases,
         DateOnly today,
         bool seesMoney,
         IReadOnlyDictionary<int, UserSummary> people)
     {
-        var position = CatalogPricing.Position(prices, today);
+        var rows = prices.ToList();
+        var position = CatalogPricing.Position(rows, today);
+        var reference = CatalogPricing.Reference(rows, masterPrices, today);
         var bought = CatalogPricing.Purchases(purchases, header.Unit);
 
         return new CatalogItemView(
@@ -115,15 +120,17 @@ internal sealed record CatalogItemView(
             header.SupplierNameAr,
             header.SupplierNameEn,
             header.Status.ToString(),
-            position.Current?.Price,
-            position.Current?.EffectiveFrom,
-            position.Previous?.Price,
-            position.ChangePercent,
+            header.MasterItemId,
+            reference.Current?.Price,
+            reference.Source,
+            reference.Current?.EffectiveFrom,
+            reference.Previous?.Price,
+            reference.ChangePercent,
             position.PriceStatus,
             position.Pending is { } pending ? PriceChangeView.From(pending, header.NameAr, header.NameEn, people) : null,
             position.Scheduled is { } scheduled ? new ScheduledPriceView(scheduled.Id, scheduled.Price, scheduled.EffectiveFrom) : null,
             header.EstimatedQuantity,
-            seesMoney ? CatalogPricing.EstimatedValue(header.EstimatedQuantity, position.Current?.Price) : null,
+            seesMoney ? CatalogPricing.EstimatedValue(header.EstimatedQuantity, reference.Current?.Price) : null,
             bought.Quantity,
             seesMoney ? bought.Amount : null,
             bought.Count,
@@ -138,16 +145,18 @@ internal sealed record CatalogItemView(
     public static IReadOnlyList<CatalogItemView> FromRows(
         IReadOnlyList<CatalogItemHeader> headers,
         IReadOnlyList<PriceRow> prices,
+        IReadOnlyList<PriceRow> masterPrices,
         IReadOnlyList<PurchaseRow> purchases,
         DateOnly today,
         bool seesMoney,
         IReadOnlyDictionary<int, UserSummary> people)
     {
         var pricesByItem = prices.ToLookup(price => price.CatalogItemId);
+        var masterByItem = masterPrices.ToLookup(price => price.CatalogItemId);
         var purchasesByItem = purchases.ToLookup(purchase => purchase.CatalogItemId);
 
         return headers
-            .Select(header => From(header, pricesByItem[header.Id], purchasesByItem[header.Id], today, seesMoney, people))
+            .Select(header => From(header, pricesByItem[header.Id], masterByItem[header.Id], purchasesByItem[header.Id], today, seesMoney, people))
             .ToList();
     }
 }
@@ -191,11 +200,14 @@ internal sealed record CatalogSummary(int ItemCount, decimal? EstimatedValue, de
         IReadOnlyList<PriceRow> prices,
         IReadOnlyList<PurchaseRow> purchases,
         DateOnly today,
-        bool seesMoney)
+        bool seesMoney,
+        IReadOnlyList<PriceRow>? masterPrices = null)
     {
         var pricesByItem = prices.ToLookup(price => price.CatalogItemId);
+        var masterByItem = (masterPrices ?? []).ToLookup(price => price.CatalogItemId);
         var estimated = items.Sum(item =>
-            CatalogPricing.EstimatedValue(item.EstimatedQuantity, CatalogPricing.Position(pricesByItem[item.Id], today).Current?.Price) ?? 0);
+            CatalogPricing.EstimatedValue(
+                item.EstimatedQuantity, CatalogPricing.Reference(pricesByItem[item.Id], masterByItem[item.Id], today).Current?.Price) ?? 0);
 
         return new CatalogSummary(
             items.Count,
