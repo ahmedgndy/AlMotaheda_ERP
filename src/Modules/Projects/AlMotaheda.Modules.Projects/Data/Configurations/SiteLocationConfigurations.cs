@@ -35,6 +35,8 @@ internal sealed class LocationSharingConfiguration : IEntityTypeConfiguration<Lo
 
 internal sealed class LocationPingConfiguration : IEntityTypeConfiguration<LocationPing>
 {
+    public const string ClientPointIndex = "UX_LocationPing_User_ClientPoint_Project";
+
     public void Configure(EntityTypeBuilder<LocationPing> builder)
     {
         builder.ToTable(nameof(LocationPing), table =>
@@ -47,6 +49,11 @@ internal sealed class LocationPingConfiguration : IEntityTypeConfiguration<Locat
 
         // One engineer's day on one project, and the daily clean-up of old positions.
         builder.HasIndex(ping => new { ping.ProjectId, ping.UserId, ping.RecordedAt }, "IX_LocationPing_Project_User_RecordedAt");
+
+        // A queued position sent twice is stored once per project.
+        builder.HasIndex(ping => new { ping.UserId, ping.ClientPointId, ping.ProjectId }, ClientPointIndex)
+            .IsUnique()
+            .HasFilter("[ClientPointId] IS NOT NULL");
         builder.HasIndex(ping => ping.ReceivedAt, "IX_LocationPing_ReceivedAt");
 
         builder.HasOne<Project>()
@@ -65,7 +72,8 @@ internal sealed class LocationAlertConfiguration : IEntityTypeConfiguration<Loca
     public const string KindColumn = "Kind";
     public const string Unavailable = "Unavailable";
     public const string OutsideSite = "OutsideSite";
-    private static readonly string[] Kinds = [Unavailable, OutsideSite];
+    public const string LowBattery = "LowBattery";
+    private static readonly string[] Kinds = [Unavailable, OutsideSite, LowBattery];
 
     public void Configure(EntityTypeBuilder<LocationAlert> builder)
     {
@@ -79,7 +87,8 @@ internal sealed class LocationAlertConfiguration : IEntityTypeConfiguration<Loca
 
         builder.HasDiscriminator<string>(KindColumn)
             .HasValue<LocationUnavailableAlert>(Unavailable)
-            .HasValue<OutsideSiteAlert>(OutsideSite);
+            .HasValue<OutsideSiteAlert>(OutsideSite)
+            .HasValue<LowBatteryAlert>(LowBattery);
         builder.Property<string>(KindColumn).HasMaxLength(30).IsUnicode(false);
         builder.Property(alert => alert.Status).HasConversion<string>().HasMaxLength(30).IsUnicode(false);
         builder.Property(alert => alert.RowVersion).IsRowVersion();
@@ -94,5 +103,41 @@ internal sealed class LocationAlertConfiguration : IEntityTypeConfiguration<Loca
             .WithMany()
             .HasForeignKey(alert => alert.ProjectId)
             .OnDelete(DeleteBehavior.NoAction);
+    }
+}
+
+internal sealed class LocationDeviceConfiguration : IEntityTypeConfiguration<LocationDevice>
+{
+    /// <summary>The foreign key to <c>access.User</c>. Added by hand in the migration: Access owns that table.</summary>
+    public const string UserForeignKey = "FK_LocationDevice_User_UserId";
+
+    public const string UserDeviceIndex = "UX_LocationDevice_User_Device";
+
+    public const int DeviceIdMaxLength = 64;
+    public const int PlatformMaxLength = 20;
+    public const int AppVersionMaxLength = 40;
+    public const int StateMaxLength = 30;
+
+    public static readonly string[] TrackingStates = ["Running", "PermissionDenied", "BackgroundDenied", "GpsOff", "Stopped"];
+    public static readonly string[] Permissions = ["Always", "WhileInUse", "Denied"];
+
+    public void Configure(EntityTypeBuilder<LocationDevice> builder)
+    {
+        builder.ToTable(nameof(LocationDevice), table =>
+        {
+            table.HasCheckConstraint("CK_LocationDevice_Battery", "[BatteryPercent] IS NULL OR [BatteryPercent] BETWEEN 0 AND 100");
+            table.HasCheckConstraint("CK_LocationDevice_TrackingState", $"[TrackingState] IS NULL OR [TrackingState] IN ({SqlList.Of(TrackingStates)})");
+            table.HasCheckConstraint("CK_LocationDevice_Permission", $"[Permission] IS NULL OR [Permission] IN ({SqlList.Of(Permissions)})");
+            table.HasCheckConstraint("CK_LocationDevice_PendingPoints", "[PendingPoints] IS NULL OR [PendingPoints] >= 0");
+        });
+
+        builder.Property(device => device.DeviceId).HasMaxLength(DeviceIdMaxLength).IsUnicode(false);
+        builder.Property(device => device.Platform).HasMaxLength(PlatformMaxLength).IsUnicode(false);
+        builder.Property(device => device.AppVersion).HasMaxLength(AppVersionMaxLength).IsUnicode(false);
+        builder.Property(device => device.TrackingState).HasMaxLength(StateMaxLength).IsUnicode(false);
+        builder.Property(device => device.Permission).HasMaxLength(StateMaxLength).IsUnicode(false);
+        builder.Property(device => device.RowVersion).IsRowVersion();
+
+        builder.HasIndex(device => new { device.UserId, device.DeviceId }, UserDeviceIndex).IsUnique();
     }
 }

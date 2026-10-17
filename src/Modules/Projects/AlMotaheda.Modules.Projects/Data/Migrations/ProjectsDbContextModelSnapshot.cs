@@ -271,6 +271,9 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2(3)");
 
+                    b.Property<Guid?>("IdempotencyKey")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Issues")
                         .HasMaxLength(2000)
                         .IsUnicode(true)
@@ -324,11 +327,18 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                     b.Property<int?>("WorkersPresent")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("WrittenAt")
+                        .HasColumnType("datetime2(3)");
+
                     b.HasKey("Id");
 
                     b.HasIndex(new[] { "ProjectId", "Status" }, "IX_DailyReport_Project_Status");
 
                     b.HasIndex(new[] { "ReportRequestId" }, "IX_DailyReport_ReportRequestId");
+
+                    b.HasIndex(new[] { "AuthorUserId", "IdempotencyKey" }, "UX_DailyReport_Author_IdempotencyKey")
+                        .IsUnique()
+                        .HasFilter("[IdempotencyKey] IS NOT NULL");
 
                     b.HasIndex(new[] { "ProjectId", "ReportDate", "AuthorUserId" }, "UX_DailyReport_Project_Date_Author")
                         .IsUnique();
@@ -686,7 +696,7 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                         {
                             t.HasCheckConstraint("CK_LocationAlert_Ended", "([Status] = 'Open' AND [EndedAt] IS NULL) OR ([Status] <> 'Open' AND [EndedAt] IS NOT NULL)");
 
-                            t.HasCheckConstraint("CK_LocationAlert_Kind", "[Kind] IN ('Unavailable', 'OutsideSite')");
+                            t.HasCheckConstraint("CK_LocationAlert_Kind", "[Kind] IN ('Unavailable', 'OutsideSite', 'LowBattery')");
 
                             t.HasCheckConstraint("CK_LocationAlert_Parties", "[EngineerUserId] <> [RecipientUserId]");
 
@@ -696,6 +706,94 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                     b.HasDiscriminator<string>("Kind").HasValue("LocationAlert");
 
                     b.UseTphMappingStrategy();
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.LocationDevice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AppVersion")
+                        .HasMaxLength(40)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(40)");
+
+                    b.Property<bool?>("BatteryCharging")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("BatteryPercent")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DeviceId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<bool?>("GpsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LastHeartbeatAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<DateTime?>("LastHeartbeatReceivedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<DateTime?>("LowBatterySince")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("PendingPoints")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Permission")
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<DateTime>("PolicyAcceptedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("PolicyVersion")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("TrackingState")
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "UserId", "DeviceId" }, "UX_LocationDevice_User_Device")
+                        .IsUnique();
+
+                    b.ToTable("LocationDevice", "projects", t =>
+                        {
+                            t.HasCheckConstraint("CK_LocationDevice_Battery", "[BatteryPercent] IS NULL OR [BatteryPercent] BETWEEN 0 AND 100");
+
+                            t.HasCheckConstraint("CK_LocationDevice_PendingPoints", "[PendingPoints] IS NULL OR [PendingPoints] >= 0");
+
+                            t.HasCheckConstraint("CK_LocationDevice_Permission", "[Permission] IS NULL OR [Permission] IN ('Always', 'WhileInUse', 'Denied')");
+
+                            t.HasCheckConstraint("CK_LocationDevice_TrackingState", "[TrackingState] IS NULL OR [TrackingState] IN ('Running', 'PermissionDenied', 'BackgroundDenied', 'GpsOff', 'Stopped')");
+                        });
                 });
 
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.LocationPing", b =>
@@ -708,6 +806,9 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
 
                     b.Property<int?>("AccuracyMeters")
                         .HasColumnType("int");
+
+                    b.Property<Guid?>("ClientPointId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<int?>("DistanceMeters")
                         .HasColumnType("int");
@@ -740,6 +841,10 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                     b.HasIndex(new[] { "ProjectId", "UserId", "RecordedAt" }, "IX_LocationPing_Project_User_RecordedAt");
 
                     b.HasIndex(new[] { "ReceivedAt" }, "IX_LocationPing_ReceivedAt");
+
+                    b.HasIndex(new[] { "UserId", "ClientPointId", "ProjectId" }, "UX_LocationPing_User_ClientPoint_Project")
+                        .IsUnique()
+                        .HasFilter("[ClientPointId] IS NOT NULL");
 
                     b.ToTable("LocationPing", "projects", t =>
                         {
@@ -1634,7 +1739,7 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                         {
                             t.HasCheckConstraint("CK_LocationAlert_Ended", "([Status] = 'Open' AND [EndedAt] IS NULL) OR ([Status] <> 'Open' AND [EndedAt] IS NOT NULL)");
 
-                            t.HasCheckConstraint("CK_LocationAlert_Kind", "[Kind] IN ('Unavailable', 'OutsideSite')");
+                            t.HasCheckConstraint("CK_LocationAlert_Kind", "[Kind] IN ('Unavailable', 'OutsideSite', 'LowBattery')");
 
                             t.HasCheckConstraint("CK_LocationAlert_Parties", "[EngineerUserId] <> [RecipientUserId]");
 
@@ -1642,6 +1747,24 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                         });
 
                     b.HasDiscriminator().HasValue("Unavailable");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.LowBatteryAlert", b =>
+                {
+                    b.HasBaseType("AlMotaheda.Modules.Projects.Data.LocationAlert");
+
+                    b.ToTable(t =>
+                        {
+                            t.HasCheckConstraint("CK_LocationAlert_Ended", "([Status] = 'Open' AND [EndedAt] IS NULL) OR ([Status] <> 'Open' AND [EndedAt] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_LocationAlert_Kind", "[Kind] IN ('Unavailable', 'OutsideSite', 'LowBattery')");
+
+                            t.HasCheckConstraint("CK_LocationAlert_Parties", "[EngineerUserId] <> [RecipientUserId]");
+
+                            t.HasCheckConstraint("CK_LocationAlert_Status", "[Status] IN ('Open', 'Recovered', 'Ended')");
+                        });
+
+                    b.HasDiscriminator().HasValue("LowBattery");
                 });
 
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.OutsideSiteAlert", b =>
@@ -1652,7 +1775,7 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                         {
                             t.HasCheckConstraint("CK_LocationAlert_Ended", "([Status] = 'Open' AND [EndedAt] IS NULL) OR ([Status] <> 'Open' AND [EndedAt] IS NOT NULL)");
 
-                            t.HasCheckConstraint("CK_LocationAlert_Kind", "[Kind] IN ('Unavailable', 'OutsideSite')");
+                            t.HasCheckConstraint("CK_LocationAlert_Kind", "[Kind] IN ('Unavailable', 'OutsideSite', 'LowBattery')");
 
                             t.HasCheckConstraint("CK_LocationAlert_Parties", "[EngineerUserId] <> [RecipientUserId]");
 

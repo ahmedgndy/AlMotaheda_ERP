@@ -51,6 +51,7 @@ internal sealed class DailyReportRow
     public string? Issues { get; init; }
     public string? Notes { get; init; }
     public DateTime CreatedAt { get; init; }
+    public DateTime? WrittenAt { get; init; }
     public DateTime SubmittedAt { get; init; }
     public DateTime? ReviewedAt { get; init; }
     public int? ReviewedBy { get; init; }
@@ -140,6 +141,7 @@ internal static class DailyReportQueries
                 Issues = report.Issues,
                 Notes = report.Notes,
                 CreatedAt = report.CreatedAt,
+                WrittenAt = report.WrittenAt,
                 SubmittedAt = report.SubmittedAt,
                 ReviewedAt = report.ReviewedAt,
                 ReviewedBy = report.ReviewedBy,

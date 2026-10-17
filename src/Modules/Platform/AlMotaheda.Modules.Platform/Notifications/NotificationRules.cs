@@ -18,6 +18,7 @@ internal static class NotificationTypes
     public const string LocationAvailable = "LocationAvailable";
     public const string OutsideSite = "OutsideSite";
     public const string BackInsideSite = "BackInsideSite";
+    public const string LowBattery = "LowBattery";
 }
 
 /// <summary>A notification to store: who gets it, its type and its title in both languages.</summary>
@@ -58,6 +59,7 @@ internal static class NotificationRules
         ["ReportRun"] = ("report export", "تصدير التقرير"),
         ["LocationUnavailableAlert"] = ("location alert", "تنبيه الموقع"),
         ["OutsideSiteAlert"] = ("location alert", "تنبيه الموقع"),
+        ["LowBatteryAlert"] = ("location alert", "تنبيه الموقع"),
     };
 
     /// <summary>StatusAfter <c>null</c> = the record was just added.</summary>
@@ -98,6 +100,8 @@ internal static class NotificationRules
         new("LocationUnavailableAlert", "Recovered", "RecipientUserId", NotificationTypes.LocationAvailable),
         new("OutsideSiteAlert", null, "RecipientUserId", NotificationTypes.OutsideSite),
         new("OutsideSiteAlert", "Recovered", "RecipientUserId", NotificationTypes.BackInsideSite),
+        // The phone said its battery is low while it could still report. Its recovery shows on the map only.
+        new("LowBatteryAlert", null, "RecipientUserId", NotificationTypes.LowBattery),
     ];
 
     /// <summary>The notifications one changed record causes. <paramref name="actorUserId"/> made the change.</summary>
@@ -156,6 +160,7 @@ internal static class NotificationRules
         NotificationTypes.LocationAvailable => ("A site engineer's location is available again", "عاد موقع مهندس الموقع متاحاً"),
         NotificationTypes.OutsideSite => ("A site engineer is outside the site area", "مهندس الموقع خارج نطاق الموقع"),
         NotificationTypes.BackInsideSite => ("A site engineer is back in the site area", "عاد مهندس الموقع إلى نطاق الموقع"),
+        NotificationTypes.LowBattery => ("A site engineer's phone battery is low", "بطارية هاتف مهندس الموقع منخفضة"),
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown notification type."),
     };
 }

@@ -103,6 +103,52 @@ public sealed class DocumentArchiveTests(SqlServerFixture database)
     }
 
     [DatabaseFact]
+    public async Task A_photo_sent_again_from_the_offline_queue_is_stored_once_with_its_capture_time()
+    {
+        await using var api = await ArchiveApi.StartAsync(database);
+        var executive = await api.SignInExecutiveAsync();
+        var (manager, _) = await api.CreateSignedInUserAsync(executive, "manager");
+        var (engineer, engineerSession) = await api.CreateSignedInUserAsync(executive, "engineer");
+        var projectId = await api.CreateProjectAsync(executive, "ARC-OFF", manager, siteEngineers: [engineer]);
+        var otherProject = await api.CreateProjectAsync(executive, "ARC-OFF2", manager, siteEngineers: [engineer]);
+        var reportId = await api.CreateDailyReportAsync(engineerSession, projectId);
+        var photo = SampleFiles.CameraJpeg(120_000);
+        var key = Guid.NewGuid().ToString();
+        var capturedAt = DateTime.UtcNow.AddHours(-6);
+        var fields = new Dictionary<string, string>
+        {
+            ["title"] = "Slab, offline photo",
+            ["category"] = "SitePhoto",
+            ["entityType"] = "DailyReport",
+            ["entityId"] = reportId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["capturedAt"] = capturedAt.ToString("o"),
+        };
+
+        var first = await api.PostUploadAsync(engineerSession, projectId, "IMG_0042.JPG", photo, fields, key);
+        await EnsureStatus(first, HttpStatusCode.Created);
+        var document = await Json(first);
+        Assert.Equal(capturedAt, document.GetProperty("capturedAt").GetDateTime().ToUniversalTime(), TimeSpan.FromMilliseconds(5));
+        Assert.Equal("DailyReport", Assert.Single(document.GetProperty("links").EnumerateArray()).GetProperty("entityType").GetString());
+
+        // The answer was lost: the same upload again returns the first document and stores no second file.
+        var again = await api.PostUploadAsync(engineerSession, projectId, "IMG_0042.JPG", photo, fields, key);
+        await EnsureStatus(again, HttpStatusCode.OK);
+        Assert.Equal(document.GetProperty("id").GetInt32(), (await Json(again)).GetProperty("id").GetInt32());
+        Assert.Single(api.StoredFiles);
+        Assert.Equal(1, await api.QueryAsync(db => db.Documents.CountAsync()));
+
+        // The same key on another project is refused; a key that is not a GUID too.
+        var elsewhere = await api.PostUploadAsync(engineerSession, otherProject, "IMG_0042.JPG", photo, new() { ["title"] = "x", ["category"] = "SitePhoto" }, key);
+        await EnsureStatus(elsewhere, HttpStatusCode.Conflict);
+        Assert.Equal("idempotency_key_reused", await CodeOf(elsewhere));
+        var badKey = await api.PostUploadAsync(engineerSession, projectId, "IMG_0043.JPG", photo, new() { ["title"] = "x", ["category"] = "SitePhoto" }, "not-a-guid");
+        await EnsureStatus(badKey, HttpStatusCode.BadRequest);
+        var badTime = await api.PostUploadAsync(engineerSession, projectId, "IMG_0044.JPG", photo, new() { ["title"] = "x", ["category"] = "SitePhoto", ["capturedAt"] = DateTime.UtcNow.AddDays(1).ToString("o") });
+        await EnsureStatus(badTime, HttpStatusCode.BadRequest);
+        Assert.Single(api.StoredFiles);
+    }
+
+    [DatabaseFact]
     public async Task Office_files_and_drawings_always_download_even_when_a_preview_is_asked()
     {
         await using var api = await ArchiveApi.StartAsync(database);

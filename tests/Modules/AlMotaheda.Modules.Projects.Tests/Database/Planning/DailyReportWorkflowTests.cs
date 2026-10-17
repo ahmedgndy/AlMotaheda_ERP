@@ -82,6 +82,43 @@ public sealed class DailyReportWorkflowTests(SqlServerFixture database)
     }
 
     [DatabaseFact]
+    public async Task A_report_sent_again_from_the_offline_queue_is_stored_once()
+    {
+        await using var api = await ProjectsApi.StartAsync(database);
+        var cast = await api.CastAsync("BDR-DAY-OFF");
+        var reports = $"/api/projects/{cast.ProjectId}/daily-reports";
+        var key = Guid.NewGuid().ToString();
+        var writtenAt = DateTime.UtcNow.AddHours(-5);
+        var body = new { reportDate = Date(CompanyToday), issues = "Written with no signal on site", idempotencyKey = key, writtenAt };
+
+        var first = await ExpectAsync(await api.PostAsync(cast.Engineer, reports, body), HttpStatusCode.Created);
+        Assert.Equal(writtenAt, first.GetProperty("writtenAt").GetDateTime().ToUniversalTime(), TimeSpan.FromMilliseconds(5));
+
+        // The answer was lost; the phone sends the same report again: the first one comes back, nothing new is stored.
+        var again = await ExpectAsync(await api.PostAsync(cast.Engineer, reports, body), HttpStatusCode.OK);
+        Assert.Equal(first.Id(), again.Id());
+        var list = await api.GetOkAsync(cast.Engineer, reports);
+        Assert.Equal(1, list.GetProperty("items").GetArrayLength());
+
+        // The same key for another day is a different report: refused, so nothing is overwritten.
+        var reused = await api.PostAsync(cast.Engineer, reports, new { reportDate = Date(CompanyToday.AddDays(-1)), issues = "Other day", idempotencyKey = key });
+        Assert.Equal(HttpStatusCode.Conflict, reused.StatusCode);
+        Assert.Equal("idempotency_key_reused", await CodeOf(reused));
+
+        // Without a key the old rule stays: one report per author, project and day.
+        var twice = await api.PostAsync(cast.Engineer, reports, new { reportDate = Date(CompanyToday), issues = "Second try without a key" });
+        Assert.Equal(HttpStatusCode.Conflict, twice.StatusCode);
+        Assert.Equal("report_exists", await CodeOf(twice));
+
+        // Wrong values are refused with field errors.
+        var bad = await api.PostAsync(cast.Engineer, reports,
+            new { reportDate = Date(CompanyToday.AddDays(-2)), issues = "x", idempotencyKey = "abc", writtenAt = DateTime.UtcNow.AddDays(-40) });
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+        var fields = (await Json(bad)).GetProperty("errors").EnumerateObject().Select(field => field.Name).Order(StringComparer.Ordinal).ToList();
+        Assert.Equal(["idempotencyKey", "writtenAt"], fields);
+    }
+
+    [DatabaseFact]
     public async Task A_report_of_a_project_you_are_not_on_answers_404()
     {
         await using var api = await ProjectsApi.StartAsync(database);

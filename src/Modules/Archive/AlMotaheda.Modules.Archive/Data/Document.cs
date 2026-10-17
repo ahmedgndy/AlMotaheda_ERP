@@ -45,6 +45,15 @@ internal sealed class Document
 
     public int UploadedBy { get; set; }
 
+    /// <summary>When the photo or file was taken on the phone (UTC), as the app reports it. Empty when not sent.</summary>
+    public DateTime? CapturedAt { get; set; }
+
+    /// <summary>
+    /// Optional key the app makes for one upload (<c>Idempotency-Key</c> header), so a file sent again from the offline
+    /// queue after a lost answer is stored once. Unique per uploader when set.
+    /// </summary>
+    public Guid? IdempotencyKey { get; set; }
+
     public DateTime? DeletedAt { get; set; }
 
     public int? DeletedBy { get; set; }

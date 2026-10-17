@@ -33,4 +33,16 @@ internal sealed partial class ProjectsLog
 
     [LoggerMessage(EventId = 2709, Level = LogLevel.Information, Message = "Location sharing of user {UserId} on project {ProjectId} was turned off: no longer a site engineer there")]
     public partial void LocationSharingEnded(int userId, int projectId);
+
+    [LoggerMessage(EventId = 2710, Level = LogLevel.Information, Message = "User {UserId} accepted tracking policy version {PolicyVersion} on device row {DeviceRowId}")]
+    public partial void TrackingPolicyAccepted(int userId, int policyVersion, int deviceRowId);
+
+    [LoggerMessage(EventId = 2711, Level = LogLevel.Information, Message = "Tracking upload from user {UserId}: {Accepted} positions kept, {Duplicates} repeated, {Rejected} refused, {Heartbeats} heartbeats")]
+    public partial void TrackingBatch(int userId, int accepted, int duplicates, int rejected, int heartbeats);
+
+    [LoggerMessage(EventId = 2712, Level = LogLevel.Warning, Message = "Battery of user {UserId}'s phone is low; {RecipientCount} people alerted on project {ProjectId}")]
+    public partial void LowBattery(int userId, int projectId, int recipientCount);
+
+    [LoggerMessage(EventId = 2713, Level = LogLevel.Information, Message = "Battery of user {UserId}'s phone recovered")]
+    public partial void BatteryRecovered(int userId);
 }

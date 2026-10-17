@@ -27,6 +27,23 @@ internal sealed record MySharingView(
     string WorkEnd,
     bool InWorkingHours);
 
+/// <summary>
+/// What the engineer's phone last reported about itself (automatic tracking). Only what it measured, with the time it
+/// measured it; empty when no phone accepted the tracking policy.
+/// </summary>
+internal sealed record EngineerDeviceView(
+    DateTime PolicyAcceptedAt,
+    DateTime? LastHeartbeatAt,
+    int? BatteryPercent,
+    bool? BatteryCharging,
+    string? TrackingState,
+    string? Permission,
+    bool? GpsEnabled,
+    int? PendingPoints,
+    DateTime? LowBatterySince,
+    string Platform,
+    string? AppVersion);
+
 /// <summary>One site engineer as the project manager or an Executive sees them.</summary>
 /// <param name="State">
 /// <c>Off</c> (never turned on, or turned off), <c>Unavailable</c> (no position for too long during working hours),
@@ -47,7 +64,11 @@ internal sealed record EngineerLocationView(
     int? DistanceMeters,
     bool? InsideSite,
     DateTime? UnavailableSince,
-    DateTime? OutsideSince);
+    DateTime? OutsideSince,
+    EngineerDeviceView? Device = null);
+
+/// <summary>One alert episode of the project (one outage, one time outside, one low battery), once for all recipients.</summary>
+internal sealed record LocationAlertView(string Kind, int EngineerUserId, string Status, DateTime StartedAt, DateTime? EndedAt);
 
 internal sealed record SiteLocationView(
     decimal? SiteLatitude,
@@ -80,6 +101,8 @@ internal static class SiteLocationEndpoints
 
     internal sealed record PositionsResponse(IReadOnlyList<PositionView> Items);
 
+    internal sealed record AlertsResponse(IReadOnlyList<LocationAlertView> Items);
+
     /// <summary>A position may be up to this old: the app sends what it measured, a little late on a bad connection.</summary>
     private static readonly TimeSpan MaxPositionAge = TimeSpan.FromHours(1);
 
@@ -108,6 +131,11 @@ internal static class SiteLocationEndpoints
             .RequirePermission(ProjectPermissions.Module, PermissionAction.View)
             .WithName("GetSiteLocation")
             .WithSummary("Where the project's site engineers are (the project manager and Executives only)");
+
+        projects.MapGet("/{projectId:int}/site-location/alerts", GetAlertsAsync)
+            .RequirePermission(ProjectPermissions.Module, PermissionAction.View)
+            .WithName("ListLocationAlerts")
+            .WithSummary("The project's location alerts of the last days: outages, outside the site, low battery (the project manager and Executives only)");
 
         projects.MapGet("/{projectId:int}/site-location/{userId:int}/positions", GetPositionsAsync)
             .RequirePermission(ProjectPermissions.Module, PermissionAction.View)
@@ -432,12 +460,20 @@ internal static class SiteLocationEndpoints
             .ToDictionaryAsync(row => row.UserId, cancellationToken);
         var people = await users.FindAsync(engineers, cancellationToken);
 
+        // The phone that reported last (an engineer may have changed phones).
+        var devices = (await db.LocationDevices.AsNoTracking()
+                .Where(device => engineers.Contains(device.UserId))
+                .ToListAsync(cancellationToken))
+            .GroupBy(device => device.UserId)
+            .ToDictionary(group => group.Key, group => group.OrderByDescending(device => device.LastHeartbeatAt ?? device.PolicyAcceptedAt).First());
+
         var items = engineers
             .Select(userId =>
             {
                 sharings.TryGetValue(userId, out var sharing);
                 people.TryGetValue(userId, out var person);
-                return Engineer(userId, person, sharing, site.RadiusMeters);
+                devices.TryGetValue(userId, out var device);
+                return Engineer(userId, person, sharing, site.RadiusMeters) with { Device = DeviceOf(device) };
             })
             .OrderBy(item => item.NameEn, StringComparer.OrdinalIgnoreCase)
             .ThenBy(item => item.UserId)
@@ -498,6 +534,77 @@ internal static class SiteLocationEndpoints
 
         return TypedResults.Ok(new PositionsResponse(items));
     }
+
+    internal static async Task<Results<Ok<AlertsResponse>, ValidationProblem, ProblemHttpResult>> GetAlertsAsync(
+        int projectId,
+        HttpContext httpContext,
+        ProjectsDbContext db,
+        ProjectAccess access,
+        CompanyClock clock,
+        CancellationToken cancellationToken,
+        int? days = null)
+    {
+        if (ProjectCaller.From(httpContext.User) is not { } caller)
+        {
+            return ApiProblem.ForbiddenResult();
+        }
+
+        if (days is < 1 or > 90)
+        {
+            var errors = new ValidationErrors();
+            errors.Add("days", "days must be 1 to 90.");
+            return ProjectProblems.Validation(errors);
+        }
+
+        if (await FindSiteAsync(access, caller, projectId, cancellationToken) is null)
+        {
+            return ProjectProblems.ProjectNotFound();
+        }
+
+        if (!await MaySeeLocationsAsync(access, caller, projectId, cancellationToken))
+        {
+            return ProjectProblems.LocationsNotAllowed();
+        }
+
+        var from = clock.UtcNow.AddDays(-(days ?? 7));
+        var rows = await db.LocationAlerts.AsNoTracking()
+            .Where(alert => alert.ProjectId == projectId && alert.StartedAt >= from)
+            .Select(alert => new
+            {
+                Kind = EF.Property<string>(alert, Data.Configurations.LocationAlertConfiguration.KindColumn),
+                alert.EngineerUserId,
+                alert.Status,
+                alert.StartedAt,
+                alert.EndedAt,
+            })
+            .Take(2_000)
+            .ToListAsync(cancellationToken);
+
+        // One row per recipient in the table; one episode on the screen.
+        var items = rows
+            .GroupBy(row => (row.Kind, row.EngineerUserId, row.StartedAt))
+            .Select(group => group.OrderBy(row => row.Status == LocationAlertStatus.Open ? 0 : 1).First())
+            .OrderByDescending(row => row.StartedAt)
+            .Select(row => new LocationAlertView(row.Kind, row.EngineerUserId, row.Status.ToString(), row.StartedAt, row.EndedAt))
+            .ToList();
+        return TypedResults.Ok(new AlertsResponse(items));
+    }
+
+    private static EngineerDeviceView? DeviceOf(LocationDevice? device) =>
+        device is null
+            ? null
+            : new EngineerDeviceView(
+                device.PolicyAcceptedAt,
+                device.LastHeartbeatAt,
+                device.BatteryPercent,
+                device.BatteryCharging,
+                device.TrackingState,
+                device.Permission,
+                device.GpsEnabled,
+                device.PendingPoints,
+                device.LowBatterySince,
+                device.Platform,
+                device.AppVersion);
 
     /// <summary>Only Executives and the project's active manager see where the engineers are.</summary>
     private static async Task<bool> MaySeeLocationsAsync(ProjectAccess access, ProjectCaller caller, int projectId, CancellationToken cancellationToken) =>

@@ -69,6 +69,59 @@ internal sealed class LocationPing
 
     /// <summary>Empty when the project has no site position or the position was too rough to tell.</summary>
     public bool? InsideSite { get; set; }
+
+    /// <summary>
+    /// The id the phone gave this position when it took it. A queue sent twice stores each position once (unique
+    /// per project, engineer and id). Empty for positions sent one by one by older app versions.
+    /// </summary>
+    public Guid? ClientPointId { get; set; }
+}
+
+/// <summary>
+/// One engineer's company phone: when they accepted the tracking policy on it, and what its last heartbeat said
+/// (battery, whether tracking runs, the location permission, GPS on or off, positions waiting to be sent). The
+/// phone only reports what it can measure; when it stops reporting, nothing is guessed.
+/// </summary>
+[NotAudited]
+internal sealed class LocationDevice
+{
+    public int Id { get; set; }
+
+    /// <summary>The engineer (Access user).</summary>
+    public int UserId { get; set; }
+
+    /// <summary>The app's own id for this installation (not a hardware id).</summary>
+    public string DeviceId { get; set; } = "";
+
+    public string Platform { get; set; } = "";
+    public string? AppVersion { get; set; }
+
+    /// <summary>The policy version accepted on this phone, and when.</summary>
+    public int PolicyVersion { get; set; }
+    public DateTime PolicyAcceptedAt { get; set; }
+
+    /// <summary>When the phone took its last heartbeat (UTC), and when the server got it.</summary>
+    public DateTime? LastHeartbeatAt { get; set; }
+    public DateTime? LastHeartbeatReceivedAt { get; set; }
+
+    public int? BatteryPercent { get; set; }
+    public bool? BatteryCharging { get; set; }
+
+    /// <summary>What the phone said about tracking: <c>Running</c>, <c>PermissionDenied</c>, <c>BackgroundDenied</c>, <c>GpsOff</c>, <c>Stopped</c>.</summary>
+    public string? TrackingState { get; set; }
+
+    /// <summary>The location permission the phone reported: <c>Always</c>, <c>WhileInUse</c>, <c>Denied</c>.</summary>
+    public string? Permission { get; set; }
+
+    public bool? GpsEnabled { get; set; }
+
+    /// <summary>Positions still waiting on the phone at the last heartbeat.</summary>
+    public int? PendingPoints { get; set; }
+
+    /// <summary>Set by a live heartbeat at or below the low-battery level; cleared when it charges or recovers.</summary>
+    public DateTime? LowBatterySince { get; set; }
+
+    public byte[] RowVersion { get; set; } = [];
 }
 
 /// <summary>
@@ -105,6 +158,9 @@ internal sealed class LocationUnavailableAlert : LocationAlert;
 
 /// <summary>The positions say the engineer is clearly outside the site area.</summary>
 internal sealed class OutsideSiteAlert : LocationAlert;
+
+/// <summary>The phone said its battery is low (and not charging) while it could still report. Never guessed after it goes quiet.</summary>
+internal sealed class LowBatteryAlert : LocationAlert;
 
 /// <summary>Stored by name; the notification rules read <c>Status</c>.</summary>
 internal enum LocationAlertStatus

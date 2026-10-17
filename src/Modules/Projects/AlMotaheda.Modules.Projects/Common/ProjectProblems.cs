@@ -15,6 +15,7 @@ internal static class ProjectProblems
     public const string MembershipEnded = "membership_already_ended";
     public const string Busy = "busy";
     public const string LocationSharingOff = "location_sharing_off";
+    public const string TrackingPolicyNotAccepted = "tracking_policy_not_accepted";
 
     public static ValidationProblem Validation(ValidationErrors errors) => ApiProblem.Validation(errors.ToDictionary());
 
@@ -68,6 +69,12 @@ internal static class ProjectProblems
         ApiProblem.ForbiddenResult("Only this project's manager and Executives see where the engineers are.");
 
     /// <summary>A position arrived while sharing is off (turned off on another phone, or by the monitor).</summary>
+    public static ProblemHttpResult PolicyNotAccepted() =>
+        ApiProblem.Create(
+            StatusCodes.Status409Conflict,
+            TrackingPolicyNotAccepted,
+            "The current location tracking policy was not accepted on this phone. Open the app and accept it first.");
+
     public static ProblemHttpResult SharingOff() =>
         ApiProblem.Create(StatusCodes.Status409Conflict, LocationSharingOff, "Location sharing is off. Turn it on to send your position.");
 }

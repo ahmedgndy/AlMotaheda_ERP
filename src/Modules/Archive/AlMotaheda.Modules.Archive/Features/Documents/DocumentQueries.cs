@@ -22,6 +22,7 @@ internal sealed class DocumentRow
     public string Sha256 { get; init; } = "";
     public DateTime UploadedAt { get; init; }
     public int UploadedBy { get; init; }
+    public DateTime? CapturedAt { get; init; }
     public byte[] RowVersion { get; init; } = [];
     public List<DocumentLinkRef> Links { get; init; } = [];
 }
@@ -146,6 +147,7 @@ internal static class DocumentQueries
             Sha256 = document.Sha256,
             UploadedAt = document.UploadedAt,
             UploadedBy = document.UploadedBy,
+            CapturedAt = document.CapturedAt,
             RowVersion = document.RowVersion,
             Links = document.Links
                 .OrderBy(link => link.Id)

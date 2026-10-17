@@ -19,7 +19,7 @@ public sealed class DatabaseSchemaTests
         using var db = CreateContext();
 
         Assert.False(db.Database.HasPendingModelChanges(), "The model changed without a migration. Run dotnet ef migrations add.");
-        Assert.Equal(["InitialProjects", "ProjectWorkspace", "ExpenseAdjustments", "SupplierUniqueness", "ExpenseSource", "SiteLocation"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
+        Assert.Equal(["InitialProjects", "ProjectWorkspace", "ExpenseAdjustments", "SupplierUniqueness", "ExpenseSource", "SiteLocation", "AutomaticTracking"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
     }
 
     [Fact]
