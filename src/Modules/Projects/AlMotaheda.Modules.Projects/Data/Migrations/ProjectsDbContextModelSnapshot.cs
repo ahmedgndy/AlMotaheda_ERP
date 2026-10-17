@@ -633,6 +633,191 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.LocationAlert", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("EngineerUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecipientUserId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "ProjectId", "StartedAt" }, "IX_LocationAlert_Project_StartedAt");
+
+                    b.HasIndex(new[] { "ProjectId", "EngineerUserId", "Kind", "RecipientUserId" }, "UX_LocationAlert_Open")
+                        .IsUnique()
+                        .HasFilter("[Status] = 'Open'");
+
+                    b.ToTable("LocationAlert", "projects", t =>
+                        {
+                            t.HasCheckConstraint("CK_LocationAlert_Ended", "([Status] = 'Open' AND [EndedAt] IS NULL) OR ([Status] <> 'Open' AND [EndedAt] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_LocationAlert_Kind", "[Kind] IN ('Unavailable', 'OutsideSite')");
+
+                            t.HasCheckConstraint("CK_LocationAlert_Parties", "[EngineerUserId] <> [RecipientUserId]");
+
+                            t.HasCheckConstraint("CK_LocationAlert_Status", "[Status] IN ('Open', 'Recovered', 'Ended')");
+                        });
+
+                    b.HasDiscriminator<string>("Kind").HasValue("LocationAlert");
+
+                    b.UseTphMappingStrategy();
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.LocationPing", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int?>("AccuracyMeters")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DistanceMeters")
+                        .HasColumnType("int");
+
+                    b.Property<bool?>("InsideSite")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("Latitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<decimal>("Longitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "ProjectId", "UserId", "RecordedAt" }, "IX_LocationPing_Project_User_RecordedAt");
+
+                    b.HasIndex(new[] { "ReceivedAt" }, "IX_LocationPing_ReceivedAt");
+
+                    b.ToTable("LocationPing", "projects", t =>
+                        {
+                            t.HasCheckConstraint("CK_LocationPing_Position", "[Latitude] BETWEEN -90 AND 90 AND [Longitude] BETWEEN -180 AND 180 AND ([AccuracyMeters] IS NULL OR [AccuracyMeters] >= 0)");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.LocationSharing", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsOn")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("LastAccuracyMeters")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("LastDistanceMeters")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("LastLatitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<decimal?>("LastLongitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<DateTime?>("LastPingAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("OutsidePings")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("OutsideSince")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("TurnedOffAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<DateTime?>("TurnedOnAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<DateTime?>("UnavailableSince")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "IsOn" }, "IX_LocationSharing_On")
+                        .HasFilter("[IsOn] = 1");
+
+                    b.HasIndex(new[] { "ProjectId", "UserId" }, "UX_LocationSharing_Project_User")
+                        .IsUnique();
+
+                    b.ToTable("LocationSharing", "projects", t =>
+                        {
+                            t.HasCheckConstraint("CK_LocationSharing_On", "[IsOn] = 0 OR [TurnedOnAt] IS NOT NULL");
+
+                            t.HasCheckConstraint("CK_LocationSharing_Position", "([LastLatitude] IS NULL AND [LastLongitude] IS NULL) OR ([LastLatitude] BETWEEN -90 AND 90 AND [LastLongitude] BETWEEN -180 AND 180)");
+                        });
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.Project", b =>
                 {
                     b.Property<int>("Id")
@@ -1441,6 +1626,42 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.LocationUnavailableAlert", b =>
+                {
+                    b.HasBaseType("AlMotaheda.Modules.Projects.Data.LocationAlert");
+
+                    b.ToTable(t =>
+                        {
+                            t.HasCheckConstraint("CK_LocationAlert_Ended", "([Status] = 'Open' AND [EndedAt] IS NULL) OR ([Status] <> 'Open' AND [EndedAt] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_LocationAlert_Kind", "[Kind] IN ('Unavailable', 'OutsideSite')");
+
+                            t.HasCheckConstraint("CK_LocationAlert_Parties", "[EngineerUserId] <> [RecipientUserId]");
+
+                            t.HasCheckConstraint("CK_LocationAlert_Status", "[Status] IN ('Open', 'Recovered', 'Ended')");
+                        });
+
+                    b.HasDiscriminator().HasValue("Unavailable");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.OutsideSiteAlert", b =>
+                {
+                    b.HasBaseType("AlMotaheda.Modules.Projects.Data.LocationAlert");
+
+                    b.ToTable(t =>
+                        {
+                            t.HasCheckConstraint("CK_LocationAlert_Ended", "([Status] = 'Open' AND [EndedAt] IS NULL) OR ([Status] <> 'Open' AND [EndedAt] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_LocationAlert_Kind", "[Kind] IN ('Unavailable', 'OutsideSite')");
+
+                            t.HasCheckConstraint("CK_LocationAlert_Parties", "[EngineerUserId] <> [RecipientUserId]");
+
+                            t.HasCheckConstraint("CK_LocationAlert_Status", "[Status] IN ('Open', 'Recovered', 'Ended')");
+                        });
+
+                    b.HasDiscriminator().HasValue("OutsideSite");
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.Budget", b =>
                 {
                     b.HasOne("AlMotaheda.Modules.Projects.Data.Project", "Project")
@@ -1564,6 +1785,37 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("CatalogItem");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.LocationAlert", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.LocationPing", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.LocationSharing", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.ProjectExpense", b =>

@@ -14,6 +14,7 @@ internal static class ProjectProblems
     public const string ManagerRequired = "manager_required";
     public const string MembershipEnded = "membership_already_ended";
     public const string Busy = "busy";
+    public const string LocationSharingOff = "location_sharing_off";
 
     public static ValidationProblem Validation(ValidationErrors errors) => ApiProblem.Validation(errors.ToDictionary());
 
@@ -59,4 +60,14 @@ internal static class ProjectProblems
     /// <summary>The user is unknown, disabled, or their role doesn't fit the responsibility.</summary>
     public static ProblemHttpResult NotAssignable(string title) =>
         ApiProblem.Create(StatusCodes.Status400BadRequest, UserNotAssignable, title);
+
+    public static ProblemHttpResult NotSiteEngineer() =>
+        ApiProblem.ForbiddenResult("Only this project's site engineers share their location.");
+
+    public static ProblemHttpResult LocationsNotAllowed() =>
+        ApiProblem.ForbiddenResult("Only this project's manager and Executives see where the engineers are.");
+
+    /// <summary>A position arrived while sharing is off (turned off on another phone, or by the monitor).</summary>
+    public static ProblemHttpResult SharingOff() =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, LocationSharingOff, "Location sharing is off. Turn it on to send your position.");
 }

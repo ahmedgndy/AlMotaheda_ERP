@@ -85,6 +85,15 @@ The SQL Server tests start SQL Server 2022 in Docker. With Docker Desktop runnin
 they are reported as skipped. On a Mac with Apple Silicon, turn on "Use Rosetta for x86_64/amd64 emulation" in
 Docker Desktop settings.
 
+## Docker, CI and releases
+
+- Run the API and a SQL Server in Docker: `docker compose -f deploy/compose.yaml up -d --build` (fill in
+  `deploy/.env` first, from `deploy/.env.example`).
+- GitHub Actions builds and tests every push and pull request; a `v*` tag publishes the Docker image, a Windows
+  build and the migration scripts.
+
+Details: [deploy/README.md](deploy/README.md).
+
 ## Deployment notes
 
 - Set `ConnectionStrings__Erp` and `Access__Tokens__SigningKey` as environment variables. Generate the key once

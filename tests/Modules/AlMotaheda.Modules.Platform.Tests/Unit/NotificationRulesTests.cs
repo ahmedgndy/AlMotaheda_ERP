@@ -80,4 +80,21 @@ public sealed class NotificationRulesTests
 
         Assert.Empty(NotificationRules.For(change, Reviewer));
     }
+
+    [Theory]
+    [InlineData("LocationUnavailableAlert", NotificationTypes.LocationUnavailable, NotificationTypes.LocationAvailable)]
+    [InlineData("OutsideSiteAlert", NotificationTypes.OutsideSite, NotificationTypes.BackInsideSite)]
+    public void A_location_alert_tells_its_recipient_when_it_opens_and_when_it_is_over_but_not_when_sharing_is_turned_off(
+        string entity, string opened, string recovered)
+    {
+        const int engineer = 33;
+        (string, int)[] people = [("EngineerUserId", engineer), ("RecipientUserId", Reviewer)];
+
+        var open = Assert.Single(NotificationRules.For(Change(entity, "Added", null, "Open", people), null));
+        var over = Assert.Single(NotificationRules.For(Change(entity, "Modified", "Open", "Recovered", people), engineer));
+
+        Assert.Equal((Reviewer, opened), (open.RecipientUserId, open.Type));
+        Assert.Equal((Reviewer, recovered), (over.RecipientUserId, over.Type));
+        Assert.Empty(NotificationRules.For(Change(entity, "Modified", "Open", "Ended", people), engineer));
+    }
 }

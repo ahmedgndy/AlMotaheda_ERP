@@ -9,6 +9,7 @@ using AlMotaheda.Modules.Projects.Features;
 using AlMotaheda.Modules.Projects.Features.Inbox;
 using AlMotaheda.Modules.Projects.Features.Members;
 using AlMotaheda.Modules.Projects.Features.Projects;
+using AlMotaheda.Modules.Projects.Features.SiteLocation;
 using AlMotaheda.Modules.Projects.Integration;
 using AlMotaheda.Modules.Projects.Security;
 using AlMotaheda.Modules.Projects.Startup;
@@ -66,7 +67,13 @@ public sealed class ProjectsModule : IModule
         ReportingFeatures.AddServices(services);
         services.AddScoped<IWorkInboxSource, ProjectsInboxSource>();
 
+        // Site engineers' location sharing and its alerts (owner's rules of 2026-10-17).
+        services.AddOptions<SiteLocationOptions>().Bind(configuration.GetSection(SiteLocationOptions.SectionName)).ValidateOnStart();
+        services.AddSingleton<IValidateOptions<SiteLocationOptions>, SiteLocationOptionsValidator>();
+        services.AddScoped<SiteLocationAlerts>();
+
         services.AddHostedService<ProjectsStartup>();
+        services.AddHostedService<SiteLocationWorker>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints)
@@ -91,6 +98,7 @@ public sealed class ProjectsModule : IModule
         CoreFeatures.Map(api, projects);
         PlanningFeatures.Map(api, projects);
         ReportingFeatures.Map(projects);
+        SiteLocationEndpoints.Map(projects);
         GetWorkInbox.Map(api);
     }
 }

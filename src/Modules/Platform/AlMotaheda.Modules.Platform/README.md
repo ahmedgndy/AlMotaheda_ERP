@@ -38,6 +38,8 @@ any module's slice ── SaveChanges ──► AuditTrailInterceptor (BuildingB
 | Report request | added | recipient | `ReportRequested` |
 | Report request | → InProgress, Submitted | requester | `ReportStarted`, `ReportSubmitted` |
 | Report request | → Returned, Completed, Cancelled | recipient | `RecordReturned`, `ReportCompleted`, `ReportCancelled` |
+| Location alert (no position) | added, → Recovered | project manager and Executives, one row each | `LocationUnavailable`, `LocationAvailable` |
+| Location alert (outside the site) | added, → Recovered | project manager and Executives, one row each | `OutsideSite`, `BackInsideSite` |
 
 "Something is waiting for your review" is not a notification: it stays in the work inbox (`GET /api/inbox`),
 computed from the records and the reviewer's permissions.

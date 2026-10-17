@@ -1,0 +1,107 @@
+# CI: every push and pull request is built and fully tested.
+# Each test project runs in its own job (its own machine), so the SQL Server test containers never compete for
+# memory the way they do on a 4 GB Docker Desktop.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    tags-ignore: ["v*"]
+  pull_request:
+  workflow_dispatch:
+  # The release workflow runs this first.
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+          cache: true
+          cache-dependency-path: Directory.Packages.props
+      - run: dotnet restore AlMotahedaERP.slnx
+      - run: dotnet build AlMotahedaERP.slnx --configuration Release --no-restore
+      - name: Check for vulnerable packages
+        run: |
+          dotnet list AlMotahedaERP.slnx package --vulnerable --include-transitive | tee vulnerable.txt
+          if grep -q "has the following vulnerable packages" vulnerable.txt; then
+            echo "::warning::Vulnerable NuGet packages found, see the log above."
+          fi
+
+  test:
+    name: Test ${{ matrix.project }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - AlMotaheda.Api.Tests
+          - AlMotaheda.Integration.Tests
+          - Modules/AlMotaheda.Modules.Access.Tests
+          - Modules/AlMotaheda.Modules.Archive.Tests
+          - Modules/AlMotaheda.Modules.Finance.Tests
+          - Modules/AlMotaheda.Modules.Fleet.Tests
+          - Modules/AlMotaheda.Modules.HR.Tests
+          - Modules/AlMotaheda.Modules.Platform.Tests
+          - Modules/AlMotaheda.Modules.Procurement.Tests
+          - Modules/AlMotaheda.Modules.Projects.Tests
+          - Modules/AlMotaheda.Modules.Reports.Tests
+          - Modules/AlMotaheda.Modules.Subcontractors.Tests
+          - Modules/AlMotaheda.Modules.Workforce.Tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+          cache: true
+          cache-dependency-path: Directory.Packages.props
+      # The SQL Server tests start SQL Server 2022 in Docker (Testcontainers); Docker is already on the runner.
+      - name: Test
+        run: >
+          dotnet test tests/${{ matrix.project }}
+          --configuration Release
+          --logger "trx;LogFileName=results.trx"
+          --results-directory test-results
+      - name: Name the results
+        if: always()
+        id: name
+        run: echo "artifact=test-results-$(basename '${{ matrix.project }}')" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ steps.name.outputs.artifact }}
+          path: test-results
+          retention-days: 14
+
+  docker:
+    name: Docker image builds
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: almotaheda-erp-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

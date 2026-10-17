@@ -22,6 +22,10 @@ internal sealed class ProjectsApi : IAsyncDisposable
     public static async Task<ProjectsApi> StartAsync(SqlServerFixture database, IDictionary<string, string?> settings) =>
         new(await AccessApi.StartAsync(database, settings));
 
+    /// <summary>The same, replacing services after the host is composed (for example a fake push sender).</summary>
+    public static async Task<ProjectsApi> StartAsync(SqlServerFixture database, Action<Microsoft.AspNetCore.Builder.WebApplicationBuilder> configureBuilder) =>
+        new(await AccessApi.StartAsync(database, configureBuilder: configureBuilder));
+
     public Task<Session> SignInExecutiveAsync() => Access.SignInExecutiveAsync();
 
     /// <summary>A new user with their own password set, signed in. Returns the user's id and session.</summary>

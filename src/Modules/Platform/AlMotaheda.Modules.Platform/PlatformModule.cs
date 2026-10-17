@@ -5,9 +5,11 @@ using AlMotaheda.Modules.Platform.DatabaseBackup;
 using AlMotaheda.Modules.Platform.Common;
 using AlMotaheda.Modules.Platform.Data;
 using AlMotaheda.Modules.Platform.Features.Audit;
+using AlMotaheda.Modules.Platform.Features.Devices;
 using AlMotaheda.Modules.Platform.Features.Notifications;
 using AlMotaheda.Modules.Platform.Live;
 using AlMotaheda.Modules.Platform.Outbox;
+using AlMotaheda.Modules.Platform.Push;
 using AlMotaheda.Modules.Platform.Startup;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -48,6 +50,12 @@ public sealed class PlatformModule : IModule
         services.AddSignalR(hub => hub.MaximumReceiveMessageSize = 4 * 1024);
         services.AddSingleton<ILiveUpdates, SignalRLiveUpdates>();
 
+        // Push notifications (Firebase Cloud Messaging): off until a service-account file is configured.
+        services.AddOptions<PushOptions>().Bind(configuration.GetSection(PushOptions.SectionName));
+        services.AddHttpClient(FcmPushSender.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
+        services.AddSingleton<IPushSender, FcmPushSender>();
+        services.AddScoped<PushDelivery>();
+
         // Cache removal: the same dependency map as the live signals.
         services.AddSingleton<IChangeObserver, CacheInvalidation>();
 
@@ -71,6 +79,8 @@ public sealed class PlatformModule : IModule
         ListNotifications.Map(api);
         GetUnreadNotificationCount.Map(api);
         MarkNotificationsRead.Map(api);
+        RegisterDevice.Map(api);
+        UnregisterDevice.Map(api);
         ListAuditEntries.Map(api);
         BackupEndpoints.Map(api);
 

@@ -4,6 +4,7 @@ using AlMotaheda.Modules.Platform.Common;
 using AlMotaheda.Modules.Platform.Data;
 using AlMotaheda.Modules.Platform.Live;
 using AlMotaheda.Modules.Platform.Notifications;
+using AlMotaheda.Modules.Platform.Push;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -143,6 +144,20 @@ internal sealed class OutboxDispatcher(
         }
 
         await PublishAsync(scope.ServiceProvider, live, cancellationToken);
+
+        // Push to the recipients' phones, also only after the commit and also best effort (docs: Push/PushDelivery).
+        if (scope.ServiceProvider.GetService<PushDelivery>() is { } push)
+        {
+            try
+            {
+                await push.SendAsync(db, stored, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                log.LiveUpdatesFailed(exception, stored.Count);
+            }
+        }
+
         return messages.Count;
     }
 

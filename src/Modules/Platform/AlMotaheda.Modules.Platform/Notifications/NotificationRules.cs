@@ -14,6 +14,10 @@ internal static class NotificationTypes
     public const string ReportCancelled = "ReportCancelled";
     public const string ExportReady = "ExportReady";
     public const string ExportFailed = "ExportFailed";
+    public const string LocationUnavailable = "LocationUnavailable";
+    public const string LocationAvailable = "LocationAvailable";
+    public const string OutsideSite = "OutsideSite";
+    public const string BackInsideSite = "BackInsideSite";
 }
 
 /// <summary>A notification to store: who gets it, its type and its title in both languages.</summary>
@@ -52,6 +56,8 @@ internal static class NotificationRules
         ["Requisition"] = ("purchase requisition", "طلب الشراء"),
         ["QuotationRequest"] = ("quotation set", "مجموعة عروض الأسعار"),
         ["ReportRun"] = ("report export", "تصدير التقرير"),
+        ["LocationUnavailableAlert"] = ("location alert", "تنبيه الموقع"),
+        ["OutsideSiteAlert"] = ("location alert", "تنبيه الموقع"),
     };
 
     /// <summary>StatusAfter <c>null</c> = the record was just added.</summary>
@@ -85,6 +91,13 @@ internal static class NotificationRules
         new("ReportRequest", "Returned", "RecipientUserId", NotificationTypes.RecordReturned),
         new("ReportRequest", "Completed", "RecipientUserId", NotificationTypes.ReportCompleted),
         new("ReportRequest", "Cancelled", "RecipientUserId", NotificationTypes.ReportCancelled),
+
+        // Site engineers' location (Projects module): one alert row per recipient, opened once per outage and
+        // closed once when it is over. Closing because sharing was turned off ("Ended") tells nobody.
+        new("LocationUnavailableAlert", null, "RecipientUserId", NotificationTypes.LocationUnavailable),
+        new("LocationUnavailableAlert", "Recovered", "RecipientUserId", NotificationTypes.LocationAvailable),
+        new("OutsideSiteAlert", null, "RecipientUserId", NotificationTypes.OutsideSite),
+        new("OutsideSiteAlert", "Recovered", "RecipientUserId", NotificationTypes.BackInsideSite),
     ];
 
     /// <summary>The notifications one changed record causes. <paramref name="actorUserId"/> made the change.</summary>
@@ -139,6 +152,10 @@ internal static class NotificationRules
         NotificationTypes.ReportCancelled => ("A report request to you was cancelled", "تم إلغاء طلب تقرير موجّه إليك"),
         NotificationTypes.ExportReady => ("Your report export is ready to download", "تصدير التقرير جاهز للتنزيل"),
         NotificationTypes.ExportFailed => ("Your report export failed", "تعذّر تصدير التقرير"),
+        NotificationTypes.LocationUnavailable => ("A site engineer's location is unavailable", "موقع مهندس الموقع غير متاح"),
+        NotificationTypes.LocationAvailable => ("A site engineer's location is available again", "عاد موقع مهندس الموقع متاحاً"),
+        NotificationTypes.OutsideSite => ("A site engineer is outside the site area", "مهندس الموقع خارج نطاق الموقع"),
+        NotificationTypes.BackInsideSite => ("A site engineer is back in the site area", "عاد مهندس الموقع إلى نطاق الموقع"),
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown notification type."),
     };
 }

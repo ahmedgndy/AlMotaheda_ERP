@@ -87,3 +87,26 @@ internal sealed class NotificationConfiguration : IEntityTypeConfiguration<Notif
             .IncludeProperties(notification => notification.ReadAt);
     }
 }
+
+internal sealed class DeviceTokenConfiguration : IEntityTypeConfiguration<DeviceToken>
+{
+    public const string TokenIndex = "UX_DeviceToken_Token";
+
+    /// <summary>Firebase registration tokens are about 160 characters today; room to spare.</summary>
+    public const int TokenMaxLength = 400;
+
+    public void Configure(EntityTypeBuilder<DeviceToken> builder)
+    {
+        builder.ToTable(nameof(DeviceToken), table =>
+            table.HasCheckConstraint("CK_DeviceToken_Platform", $"[Platform] IN ({SqlList.Of(DevicePlatforms.All)})"));
+
+        builder.Property(device => device.Platform).HasMaxLength(20);
+        builder.Property(device => device.Token).HasMaxLength(TokenMaxLength);
+
+        // One row per phone: registering the same token again updates it (and moves it to the signed-in user).
+        builder.HasIndex(device => device.Token).IsUnique().HasDatabaseName(TokenIndex);
+
+        // Sending: the active tokens of one recipient.
+        builder.HasIndex(device => device.UserId, "IX_DeviceToken_User").HasFilter("[DisabledAt] IS NULL");
+    }
+}

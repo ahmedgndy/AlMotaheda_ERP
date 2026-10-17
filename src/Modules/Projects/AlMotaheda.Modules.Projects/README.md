@@ -69,6 +69,29 @@ frontend shows only the buttons that will work. The server checks again on every
 Dates are `yyyy-MM-dd`. Statuses and responsibilities are sent and returned by name (`OnHold`; any letter case is
 accepted). Edits take the `rowVersion` from your last read and answer 409 `concurrency_conflict` if someone saved first.
 
+## Site engineers' location (owner's rules of 2026-10-17)
+
+Only an active site engineer of the project shares, only after turning it on in the app (which shows a notice
+first), and only during working hours. Only the project's active manager and Executives see it.
+
+| Endpoint | Who | Notes |
+|---|---|---|
+| `GET /api/projects/{id}/site-location/me` | anyone who can open the project | `{ canShare, isOn, heartbeatMinutes, workDays, workStart, workEnd, inWorkingHours, … }` |
+| `PUT /api/projects/{id}/site-location/me` `{ isOn }` | on: site engineer, project not completed; off: always | 403 for anyone else |
+| `POST /api/projects/{id}/site-location/me/positions` `{ latitude, longitude, accuracyMeters, recordedAt }` | site engineer with sharing on | 409 `location_sharing_off`; outside working hours `stored: false` and nothing is kept |
+| `GET /api/projects/{id}/site-location` | project manager, Executive | each site engineer's state: `Off`, `Unavailable`, `OutsideSite`, `OnSite`, `Sharing` |
+| `GET /api/projects/{id}/site-location/{userId}/positions?date=yyyy-MM-dd` | project manager, Executive | one company day, oldest first |
+
+- **Silence.** The monitor (`SiteLocationWorker`, every `CheckEverySeconds`) marks a phone "location unavailable"
+  when no position arrived for `UnavailableAfterMinutes`, counting only today's working hours. It never guesses why.
+- **Outside the site.** A position is outside only when even its accuracy circle is beyond the site radius;
+  `OutsidePingsBeforeAlert` such positions in a row raise the alert. A rough position near the edge counts as neither.
+- **Alerts** (`LocationAlert`, one row per recipient: the project manager and every active Executive) open once per
+  outage and close once (`Recovered`), so the Platform rules notify once each way. Turning sharing off, leaving the
+  project or a completed project closes them as `Ended`, which notifies nobody.
+- Positions (`LocationPing`) and the sharing rows are not audited (personal data, every few minutes); alerts are.
+  Positions older than `KeepDays` are deleted hourly.
+
 ## Errors
 
 | Status | Code | When |
@@ -91,6 +114,10 @@ accepted). Edits take the `rowVersion` from your last read and answer 409 `concu
   migrations before the Projects migrations.**
 
 ## Configuration
+
+Section `SiteLocation`: `HeartbeatMinutes` (5), `UnavailableAfterMinutes` (15), `OutsidePingsBeforeAlert` (2),
+`KeepDays` (90), `CheckEverySeconds` (60), `WorkDays` (Saturday to Thursday), `WorkStart` (08:00), `WorkEnd` (17:00),
+`MonitorEnabled` (true). Company time zone: `Projects:TimeZone`. Checked at startup.
 
 | Setting | Default | Notes |
 |---|---|---|
@@ -119,4 +146,5 @@ accepted). Edits take the `rowVersion` from your last read and answer 409 `concu
   `ExecutiveGate`, and the per-project lock.
 - `Common`: validation, error responses, the audit log, the business calendar.
 - `Data`: entities, `ProjectsDbContext`, table configuration and migrations.
+- `Features/SiteLocation`: the location endpoints, the pure rules (`SiteLocationRules`), alerts and the monitor.
 - `Startup`: applies migrations when enabled.

@@ -1,0 +1,104 @@
+# CD: a version tag (for example v1.4.0) produces everything needed to install that version:
+#   1. the Docker image, pushed to GitHub Container Registry (ghcr.io/<owner>/almotaheda-erp-api:<version>)
+#   2. a ready-to-run Windows build (win-x64 zip) for the Windows server with IIS or a Windows service
+#   3. the reviewed-in-order SQL migration scripts
+# and attaches 2 and 3 to a GitHub Release. Nothing is installed on a server automatically:
+# the database scripts must be reviewed and applied first (see deploy/README.md).
+#
+#   git tag v1.4.0 && git push origin v1.4.0
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  IMAGE_NAME: almotaheda-erp-api
+
+jobs:
+  # Same build and tests as CI; a release never ships a red build.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  image:
+    name: Docker image
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  packages:
+    name: Windows build and migration scripts
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Version
+        id: version
+        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Publish for Windows (needs the ASP.NET Core 10 Hosting Bundle on the server)
+        run: >
+          dotnet publish src/Host/AlMotaheda.Api/AlMotaheda.Api.csproj
+          --configuration Release --runtime win-x64 --self-contained false
+          --output artifacts/win-x64
+          /p:Version=${{ steps.version.outputs.value }}
+      - name: Zip the Windows build
+        run: cd artifacts/win-x64 && zip -qr "../almotaheda-erp-api-${{ steps.version.outputs.value }}-win-x64.zip" .
+      - name: Migration scripts
+        run: |
+          deploy/migration-scripts.sh artifacts/migrations
+          cd artifacts && zip -qr "almotaheda-erp-migrations-${{ steps.version.outputs.value }}.zip" migrations
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-files
+          path: artifacts/*.zip
+
+  github-release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [image, packages]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-files
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: "*.zip"
+          generate_release_notes: true

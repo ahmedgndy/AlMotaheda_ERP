@@ -1,0 +1,24 @@
+# Keep the Docker build context small and free of secrets.
+**/bin/
+**/obj/
+**/App_Data/
+**/TestResults/
+**/test-results/
+**/.vs/
+**/.vscode/
+**/.idea/
+**/*.user
+**/.DS_Store
+
+.git/
+.github/
+.claude/
+docs/
+deploy/
+tests/
+
+# Secrets never go into an image.
+**/.env
+**/.env.*
+**/appsettings.*.local.json
+**/secrets.json
