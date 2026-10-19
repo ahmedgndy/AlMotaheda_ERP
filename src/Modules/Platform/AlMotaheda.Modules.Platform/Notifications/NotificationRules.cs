@@ -18,6 +18,10 @@ internal static class NotificationTypes
     public const string LocationAvailable = "LocationAvailable";
     public const string OutsideSite = "OutsideSite";
     public const string BackInsideSite = "BackInsideSite";
+    public const string PriceAboveRange = "PriceAboveRange";
+    public const string CostRecorded = "CostRecorded";
+    public const string PaymentPaid = "PaymentPaid";
+    public const string PaymentFailed = "PaymentFailed";
 }
 
 /// <summary>A notification to store: who gets it, its type and its title in both languages.</summary>
@@ -58,6 +62,10 @@ internal static class NotificationRules
         ["ReportRun"] = ("report export", "تصدير التقرير"),
         ["LocationUnavailableAlert"] = ("location alert", "تنبيه الموقع"),
         ["OutsideSiteAlert"] = ("location alert", "تنبيه الموقع"),
+        ["PriceRange"] = ("price range request", "طلب النطاق السعري"),
+        ["PriceAboveRangeAlert"] = ("purchase above its reference price", "شراء بسعر أعلى من السعر المرجعي"),
+        ["CostRecordedAlert"] = ("new site cost", "تكلفة موقع جديدة"),
+        ["PaymentRequest"] = ("payment request", "طلب الصرف"),
     };
 
     /// <summary>StatusAfter <c>null</c> = the record was just added.</summary>
@@ -98,6 +106,22 @@ internal static class NotificationRules
         new("LocationUnavailableAlert", "Recovered", "RecipientUserId", NotificationTypes.LocationAvailable),
         new("OutsideSiteAlert", null, "RecipientUserId", NotificationTypes.OutsideSite),
         new("OutsideSiteAlert", "Recovered", "RecipientUserId", NotificationTypes.BackInsideSite),
+
+        // The company price list (Projects module): the requester hears the Executive's decision.
+        new("PriceRange", "Approved", "RequestedBy", NotificationTypes.RecordApproved),
+        new("PriceRange", "Rejected", "RequestedBy", NotificationTypes.RecordRejected),
+
+        // Cost alerts (Projects module): one row per recipient, written in the record's own transaction, so a
+        // notification exists only for a committed record and a retried delivery stores it once.
+        new("PriceAboveRangeAlert", null, "RecipientUserId", NotificationTypes.PriceAboveRange),
+        new("CostRecordedAlert", null, "RecipientUserId", NotificationTypes.CostRecorded),
+
+        // Payment requests (Finance): whoever asked hears the Executive's decision and the payment's outcome. The
+        // notification holds no amount or payee: it only points to the request.
+        new("PaymentRequest", "Approved", "CreatedBy", NotificationTypes.RecordApproved),
+        new("PaymentRequest", "Rejected", "CreatedBy", NotificationTypes.RecordRejected),
+        new("PaymentRequest", "Paid", "CreatedBy", NotificationTypes.PaymentPaid),
+        new("PaymentRequest", "Failed", "CreatedBy", NotificationTypes.PaymentFailed),
     ];
 
     /// <summary>The notifications one changed record causes. <paramref name="actorUserId"/> made the change.</summary>
@@ -156,6 +180,10 @@ internal static class NotificationRules
         NotificationTypes.LocationAvailable => ("A site engineer's location is available again", "عاد موقع مهندس الموقع متاحاً"),
         NotificationTypes.OutsideSite => ("A site engineer is outside the site area", "مهندس الموقع خارج نطاق الموقع"),
         NotificationTypes.BackInsideSite => ("A site engineer is back in the site area", "عاد مهندس الموقع إلى نطاق الموقع"),
+        NotificationTypes.PriceAboveRange => ("A purchase was recorded above its reference price", "تم تسجيل شراء بسعر أعلى من السعر المرجعي"),
+        NotificationTypes.CostRecorded => ("A new site cost is waiting for review", "تكلفة موقع جديدة بانتظار المراجعة"),
+        NotificationTypes.PaymentPaid => ("Your payment request was paid", "تم صرف طلب الصرف الخاص بك"),
+        NotificationTypes.PaymentFailed => ("Your payment request failed at the bank", "تعذّر تنفيذ طلب الصرف لدى البنك"),
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown notification type."),
     };
 }

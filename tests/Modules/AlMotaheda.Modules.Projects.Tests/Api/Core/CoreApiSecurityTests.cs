@@ -28,6 +28,8 @@ public sealed class CoreApiSecurityTests
         { "GET", "/api/projects/1/items/unallocated", "projects:F" },
         { "GET", "/api/projects/1/items/options", "projects:V" },
         { "GET", "/api/projects/1/items/2", "projects:F" },
+        { "GET", "/api/projects/1/items/2/cost-breakdown", "projects:F" },
+        { "PUT", "/api/projects/1/items/2/parent", "projects:E" },
         { "POST", "/api/projects/1/items", "projects:E" },
         { "PUT", "/api/projects/1/items/2", "projects:E" },
         { "POST", "/api/projects/1/items/2/deactivate", "projects:E" },

@@ -52,10 +52,15 @@ internal sealed record ItemFields(string NameAr, string NameEn, string Category,
         item.Notes = Notes;
     }
 
-    /// <summary>True when another item of the project already has one of the names.</summary>
-    public Task<bool> NameTakenAsync(ProjectsDbContext db, int projectId, int? exceptItemId, CancellationToken cancellationToken) =>
+    /// <summary>True when another item with the same parent (or another main item) already has one of the names.</summary>
+    public Task<bool> NameTakenAsync(ProjectsDbContext db, int projectId, int? parentItemId, int? exceptItemId, CancellationToken cancellationToken) =>
+        NameTakenAsync(db, projectId, parentItemId, exceptItemId, NameAr, NameEn, cancellationToken);
+
+    public static Task<bool> NameTakenAsync(
+        ProjectsDbContext db, int projectId, int? parentItemId, int? exceptItemId, string nameAr, string nameEn, CancellationToken cancellationToken) =>
         db.ProjectItems.AnyAsync(
-            other => other.ProjectId == projectId && other.Id != exceptItemId && (other.NameAr == NameAr || other.NameEn == NameEn),
+            other => other.ProjectId == projectId && other.ParentItemId == parentItemId && other.Id != exceptItemId
+                     && (other.NameAr == nameAr || other.NameEn == nameEn),
             cancellationToken);
 }
 
@@ -75,6 +80,34 @@ internal static class ItemRules
         }
 
         return project.WritesBlocked ? ProjectProblems.CompletedProject() : null;
+    }
+
+    /// <summary>
+    /// Checks that <paramref name="parentItemId"/> can be the parent of a sub-item: an item of this project
+    /// (otherwise a form error on <c>parentItemId</c>), a main item, and active. Run under the project lock, so the
+    /// parent can't become a sub-item or be deactivated between this check and the save.
+    /// </summary>
+    /// <returns>The rule conflict to send back, or <c>null</c>; a parent that is not found is added to <paramref name="errors"/>.</returns>
+    public static async Task<ProblemHttpResult?> ParentProblemAsync(
+        ProjectsDbContext db, int projectId, int parentItemId, ValidationErrors errors, CancellationToken cancellationToken)
+    {
+        var parent = await db.ProjectItems.AsNoTracking()
+            .Where(item => item.Id == parentItemId && item.ProjectId == projectId)
+            .Select(item => new { item.ParentItemId, item.Status })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (parent is null)
+        {
+            errors.Add("parentItemId", "The main item was not found on this project.");
+            return null;
+        }
+
+        if (parent.ParentItemId is not null)
+        {
+            return CoreProblems.ParentIsSubItem();
+        }
+
+        return parent.Status == ProjectItemStatus.Active ? null : CoreProblems.ParentInactive();
     }
 
     /// <summary>True when the save failed on one of the item name indexes.</summary>

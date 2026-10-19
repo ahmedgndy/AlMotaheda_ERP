@@ -1,6 +1,7 @@
 using AlMotaheda.Modules.Access.Contracts;
 using AlMotaheda.Modules.Projects.Common;
 using AlMotaheda.Modules.Projects.Data;
+using AlMotaheda.Modules.Projects.Features.Prices;
 using AlMotaheda.Modules.Projects.Features.Projects;
 using Microsoft.EntityFrameworkCore;
 
@@ -34,6 +35,8 @@ internal sealed record ExpenseAdjustmentView(
 /// A caller without projects SeeMoney sees only their own records and the amount they typed. How a record was
 /// paid is not theirs to see (owner decision, QA P9-02): <see cref="Paid"/>, <see cref="Outstanding"/> and
 /// <see cref="PaymentState"/> are <c>null</c> and <see cref="Payments"/> is empty for them.
+/// <see cref="PriceCheck"/> is the comparison with the company price list made when the record was recorded; the
+/// recorder typed the price, so it is shown to them too.
 /// </remarks>
 internal sealed record ExpenseView(
     int Id,
@@ -81,7 +84,8 @@ internal sealed record ExpenseView(
     PersonRef Recorder,
     DateTime? UpdatedAt,
     int? UpdatedBy,
-    string RowVersion)
+    string RowVersion,
+    PriceCheckView? PriceCheck)
 {
     public static ExpenseView From(ExpenseRow row, IReadOnlyDictionary<int, UserSummary> people, bool seesMoney)
     {
@@ -133,7 +137,8 @@ internal sealed record ExpenseView(
             PersonRef.From(row.CreatedBy, people),
             row.UpdatedAt,
             row.UpdatedBy,
-            RowVersions.Format(row.RowVersion));
+            RowVersions.Format(row.RowVersion),
+            PriceCheckView.From(row));
     }
 
     /// <summary>Builds the views of a page with one name lookup for every recorder and reviewer on it.</summary>

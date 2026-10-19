@@ -24,6 +24,7 @@ namespace AlMotaheda.Modules.Access.Security;
 /// at a time. That closes a race the token check alone can't: two Executives disabling each other at the same
 /// moment would otherwise leave the company with no active Executive.</para>
 /// </remarks>
+/// 
 internal sealed class UserManagementGate(AccessDbContext db, TimeProvider time, SecurityLog log)
 {
     private const string LockName = "AlMotaheda.Access.UserManagement";

@@ -14,7 +14,11 @@ public interface IProjectItems
 }
 
 /// <param name="IsActive">New records can only be linked to an active item.</param>
-public sealed record ProjectItemRef(int Id, int ProjectId, string NameAr, string NameEn, bool IsActive);
+/// <param name="ParentItemId">
+/// The main item this is a sub-item of, or <c>null</c> for a main item. A record may be linked to either: labor is
+/// often recorded on the main item, a purchase on the sub-item it is for.
+/// </param>
+public sealed record ProjectItemRef(int Id, int ProjectId, string NameAr, string NameEn, bool IsActive, int? ParentItemId = null);
 
 /// <summary>Looks up suppliers (a company-wide list owned by Projects) for modules that record supplier costs.</summary>
 public interface ISupplierDirectory

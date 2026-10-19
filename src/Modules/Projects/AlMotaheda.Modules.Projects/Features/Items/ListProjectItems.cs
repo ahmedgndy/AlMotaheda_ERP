@@ -57,12 +57,13 @@ internal static class ListProjectItems
         var data = await source.LoadAsync(projectId, cancellationToken);
         var text = Input.Clean(search);
 
-        var rows = data.Items
+        // Screen order: each main item followed by its sub-items.
+        var rows = data.Tree.Ordered
             .Where(item => includeInactive || item.Status == ProjectItemStatus.Active)
             .Where(item => text is null
                 || item.NameAr.Contains(text, StringComparison.OrdinalIgnoreCase)
                 || item.NameEn.Contains(text, StringComparison.OrdinalIgnoreCase))
-            .Select(item => ItemRow.From(item, data.Ledger.Of(item.Id)))
+            .Select(data.RowOf)
             .ToList();
 
         var reconciliation = await ReconcileAsync(projectId, data, costSources, cancellationToken);

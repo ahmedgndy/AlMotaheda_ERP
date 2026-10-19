@@ -37,6 +37,14 @@ internal sealed class ExpenseRow
     public string? CatalogItemNameAr { get; init; }
     public string? CatalogItemNameEn { get; init; }
     public decimal? CatalogPriceAtRecording { get; init; }
+    public int? PriceItemId { get; init; }
+    public string? PriceItemNameAr { get; init; }
+    public string? PriceItemNameEn { get; init; }
+    public int? PriceRangeId { get; init; }
+    public decimal? ReferenceMinPrice { get; init; }
+    public decimal? ReferenceMaxPrice { get; init; }
+    public PriceCheckResult? PriceCheck { get; init; }
+    public string? PriceJustification { get; init; }
     public int? ProjectItemId { get; init; }
     public string? ProjectItemNameAr { get; init; }
     public string? ProjectItemNameEn { get; init; }
@@ -134,6 +142,22 @@ internal static class ExpenseQueries
         var query = db.ProjectExpenses.AsNoTracking()
             .Where(expense => expense.ProjectId == projectId && expense.ProjectItemId == itemId)
             .Where(expense => expense.Kind == ExpenseKind.Supply || expense.SupplierId != null || expense.ProjectItemId != null);
+
+        query = approved
+            ? query.Where(expense => expense.Status == ExpenseStatus.Approved)
+            : query.Where(expense => expense.Status == ExpenseStatus.Recorded || expense.Status == ExpenseStatus.Returned);
+
+        return Project(db, query.OrderByDescending(expense => expense.ExpenseDate).ThenByDescending(expense => expense.Id));
+    }
+
+    /// <summary>
+    /// The records linked to any of <paramref name="itemIds"/> (a main item and its sub-items), approved or still
+    /// waiting for review (recorded or returned), newest first. One query for the whole breakdown.
+    /// </summary>
+    public static IQueryable<ExpenseRow> LinesOfItems(ProjectsDbContext db, int projectId, int[] itemIds, bool approved)
+    {
+        var query = db.ProjectExpenses.AsNoTracking()
+            .Where(expense => expense.ProjectId == projectId && expense.ProjectItemId != null && itemIds.Contains(expense.ProjectItemId.Value));
 
         query = approved
             ? query.Where(expense => expense.Status == ExpenseStatus.Approved)
@@ -274,6 +298,14 @@ internal static class ExpenseQueries
             CatalogItemNameAr = expense.CatalogItem != null ? expense.CatalogItem.NameAr : null,
             CatalogItemNameEn = expense.CatalogItem != null ? expense.CatalogItem.NameEn : null,
             CatalogPriceAtRecording = expense.CatalogPriceAtRecording,
+            PriceItemId = expense.PriceItemId,
+            PriceItemNameAr = expense.PriceItem != null ? expense.PriceItem.NameAr : null,
+            PriceItemNameEn = expense.PriceItem != null ? expense.PriceItem.NameEn : null,
+            PriceRangeId = expense.PriceRangeId,
+            ReferenceMinPrice = expense.ReferenceMinPrice,
+            ReferenceMaxPrice = expense.ReferenceMaxPrice,
+            PriceCheck = expense.PriceCheck,
+            PriceJustification = expense.PriceJustification,
             ProjectItemId = expense.ProjectItemId,
             ProjectItemNameAr = expense.ProjectItem != null ? expense.ProjectItem.NameAr : null,
             ProjectItemNameEn = expense.ProjectItem != null ? expense.ProjectItem.NameEn : null,

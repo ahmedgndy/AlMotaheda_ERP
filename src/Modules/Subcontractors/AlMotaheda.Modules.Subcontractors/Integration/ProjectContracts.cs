@@ -33,6 +33,56 @@ internal sealed class SubcontractItemCosts(SubcontractorsDbContext db) : ISubcon
             .ToList();
     }
 
+    public async Task<IReadOnlyDictionary<int, IReadOnlyList<SubcontractItemLine>>> LinesByItemAsync(
+        int projectId, IReadOnlyCollection<int> itemIds, CancellationToken cancellationToken)
+    {
+        if (itemIds.Count == 0)
+        {
+            return new Dictionary<int, IReadOnlyList<SubcontractItemLine>>();
+        }
+
+        var ids = itemIds.Distinct().ToArray();
+        var rows = await ItemCostQueries.ApprovedWorkOn(db, projectId, ids).ToListAsync(cancellationToken);
+
+        return rows
+            .GroupBy(row => row.ProjectItemId!.Value)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<SubcontractItemLine>)group
+                    .OrderByDescending(row => row.Date)
+                    .ThenBy(row => row.Kind)
+                    .ThenByDescending(row => row.Id)
+                    .Select(row => row.ToLine())
+                    .ToList());
+    }
+
+    public async Task<IReadOnlyList<SubcontractItemCommitment>> CommitmentsByItemAsync(
+        int projectId, IReadOnlyCollection<int> itemIds, CancellationToken cancellationToken)
+    {
+        if (itemIds.Count == 0)
+        {
+            return [];
+        }
+
+        var ids = itemIds.Distinct().ToArray();
+        var lines = await ItemCostQueries.CommitmentLines(db, projectId, ids).ToListAsync(cancellationToken);
+
+        return lines
+            .OrderBy(line => line.ItemId)
+            .ThenBy(line => line.ContractId)
+            .ThenBy(line => line.ContractItemId)
+            .Select(line =>
+            {
+                var value = Money.Round(line.Quantity * line.UnitPrice);
+                // The same rule as the project's commitment (SubcontractFigures.CostFigures): every contract not completed.
+                var remaining = line.Status == ContractStatus.Completed ? 0 : Math.Max(0, value - line.Executed);
+                return new SubcontractItemCommitment(
+                    line.ItemId, line.ContractId, line.ContractNo, line.ContractItemId, line.ContractItemName, line.SubcontractorId,
+                    line.SubcontractorNameAr, line.SubcontractorNameEn, line.Status.ToString(), value, line.Executed, remaining);
+            })
+            .ToList();
+    }
+
     public async Task<bool> HasLinksAsync(int projectId, int itemId, CancellationToken cancellationToken) =>
         await db.ContractItems.AnyAsync(item => item.ProjectItemId == itemId && item.Contract.ProjectId == projectId, cancellationToken)
         || await db.ManpowerSheets.AnyAsync(sheet => sheet.ProjectItemId == itemId && sheet.Contract.ProjectId == projectId, cancellationToken);
@@ -103,9 +153,53 @@ internal sealed class ItemWorkRow
         PaymentStates.Of(Amount, Allocated));
 }
 
+/// <summary>One contract line linked to a project item, with its approved measured work.</summary>
+internal sealed class CommitmentLineRow
+{
+    public int ItemId { get; init; }
+    public int ContractId { get; init; }
+    public string? ContractNo { get; init; }
+    public ContractStatus Status { get; init; }
+    public int ContractItemId { get; init; }
+    public string ContractItemName { get; init; } = "";
+    public int SubcontractorId { get; init; }
+    public string SubcontractorNameAr { get; init; } = "";
+    public string SubcontractorNameEn { get; init; } = "";
+    public decimal Quantity { get; init; }
+    public decimal UnitPrice { get; init; }
+    public decimal Executed { get; init; }
+}
+
 /// <summary>The queries behind the items contracts, as <see cref="IQueryable{T}"/> so tests can prove they translate.</summary>
 internal static class ItemCostQueries
 {
+    /// <summary>The approved work of a project on some project items: the rows of <see cref="ApprovedWork"/> on those items.</summary>
+    public static IQueryable<ItemWorkRow> ApprovedWorkOn(SubcontractorsDbContext db, int projectId, int[] itemIds) =>
+        ApprovedWork(db, projectId, itemFilter: false, itemId: null)
+            .Where(row => row.ProjectItemId != null && itemIds.Contains(row.ProjectItemId.Value));
+
+    /// <summary>The contract lines of a project linked to some project items, with their approved measured amount.</summary>
+    public static IQueryable<CommitmentLineRow> CommitmentLines(SubcontractorsDbContext db, int projectId, int[] itemIds) =>
+        db.ContractItems.AsNoTracking()
+            .Where(item => item.Contract.ProjectId == projectId && item.ProjectItemId != null && itemIds.Contains(item.ProjectItemId.Value))
+            .Select(item => new CommitmentLineRow
+            {
+                ItemId = item.ProjectItemId!.Value,
+                ContractId = item.ContractId,
+                ContractNo = item.Contract.ContractNo,
+                Status = item.Contract.Status,
+                ContractItemId = item.Id,
+                ContractItemName = item.Name,
+                SubcontractorId = item.Contract.SubcontractorId,
+                SubcontractorNameAr = item.Contract.Subcontractor.NameAr,
+                SubcontractorNameEn = item.Contract.Subcontractor.NameEn,
+                Quantity = item.Quantity,
+                UnitPrice = item.UnitPrice,
+                Executed = db.ProgressMeasurements
+                    .Where(measurement => measurement.ContractItemId == item.Id && measurement.Status == WorkStatus.Approved)
+                    .Sum(measurement => (decimal?)measurement.Amount) ?? 0,
+            });
+
     /// <summary>
     /// The approved measurements and manpower sheets of a project. With <paramref name="itemFilter"/>, only those on
     /// <paramref name="itemId"/>, or those not linked yet when it is <c>null</c>.

@@ -206,5 +206,7 @@ public sealed class ExpenseRulesTests
         string? DeliveryNoteNo = null,
         int? CatalogItemId = null,
         int? ProjectItemId = null,
-        string? Notes = null) : IExpenseFieldsRequest;
+        string? Notes = null,
+        int? PriceItemId = null,
+        string? PriceJustification = null) : IExpenseFieldsRequest;
 }

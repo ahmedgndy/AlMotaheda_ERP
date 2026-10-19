@@ -72,6 +72,33 @@ internal sealed class ProjectExpense
     public decimal? CatalogPriceAtRecording { get; set; }
 
     /// <summary>
+    /// Supply only, optional: the company price list item (price management) this purchase is compared with. Same
+    /// unit as the supply.
+    /// </summary>
+    public int? PriceItemId { get; set; }
+    public PriceItem? PriceItem { get; set; }
+
+    /// <summary>The approved range the unit price was compared with, when one applied on the purchase date.</summary>
+    public int? PriceRangeId { get; set; }
+    public PriceRange? PriceRange { get; set; }
+
+    /// <summary>The range's minimum and maximum, copied when the record was recorded: a later range never changes them.</summary>
+    public decimal? ReferenceMinPrice { get; set; }
+    public decimal? ReferenceMaxPrice { get; set; }
+
+    /// <summary>The result of the comparison, computed by the server when the record was recorded or resubmitted.</summary>
+    public PriceCheckResult? PriceCheck { get; set; }
+
+    /// <summary>Why the price is above the range: required from the recorder in that case.</summary>
+    public string? PriceJustification { get; set; }
+
+    /// <summary>
+    /// A client-made key for one "save" of the form. Sending the same key again (a retry, a double tap) returns the
+    /// first record and records nothing (unique index), so the same purchase is never charged twice.
+    /// </summary>
+    public Guid? IdempotencyKey { get; set; }
+
+    /// <summary>
     /// The project item this cost belongs to; empty while it is "not linked to an item yet". A link, not a copy:
     /// changing it moves the amount between items and never creates a row.
     /// </summary>

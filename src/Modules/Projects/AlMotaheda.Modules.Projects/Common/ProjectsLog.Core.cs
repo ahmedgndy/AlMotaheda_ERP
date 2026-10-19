@@ -26,6 +26,9 @@ internal sealed partial class ProjectsLog
     [LoggerMessage(EventId = 2414, Level = LogLevel.Information, Message = "User {ActorId} deleted item {ItemId} on project {ProjectId}")]
     public partial void ItemDeleted(int actorId, int projectId, int itemId);
 
+    [LoggerMessage(EventId = 2415, Level = LogLevel.Information, Message = "User {ActorId} moved item {ItemId} on project {ProjectId} under {ParentItemId}; was under {PreviousParentItemId}")]
+    public partial void ItemMoved(int actorId, int projectId, int itemId, int? parentItemId, int? previousParentItemId);
+
     [LoggerMessage(EventId = 2421, Level = LogLevel.Information, Message = "User {ActorId} recorded {Kind} {ExpenseId} on project {ProjectId} ({Channel})")]
     public partial void ExpenseRecorded(int actorId, int projectId, int expenseId, string kind, string channel);
 

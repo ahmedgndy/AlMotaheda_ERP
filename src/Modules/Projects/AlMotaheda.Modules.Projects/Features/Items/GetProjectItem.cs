@@ -109,12 +109,19 @@ internal sealed class ItemDetails(ProjectsDbContext db, ItemsLedgerSource source
         var subcontractLines = await subcontracts.LinesAsync(projectId, itemId, cancellationToken);
         var laborLines = await labor.LinesAsync(projectId, itemId, cancellationToken);
 
+        var subItems = item is null
+            ? []
+            : data.Tree.SubItemIds(item.Id).Select(child => data.RowOf(data.Items.First(candidate => candidate.Id == child))).ToList();
+        var withSubItems = item is null ? null : data.Tree.WithSubItems(item, data.Ledger);
+
         return new ItemDetail(
-            item is null ? null : ItemRow.From(item, figures),
+            item is null ? null : data.RowOf(item),
             approved.Select(SupplierLine.From).ToList(),
             subcontractLines,
             laborLines,
             pending.Select(SupplierLine.From).ToList(),
-            ItemFiguresView.From(figures));
+            ItemFiguresView.From(figures),
+            subItems,
+            withSubItems is null ? null : ItemFiguresView.From(withSubItems));
     }
 }

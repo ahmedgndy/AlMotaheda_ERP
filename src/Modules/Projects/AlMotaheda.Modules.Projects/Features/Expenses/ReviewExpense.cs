@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace AlMotaheda.Modules.Projects.Features.Expenses;
 
@@ -29,8 +30,8 @@ internal static class ApproveExpense
 
     internal static Task<Results<Ok<ExpenseView>, ValidationProblem, ProblemHttpResult>> HandleAsync(
         int projectId, int expenseId, ReviewRequest request, HttpContext httpContext, ProjectsDbContext db, IProjectAccess access,
-        IUserDirectory users, CompanyClock clock, ProjectsLog log, CancellationToken cancellationToken) =>
-        ExpenseReview.HandleAsync(ExpenseStatus.Approved, projectId, expenseId, request, httpContext, db, access, users, clock, log, cancellationToken);
+        IUserDirectory users, IOptions<ProjectsOptions> options, CompanyClock clock, ProjectsLog log, CancellationToken cancellationToken) =>
+        ExpenseReview.HandleAsync(ExpenseStatus.Approved, projectId, expenseId, request, httpContext, db, access, users, options, clock, log, cancellationToken);
 }
 
 /// <summary><c>POST /api/projects/{pid}/expenses/{id}/return</c>: back to the recorder to fix, with a note.</summary>
@@ -44,8 +45,8 @@ internal static class ReturnExpense
 
     internal static Task<Results<Ok<ExpenseView>, ValidationProblem, ProblemHttpResult>> HandleAsync(
         int projectId, int expenseId, ReviewRequest request, HttpContext httpContext, ProjectsDbContext db, IProjectAccess access,
-        IUserDirectory users, CompanyClock clock, ProjectsLog log, CancellationToken cancellationToken) =>
-        ExpenseReview.HandleAsync(ExpenseStatus.Returned, projectId, expenseId, request, httpContext, db, access, users, clock, log, cancellationToken);
+        IUserDirectory users, IOptions<ProjectsOptions> options, CompanyClock clock, ProjectsLog log, CancellationToken cancellationToken) =>
+        ExpenseReview.HandleAsync(ExpenseStatus.Returned, projectId, expenseId, request, httpContext, db, access, users, options, clock, log, cancellationToken);
 }
 
 /// <summary><c>POST /api/projects/{pid}/expenses/{id}/reject</c>: final; the record is never a cost.</summary>
@@ -59,8 +60,8 @@ internal static class RejectExpense
 
     internal static Task<Results<Ok<ExpenseView>, ValidationProblem, ProblemHttpResult>> HandleAsync(
         int projectId, int expenseId, ReviewRequest request, HttpContext httpContext, ProjectsDbContext db, IProjectAccess access,
-        IUserDirectory users, CompanyClock clock, ProjectsLog log, CancellationToken cancellationToken) =>
-        ExpenseReview.HandleAsync(ExpenseStatus.Rejected, projectId, expenseId, request, httpContext, db, access, users, clock, log, cancellationToken);
+        IUserDirectory users, IOptions<ProjectsOptions> options, CompanyClock clock, ProjectsLog log, CancellationToken cancellationToken) =>
+        ExpenseReview.HandleAsync(ExpenseStatus.Rejected, projectId, expenseId, request, httpContext, db, access, users, options, clock, log, cancellationToken);
 }
 
 /// <summary>
@@ -79,6 +80,7 @@ internal static class ExpenseReview
         ProjectsDbContext db,
         IProjectAccess access,
         IUserDirectory users,
+        IOptions<ProjectsOptions> options,
         CompanyClock clock,
         ProjectsLog log,
         CancellationToken cancellationToken)
@@ -130,6 +132,15 @@ internal static class ExpenseReview
                 return WorkspaceProblems.ReviewerIsRecorder();
             case ExpenseDecision.WrongStatus:
                 return WorkspaceProblems.WrongStatus($"Only a recorded record can be reviewed. This one is {expense.Status}.");
+        }
+
+        // A purchase above its reference range, under the ExecutiveApproval policy: only an Executive approves it.
+        // Returning or rejecting it stays with any reviewer. The comparison is the one copied at recording.
+        if (target == ExpenseStatus.Approved && !caller.IsExecutive
+            && Prices.PriceCheck.NeedsExecutive(expense.PriceCheck, options.Value.PriceCheckPolicy))
+        {
+            log.ActionRefused(caller.UserId, "ReviewApproved", "price above range needs an Executive");
+            return PriceProblems.ApprovedByExecutive();
         }
 
         expense.Review(target, caller.UserId, clock.UtcNow, note);

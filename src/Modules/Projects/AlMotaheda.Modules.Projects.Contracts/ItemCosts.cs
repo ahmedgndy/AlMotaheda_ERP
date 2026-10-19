@@ -22,6 +22,13 @@ public interface ILaborItemCosts
     /// <summary>The approved labor lines of one item, or of "not linked yet" when <paramref name="itemId"/> is <c>null</c>.</summary>
     Task<IReadOnlyList<LaborItemLine>> LinesAsync(int projectId, int? itemId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The approved labor lines of several items at once (a main item and its sub-items), by item id, from one load.
+    /// Items with no labor are absent. A line split over two of the items appears under each with its own part.
+    /// </summary>
+    Task<IReadOnlyDictionary<int, IReadOnlyList<LaborItemLine>>> LinesByItemAsync(
+        int projectId, IReadOnlyCollection<int> itemIds, CancellationToken cancellationToken);
+
     /// <summary>True when any labor record, approved or not, is linked to the item. Such an item can't be deleted.</summary>
     Task<bool> HasLinksAsync(int projectId, int itemId, CancellationToken cancellationToken);
 }
@@ -75,9 +82,39 @@ public interface ISubcontractItemCosts
     /// <summary>The approved work of one item, or of "not linked yet" when <paramref name="itemId"/> is <c>null</c>.</summary>
     Task<IReadOnlyList<SubcontractItemLine>> LinesAsync(int projectId, int? itemId, CancellationToken cancellationToken);
 
+    /// <summary>The approved work of several items at once, by item id, in one query. Items with no work are absent.</summary>
+    Task<IReadOnlyDictionary<int, IReadOnlyList<SubcontractItemLine>>> LinesByItemAsync(
+        int projectId, IReadOnlyCollection<int> itemIds, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// What is signed but not executed yet, per contract line linked to one of <paramref name="itemIds"/>: the line's
+    /// value (quantity × unit price) minus its approved measured work, never below zero, on contracts that are not
+    /// completed (the rule of the project's commitment). A commitment is never a cost and never paid; it is shown next to them.
+    /// </summary>
+    Task<IReadOnlyList<SubcontractItemCommitment>> CommitmentsByItemAsync(
+        int projectId, IReadOnlyCollection<int> itemIds, CancellationToken cancellationToken);
+
     /// <summary>True when any contract item or manpower sheet is linked to the item. Such an item can't be deleted.</summary>
     Task<bool> HasLinksAsync(int projectId, int itemId, CancellationToken cancellationToken);
 }
+
+/// <summary>One contract line on a project item, as a commitment.</summary>
+/// <param name="LineValue">Quantity × unit price of the contract line: the agreed value, not a cost.</param>
+/// <param name="Executed">Approved measured work on the line: already recognized cost (in the item's cost, not here).</param>
+/// <param name="Remaining">max(0, LineValue − Executed) while the contract is not completed; 0 once it is.</param>
+public sealed record SubcontractItemCommitment(
+    int ItemId,
+    int ContractId,
+    string? ContractNo,
+    int ContractItemId,
+    string ContractItemName,
+    int SubcontractorId,
+    string SubcontractorNameAr,
+    string SubcontractorNameEn,
+    string ContractStatus,
+    decimal LineValue,
+    decimal Executed,
+    decimal Remaining);
 
 /// <summary>One approved piece of subcontract work: a measurement of a contract item, or a manpower sheet.</summary>
 /// <param name="RecordType"><c>Measurement</c> or <c>Manpower</c>.</param>

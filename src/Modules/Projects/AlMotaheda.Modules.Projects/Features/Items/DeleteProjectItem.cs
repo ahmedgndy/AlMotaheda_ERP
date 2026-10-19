@@ -63,6 +63,12 @@ internal static class DeleteProjectItem
             return CoreProblems.ItemNotFound();
         }
 
+        // A main item with sub-items keeps them; the foreign key would refuse the delete anyway.
+        if (await db.ProjectItems.AnyAsync(child => child.ParentItemId == itemId, cancellationToken))
+        {
+            return CoreProblems.StillHasSubItems();
+        }
+
         if (await ItemQueries.LinkedExpenses(db, itemId).AnyAsync(cancellationToken)
             || await labor.HasLinksAsync(projectId, itemId, cancellationToken)
             || await subcontracts.HasLinksAsync(projectId, itemId, cancellationToken))

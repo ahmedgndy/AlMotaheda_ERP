@@ -3,6 +3,7 @@ using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Projects.Data;
 using AlMotaheda.Modules.Projects.Data.Configurations;
 using AlMotaheda.Modules.Projects.Features.Catalog;
+using AlMotaheda.Modules.Projects.Features.Prices;
 using Microsoft.EntityFrameworkCore;
 
 namespace AlMotaheda.Modules.Projects.Features.Expenses;
@@ -26,6 +27,12 @@ internal interface IExpenseFieldsRequest
     int? CatalogItemId { get; }
     int? ProjectItemId { get; }
     string? Notes { get; }
+
+    /// <summary>Supply only, optional: the company price list item the purchase is compared with.</summary>
+    int? PriceItemId { get; }
+
+    /// <summary>Required when the unit price is above the reference range (and the policy lets it through).</summary>
+    string? PriceJustification { get; }
 }
 
 /// <summary>
@@ -49,7 +56,9 @@ internal sealed record ExpenseFields(
     string? DeliveryNoteNo,
     int? CatalogItemId,
     int? ProjectItemId,
-    string? Notes)
+    string? Notes,
+    int? PriceItemId = null,
+    string? PriceJustification = null)
 {
     /// <param name="today">The company's business date; a record can't be dated after it.</param>
     public static ExpenseFields? Validate(IExpenseFieldsRequest request, DateOnly today, ValidationErrors errors)
@@ -91,6 +100,13 @@ internal sealed record ExpenseFields(
         var invoiceNo = Input.OptionalText(request.InvoiceNo, ProjectExpenseConfiguration.ReferenceMaxLength, errors, "invoiceNo", "The invoice number");
         var deliveryNoteNo = Input.OptionalText(request.DeliveryNoteNo, ProjectExpenseConfiguration.ReferenceMaxLength, errors, "deliveryNoteNo", "The delivery note number");
         var notes = Input.OptionalText(request.Notes, ProjectExpenseConfiguration.NotesMaxLength, errors, "notes", "Notes");
+        var justification = Input.OptionalText(
+            request.PriceJustification, ProjectExpenseConfiguration.PriceJustificationMaxLength, errors, "priceJustification", "The justification");
+
+        if (request.PriceItemId is < 1)
+        {
+            errors.Add("priceItemId", "priceItemId is not valid.");
+        }
 
         if (hasChannel && channel == PaymentChannel.Credit && request.SupplierId is null)
         {
@@ -170,6 +186,11 @@ internal sealed record ExpenseFields(
             {
                 errors.Add("catalogItemId", "A catalog item applies to supplies only.");
             }
+
+            if (request.PriceItemId is not null)
+            {
+                errors.Add("priceItemId", "A price list item applies to supplies only.");
+            }
         }
 
         if (errors.HasErrors)
@@ -193,7 +214,9 @@ internal sealed record ExpenseFields(
             deliveryNoteNo,
             request.CatalogItemId,
             request.ProjectItemId,
-            notes);
+            notes,
+            request.PriceItemId,
+            justification);
     }
 
     public void ApplyTo(ProjectExpense expense)
@@ -214,13 +237,27 @@ internal sealed record ExpenseFields(
         expense.CatalogItemId = CatalogItemId;
         expense.Notes = Notes;
     }
+
+    /// <summary>
+    /// Copies the price comparison the server made (<see cref="ExpenseReferences.Price"/>) onto the record: the
+    /// reference range as it was on the purchase date, so a later range never rewrites this comparison.
+    /// </summary>
+    public void ApplyPriceCheckTo(ProjectExpense expense, PriceReference? price)
+    {
+        expense.PriceItemId = price?.PriceItemId;
+        expense.PriceRangeId = price?.Range?.RangeId;
+        expense.ReferenceMinPrice = price?.Range?.MinPrice;
+        expense.ReferenceMaxPrice = price?.Range?.MaxPrice;
+        expense.PriceCheck = price?.Comparison.Result;
+        expense.PriceJustification = price is null ? null : PriceJustification;
+    }
 }
 
 /// <summary>What the database said about the ids on the form.</summary>
 /// <param name="ItemStatus">The project item's status when one was named and found; <c>null</c> otherwise.</param>
 /// <param name="CatalogPrice">The approved catalog price on the record's date, when a catalog item was named.</param>
 /// <param name="SupplierKind">The supplier's kind when one was named and found; <c>null</c> otherwise.</param>
-internal sealed record ExpenseReferences(ProjectItemStatus? ItemStatus, decimal? CatalogPrice, SupplierKind? SupplierKind = null)
+internal sealed record ExpenseReferences(ProjectItemStatus? ItemStatus, decimal? CatalogPrice, SupplierKind? SupplierKind = null, PriceReference? Price = null)
 {
     /// <summary>The supplier sells fuel or equipment: such costs belong in Site equipment (409 <c>use_equipment_costs</c>).</summary>
     public bool IsEquipmentCost => SupplierKind is { } kind && ExpenseRules.IsEquipmentSupplier(kind);
@@ -285,6 +322,35 @@ internal sealed record ExpenseReferences(ProjectItemStatus? ItemStatus, decimal?
             }
         }
 
-        return new ExpenseReferences(itemStatus, catalogPrice, supplierKind);
+        PriceReference? price = null;
+        if (fields.PriceItemId is { } priceItemId && fields.Unit is { } unit && fields.UnitPrice is { } unitPrice && fields.Quantity is { } quantity)
+        {
+            var item = await db.PriceItems.AsNoTracking()
+                .Where(candidate => candidate.Id == priceItemId)
+                .Select(candidate => new { candidate.Unit, candidate.Status })
+                .SingleOrDefaultAsync(cancellationToken);
+
+            if (item is null)
+            {
+                errors.Add("priceItemId", "The price list item was not found.");
+            }
+            else if (!string.Equals(item.Unit, unit, StringComparison.Ordinal))
+            {
+                // A price per ton can't be compared with a price per bag: the supply must use the item's unit.
+                errors.Add("unit", $"The price list item is priced per {item.Unit}: record the quantity in {item.Unit}.");
+            }
+            else
+            {
+                var range = await PriceRanges.ApplicableAsync(db, priceItemId, fields.SupplierId, fields.ExpenseDate, cancellationToken);
+                var comparison = PriceCheck.Compare(unitPrice, quantity, range?.MinPrice, range?.MaxPrice);
+                price = new PriceReference(priceItemId, item.Status == PriceItemStatus.Active, range, comparison);
+            }
+        }
+
+        return new ExpenseReferences(itemStatus, catalogPrice, supplierKind, price);
     }
 }
+
+/// <summary>The price list item a supply names and how its unit price compares with the range on its date.</summary>
+/// <param name="Range"><c>null</c> when no approved range applies on the purchase date.</param>
+internal sealed record PriceReference(int PriceItemId, bool IsActive, ApplicableRange? Range, PriceComparison Comparison);

@@ -6,6 +6,12 @@ using AlMotaheda.Modules.Projects.Features.Expenses;
 namespace AlMotaheda.Modules.Projects.Features.Items;
 
 /// <summary>One row of the project items table: the item and its figures from <see cref="ItemsLedger"/>.</summary>
+/// <remarks>
+/// The money fields are the item's <b>own</b> records. For a main item, <see cref="WithSubItems"/> adds its
+/// sub-items' records; it is <c>null</c> on a sub-item. The table's totals are sums of the own figures, so a
+/// sub-item's record is counted once, never again through its main item.
+/// </remarks>
+/// <param name="Level">1 for a main item, 2 for a sub-item.</param>
 internal sealed record ItemRow(
     int Id,
     string NameAr,
@@ -38,9 +44,14 @@ internal sealed record ItemRow(
     int CreatedBy,
     DateTime? UpdatedAt,
     int? UpdatedBy,
-    string RowVersion)
+    string RowVersion,
+    int? ParentItemId,
+    int Level,
+    int SubItemCount,
+    ItemFiguresView? WithSubItems)
 {
-    public static ItemRow From(ItemHeader item, ItemFigures figures) => new(
+    /// <param name="withSubItems">The roll-up of a main item (<see cref="ItemTree.WithSubItems"/>); <c>null</c> for a sub-item.</param>
+    public static ItemRow From(ItemHeader item, ItemFigures figures, int subItemCount, ItemFigures? withSubItems) => new(
         item.Id,
         item.NameAr,
         item.NameEn,
@@ -72,13 +83,23 @@ internal sealed record ItemRow(
         item.CreatedBy,
         item.UpdatedAt,
         item.UpdatedBy,
-        RowVersions.Format(item.RowVersion));
+        RowVersions.Format(item.RowVersion),
+        item.ParentItemId,
+        item.IsMainItem ? 1 : 2,
+        subItemCount,
+        withSubItems is null ? null : ItemFiguresView.From(withSubItems));
 
-    public static ItemRow From(ProjectItem item, ItemFigures figures) => From(
-        new ItemHeader(
-            item.Id, item.NameAr, item.NameEn, item.Category, item.Unit, item.Description, item.Notes, item.Status,
-            item.DeactivatedAt, item.DeactivatedBy, item.CreatedAt, item.CreatedBy, item.UpdatedAt, item.UpdatedBy, item.RowVersion),
-        figures);
+    public static ItemHeader Header(ProjectItem item) => new(
+        item.Id, item.NameAr, item.NameEn, item.Category, item.Unit, item.Description, item.Notes, item.Status,
+        item.DeactivatedAt, item.DeactivatedBy, item.CreatedAt, item.CreatedBy, item.UpdatedAt, item.UpdatedBy, item.RowVersion,
+        item.ParentItemId);
+
+    /// <summary>The row of a tracked item after a change, with the figures of the ledger loaded after the save.</summary>
+    public static ItemRow From(ProjectItem item, ItemsLedgerData data) => data.RowOf(Header(item));
+
+    /// <summary>The row of an item that can't have records yet (just created).</summary>
+    public static ItemRow New(ProjectItem item) =>
+        From(Header(item), ItemFigures.Empty, 0, item.ParentItemId is null ? ItemFigures.Empty : null);
 }
 
 /// <summary>The figures of a group (all items, or the not-linked group), as the items screens return them.</summary>
@@ -183,10 +204,14 @@ internal sealed record SupplierLine(
 /// The detail of one item, or of the "not linked yet" group (<see cref="Item"/> is then <c>null</c>): the approved
 /// lines from the three sources, the lines still waiting for review, and the same figures as the table row.
 /// </summary>
+/// <param name="SubItems">A main item's sub-items, as rows of the table (own figures each). Empty otherwise.</param>
+/// <param name="WithSubItems">A main item's figures with its sub-items; <c>null</c> for a sub-item and the not-linked group.</param>
 internal sealed record ItemDetail(
     ItemRow? Item,
     IReadOnlyList<SupplierLine> SupplierLines,
     IReadOnlyList<SubcontractItemLine> SubcontractLines,
     IReadOnlyList<LaborItemLine> LaborLines,
     IReadOnlyList<SupplierLine> PendingSupplierLines,
-    ItemFiguresView Totals);
+    ItemFiguresView Totals,
+    IReadOnlyList<ItemRow> SubItems,
+    ItemFiguresView? WithSubItems);

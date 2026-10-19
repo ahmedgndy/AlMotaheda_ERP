@@ -12,6 +12,8 @@ internal sealed class ProjectExpenseConfiguration : IEntityTypeConfiguration<Pro
     public const int ReviewNoteMaxLength = 500;
     public const int NotesMaxLength = 1000;
     public const string SourceIndex = "UX_ProjectExpense_Source";
+    public const string IdempotencyIndex = "UX_ProjectExpense_IdempotencyKey";
+    public const int PriceJustificationMaxLength = 500;
 
     public void Configure(EntityTypeBuilder<ProjectExpense> builder)
     {
@@ -48,6 +50,14 @@ internal sealed class ProjectExpenseConfiguration : IEntityTypeConfiguration<Pro
 
             table.HasCheckConstraint("CK_ProjectExpense_Source", "([SourceType] IS NULL AND [SourceId] IS NULL) OR ([SourceType] IS NOT NULL AND [SourceId] IS NOT NULL)");
 
+            // The price comparison is a supply's, and its copied range exists exactly when a range was found.
+            table.HasCheckConstraint(
+                "CK_ProjectExpense_PriceCheck",
+                $"([PriceCheck] IS NULL AND [PriceItemId] IS NULL AND [PriceRangeId] IS NULL AND [ReferenceMinPrice] IS NULL AND [ReferenceMaxPrice] IS NULL) "
+                + $"OR ([Kind] = 'Supply' AND [PriceItemId] IS NOT NULL AND [PriceCheck] IN ({SqlList.Of(Enum.GetNames<PriceCheckResult>())}) "
+                + "AND (([PriceCheck] = 'NoReference' AND [PriceRangeId] IS NULL AND [ReferenceMinPrice] IS NULL AND [ReferenceMaxPrice] IS NULL) "
+                + "OR ([PriceCheck] <> 'NoReference' AND [PriceRangeId] IS NOT NULL AND [ReferenceMinPrice] IS NOT NULL AND [ReferenceMaxPrice] IS NOT NULL)))");
+
             table.HasCheckConstraint(
                 "CK_ProjectExpense_ItemLink",
                 "([ItemLinkedAt] IS NULL AND [ItemLinkedBy] IS NULL) OR ([ItemLinkedAt] IS NOT NULL AND [ItemLinkedBy] IS NOT NULL)");
@@ -66,6 +76,16 @@ internal sealed class ProjectExpenseConfiguration : IEntityTypeConfiguration<Pro
         builder.Property(expense => expense.ReviewNote).HasMaxLength(ReviewNoteMaxLength).IsUnicode();
         builder.Property(expense => expense.Notes).HasMaxLength(NotesMaxLength).IsUnicode();
         builder.Property(expense => expense.RowVersion).IsRowVersion();
+        builder.Property(expense => expense.ReferenceMinPrice).HasPrecision(18, 2);
+        builder.Property(expense => expense.ReferenceMaxPrice).HasPrecision(18, 2);
+        builder.Property(expense => expense.PriceCheck).HasConversion<string>().HasMaxLength(30).IsUnicode(false);
+        builder.Property(expense => expense.PriceJustification).HasMaxLength(PriceJustificationMaxLength).IsUnicode();
+
+        builder.HasIndex(expense => expense.IdempotencyKey)
+            .IsUnique()
+            .HasFilter("[IdempotencyKey] IS NOT NULL")
+            .HasDatabaseName(IdempotencyIndex);
+        builder.HasIndex(expense => expense.PriceItemId, "IX_ProjectExpense_PriceItemId");
 
         // The lists of a project: by date, and by status for the review queue.
         builder.HasIndex(expense => new { expense.ProjectId, expense.ExpenseDate }, "IX_ProjectExpense_Project_Date");
@@ -95,6 +115,16 @@ internal sealed class ProjectExpenseConfiguration : IEntityTypeConfiguration<Pro
         builder.HasOne(expense => expense.CatalogItem)
             .WithMany()
             .HasForeignKey(expense => expense.CatalogItemId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.HasOne(expense => expense.PriceItem)
+            .WithMany()
+            .HasForeignKey(expense => expense.PriceItemId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.HasOne(expense => expense.PriceRange)
+            .WithMany()
+            .HasForeignKey(expense => expense.PriceRangeId)
             .OnDelete(DeleteBehavior.NoAction);
 
         builder.HasOne(expense => expense.ProjectItem)

@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace AlMotaheda.Modules.Projects.Features.Expenses;
 
@@ -38,7 +39,9 @@ internal static class UpdateExpense
         int? CatalogItemId,
         int? ProjectItemId,
         string? Notes,
-        string? RowVersion) : IExpenseFieldsRequest;
+        string? RowVersion,
+        int? PriceItemId = null,
+        string? PriceJustification = null) : IExpenseFieldsRequest;
 
     public static void Map(IEndpointRouteBuilder projects) =>
         projects.MapPut("/{projectId:int}/expenses/{expenseId:int}", HandleAsync)
@@ -54,6 +57,8 @@ internal static class UpdateExpense
         ProjectsDbContext db,
         IProjectAccess access,
         IUserDirectory users,
+        CostAlerts alerts,
+        IOptions<ProjectsOptions> options,
         CompanyClock clock,
         ProjectsLog log,
         CancellationToken cancellationToken)
@@ -115,10 +120,24 @@ internal static class UpdateExpense
             return WorkspaceProblems.InactiveItem();
         }
 
+        // The price is checked again with the corrected figures and the range on the (possibly new) date.
+        var policy = options.Value.PriceCheckPolicy;
+        var priceProblem = ExpensePricing.Check(fields!, references, policy, errors, keptPriceItemId: expense.PriceItemId);
+        if (errors.HasErrors)
+        {
+            return ProjectProblems.Validation(errors);
+        }
+
+        if (priceProblem is not null)
+        {
+            return priceProblem;
+        }
+
         var now = clock.UtcNow;
         var oldStatus = expense.Status;
 
         fields!.ApplyTo(expense);
+        fields.ApplyPriceCheckTo(expense, references.Price);
         expense.CatalogPriceAtRecording = references.CatalogPrice;
         expense.Resubmit(caller.UserId, now);
 
@@ -130,6 +149,12 @@ internal static class UpdateExpense
         }
 
         db.Entry(expense).Property(candidate => candidate.RowVersion).OriginalValue = rowVersion!;
+
+        if (references.Price?.Comparison.IsAboveRange == true)
+        {
+            await alerts.AddAsync<PriceAboveRangeAlert>(
+                expense, await alerts.ManagersAndExecutivesAsync(projectId, caller.UserId, cancellationToken), now, cancellationToken);
+        }
 
         try
         {

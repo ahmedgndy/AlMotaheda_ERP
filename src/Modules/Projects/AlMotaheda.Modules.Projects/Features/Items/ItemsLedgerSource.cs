@@ -21,7 +21,11 @@ internal sealed record ItemHeader(
     int CreatedBy,
     DateTime? UpdatedAt,
     int? UpdatedBy,
-    byte[] RowVersion);
+    byte[] RowVersion,
+    int? ParentItemId = null)
+{
+    public bool IsMainItem => ParentItemId is null;
+}
 
 /// <summary>Everything the items screens are computed from, loaded once per request.</summary>
 /// <param name="Items">Every item of the project, active and inactive, by English name.</param>
@@ -32,6 +36,12 @@ internal sealed record ItemsLedgerData(
     IReadOnlyList<ExpenseSettlementRow> Expenses,
     ItemsLedgerResult Ledger)
 {
+    /// <summary>The main items and their sub-items, built once from <see cref="Items"/>.</summary>
+    public ItemTree Tree { get; } = ItemTree.Build(Items);
+
+    /// <summary>One row of the items table for <paramref name="item"/>, with its own figures and, for a main item, its sub-items'.</summary>
+    public ItemRow RowOf(ItemHeader item) => ItemRow.From(item, Ledger.Of(item.Id), Tree.SubItemIds(item.Id).Count, Tree.WithSubItems(item, Ledger));
+
     /// <summary>
     /// Approved site expenses with no supplier and no item: in the project total, but on no items screen.
     /// </summary>
@@ -111,7 +121,8 @@ internal static class ItemQueries
                 item.CreatedBy,
                 item.UpdatedAt,
                 item.UpdatedBy,
-                item.RowVersion));
+                item.RowVersion,
+                item.ParentItemId));
 
     /// <summary>True when any record of this module, approved or not, is linked to the item.</summary>
     public static IQueryable<ProjectExpense> LinkedExpenses(ProjectsDbContext db, int itemId) =>

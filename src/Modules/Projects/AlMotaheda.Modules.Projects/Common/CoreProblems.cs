@@ -20,6 +20,10 @@ internal static class CoreProblems
     public const string ItemGone = "item_removed";
     public const string AdjustmentOpen = "adjustment_open";
     public const string AdjustmentBelowPaid = "adjustment_below_paid";
+    public const string ItemParentIsSubItem = "item_parent_is_sub_item";
+    public const string ItemHasSubItems = "item_has_sub_items";
+    public const string ItemHasActiveSubItems = "item_has_active_sub_items";
+    public const string ItemParentInactive = "item_parent_inactive";
 
     public static ProblemHttpResult SupplierNotFound() => WorkspaceProblems.NotFound("supplier");
 
@@ -47,7 +51,23 @@ internal static class CoreProblems
         ApiProblem.Create(StatusCodes.Status409Conflict, SupplierTaxNumberExists, "A supplier with this tax number already exists.");
 
     public static ProblemHttpResult ItemNameAlreadyUsed() =>
-        ApiProblem.Create(StatusCodes.Status409Conflict, ItemNameTaken, "This project already has an item with this name.");
+        ApiProblem.Create(StatusCodes.Status409Conflict, ItemNameTaken, "This project already has an item with this name at this level.");
+
+    /// <summary>Two levels only: a sub-item can't be the parent of another item.</summary>
+    public static ProblemHttpResult ParentIsSubItem() =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, ItemParentIsSubItem, "A sub-item can't have sub-items. Choose a main item as the parent.");
+
+    /// <summary>A main item with sub-items can't become a sub-item, and can't be deleted.</summary>
+    public static ProblemHttpResult StillHasSubItems() =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, ItemHasSubItems, "This item has sub-items. Move or delete them first.");
+
+    /// <summary>A main item is deactivated after its sub-items, so no active sub-item hangs under an inactive item.</summary>
+    public static ProblemHttpResult StillHasActiveSubItems() =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, ItemHasActiveSubItems, "Deactivate this item's sub-items first.");
+
+    /// <summary>A sub-item is added, moved or reactivated only under an active main item.</summary>
+    public static ProblemHttpResult ParentInactive() =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, ItemParentInactive, "The main item is inactive. Reactivate it first.");
 
     /// <summary>Records are linked to the item, so it can only be deactivated.</summary>
     public static ProblemHttpResult ItemStillHasRecords() =>
@@ -77,6 +97,12 @@ internal static class CoreProblems
             StatusCodes.Status409Conflict,
             WorkspaceProblems.IdempotencyKeyReused,
             "This idempotency key was already used for a different payment. Make a new key for a new payment.");
+
+    public static ProblemHttpResult ExpenseKeyUsedElsewhere() =>
+        ApiProblem.Create(
+            StatusCodes.Status409Conflict,
+            WorkspaceProblems.IdempotencyKeyReused,
+            "This idempotency key was already used for another record. Make a new key for a new record.");
 
     public static ProblemHttpResult AlreadyVoided() =>
         ApiProblem.Create(StatusCodes.Status409Conflict, PaymentAlreadyVoided, "This payment is already voided.");

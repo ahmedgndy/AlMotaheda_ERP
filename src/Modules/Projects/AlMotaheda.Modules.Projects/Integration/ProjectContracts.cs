@@ -66,7 +66,7 @@ internal sealed class ProjectItemsContract(ProjectsDbContext db) : IProjectItems
         var items = await db.ProjectItems
             .AsNoTracking()
             .Where(item => item.ProjectId == projectId && ids.Contains(item.Id))
-            .Select(item => new ProjectItemRef(item.Id, item.ProjectId, item.NameAr, item.NameEn, item.Status == ProjectItemStatus.Active))
+            .Select(item => new ProjectItemRef(item.Id, item.ProjectId, item.NameAr, item.NameEn, item.Status == ProjectItemStatus.Active, item.ParentItemId))
             .ToListAsync(cancellationToken);
 
         return items.ToDictionary(item => item.Id);

@@ -89,6 +89,13 @@ internal static class ProjectItemStatusChange
             return refusal;
         }
 
+        // Under the project lock: a sub-item can't be added under the item, or reactivated, while it is deactivated.
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        if (!await ProjectLock.TryAcquireAsync(db, projectId, cancellationToken))
+        {
+            return ProjectProblems.TryAgainLater();
+        }
+
         var item = await db.ProjectItems.SingleOrDefaultAsync(candidate => candidate.Id == itemId && candidate.ProjectId == projectId, cancellationToken);
         if (item is null)
         {
@@ -98,6 +105,20 @@ internal static class ProjectItemStatusChange
         if (item.Status == target)
         {
             return WorkspaceProblems.WrongStatus($"This item is already {target}.");
+        }
+
+        // No active sub-item under an inactive main item: deactivate from the bottom up, reactivate from the top down.
+        if (target == ProjectItemStatus.Inactive
+            && await db.ProjectItems.AnyAsync(child => child.ParentItemId == item.Id && child.Status == ProjectItemStatus.Active, cancellationToken))
+        {
+            return CoreProblems.StillHasActiveSubItems();
+        }
+
+        if (target == ProjectItemStatus.Active
+            && item.ParentItemId is { } parentId
+            && await db.ProjectItems.AnyAsync(parent => parent.Id == parentId && parent.Status != ProjectItemStatus.Active, cancellationToken))
+        {
+            return CoreProblems.ParentInactive();
         }
 
         var now = clock.UtcNow;
@@ -118,9 +139,10 @@ internal static class ProjectItemStatusChange
             return ApiProblem.ConcurrencyConflictResult();
         }
 
+        await transaction.CommitAsync(cancellationToken);
         log.ItemStatusChanged(caller.UserId, projectId, item.Id, target.ToString());
 
         var data = await source.LoadAsync(projectId, cancellationToken);
-        return TypedResults.Ok(ItemRow.From(item, data.Ledger.Of(item.Id)));
+        return TypedResults.Ok(ItemRow.From(item, data));
     }
 }

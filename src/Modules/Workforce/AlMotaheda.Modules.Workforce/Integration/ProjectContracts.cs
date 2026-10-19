@@ -18,6 +18,22 @@ internal sealed class LaborItemCosts(LaborLedgerSource source, WorkforceDbContex
     public async Task<IReadOnlyList<LaborItemLine>> LinesAsync(int projectId, int? itemId, CancellationToken cancellationToken) =>
         (await source.LoadAsync(projectId, null, null, withDeductionReasons: true, cancellationToken)).LinesOf(itemId);
 
+    public async Task<IReadOnlyDictionary<int, IReadOnlyList<LaborItemLine>>> LinesByItemAsync(
+        int projectId, IReadOnlyCollection<int> itemIds, CancellationToken cancellationToken)
+    {
+        if (itemIds.Count == 0)
+        {
+            return new Dictionary<int, IReadOnlyList<LaborItemLine>>();
+        }
+
+        var wanted = itemIds.ToHashSet();
+        var ledger = await source.LoadAsync(projectId, null, null, withDeductionReasons: true, cancellationToken);
+        return ledger.Parts
+            .Where(part => part.ItemId is { } id && wanted.Contains(id))
+            .GroupBy(part => part.ItemId!.Value)
+            .ToDictionary(group => group.Key, group => (IReadOnlyList<LaborItemLine>)group.Select(part => part.Line).ToList());
+    }
+
     public Task<bool> HasLinksAsync(int projectId, int itemId, CancellationToken cancellationToken) =>
         LaborQueries.LinksToItem(db, projectId, itemId).AnyAsync(cancellationToken);
 }

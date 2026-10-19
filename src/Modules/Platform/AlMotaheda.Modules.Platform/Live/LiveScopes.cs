@@ -66,6 +66,11 @@ internal static class LiveScopes
         ["Budget"] = new(["Budgets", "BudgetComparison", "ProjectOverview"], true, []),
         ["CatalogItem"] = new(["Catalog"], false, [Procurement]),
         ["ItemPrice"] = new(["Catalog", "PriceChanges"], false, [Procurement]),
+        // The company price list has no project: it is heard by purchasing and refetched by the price screens.
+        ["PriceItem"] = new(["PriceManagement"], false, [Procurement]),
+        ["PriceRange"] = new(["PriceManagement", "PriceRangeRequests"], false, [Procurement]),
+        // Moving an item under another main item changes the roll-ups of the items table.
+        ["ProjectItem"] = new(["ProjectItems", "ProjectOverview", "BudgetComparison"], true, []),
         ["PaymentRequest"] = new(["PaymentRequests", "CompanyDashboard"], true, [Finance]),
         ["LedgerEntry"] = new(["Ledger", "CashMovement", "Reconciliation", "CompanyDashboard"], true, [Finance]),
         ["SalarySheet"] = new(["SalarySheets"], false, [Hr]),
@@ -88,7 +93,7 @@ internal static class LiveScopes
         "AttendanceLine", "LineAdjustment", "SupplierPaymentAllocation", "WorkerPaymentAllocation", "SubPaymentAllocation",
         "PaymentRequestLine", "PaymentRequestEvent", "RequisitionLine", "RequisitionEvent", "QuotationLine", "PurchaseOrderLine",
         "PurchaseOrderRevision", "GoodsReceiptLine", "SupplierInvoiceLine", "SalarySheetLine", "BudgetLine", "VoidedEquipmentCostPayment",
-        "ReportRun", "RefreshToken", "UserSignInState",
+        "ReportRun", "RefreshToken", "UserSignInState", "PriceAboveRangeAlert", "CostRecordedAlert",
     };
 
     /// <summary>The signals one changed record sends.</summary>

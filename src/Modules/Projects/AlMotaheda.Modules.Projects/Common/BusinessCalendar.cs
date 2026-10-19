@@ -12,6 +12,12 @@ internal sealed class ProjectsOptions
     /// membership, is the date in this zone, not in UTC.
     /// </summary>
     public string TimeZone { get; set; } = "Africa/Cairo";
+
+    /// <summary>
+    /// What a purchase above its reference price range does: <c>Warn</c> (default: saved with the warning and a
+    /// justification), <c>ExecutiveApproval</c> (only an Executive may approve it) or <c>Block</c> (refused).
+    /// </summary>
+    public Data.PriceCheckPolicy PriceCheckPolicy { get; set; } = Data.PriceCheckPolicy.Warn;
 }
 
 internal sealed class ProjectsOptionsValidator : IValidateOptions<ProjectsOptions>

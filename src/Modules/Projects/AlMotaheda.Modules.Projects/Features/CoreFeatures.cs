@@ -19,6 +19,7 @@ internal static class CoreFeatures
         services.AddScoped<ItemsLedgerSource>();
         services.AddScoped<ItemDetails>();
         services.AddScoped<IProjectItemsSummary, ProjectItemsSummaryProvider>();
+        services.AddScoped<CostAlerts>();
     }
 
     /// <param name="api">The shared <c>/api</c> group, for company-wide routes such as <c>/suppliers</c>.</param>
@@ -33,8 +34,10 @@ internal static class CoreFeatures
         ListProjectItemOptions.Map(projects);
         GetUnallocatedItems.Map(projects);
         GetProjectItem.Map(projects);
+        GetItemCostBreakdown.Map(projects);
         CreateProjectItem.Map(projects);
         UpdateProjectItem.Map(projects);
+        MoveProjectItem.Map(projects);
         DeactivateProjectItem.Map(projects);
         ReactivateProjectItem.Map(projects);
         DeleteProjectItem.Map(projects);

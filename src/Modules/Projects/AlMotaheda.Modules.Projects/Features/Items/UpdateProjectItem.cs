@@ -72,7 +72,7 @@ internal static class UpdateProjectItem
         }
 
         if ((fields!.NameAr != item.NameAr || fields.NameEn != item.NameEn)
-            && await fields.NameTakenAsync(db, projectId, itemId, cancellationToken))
+            && await fields.NameTakenAsync(db, projectId, item.ParentItemId, itemId, cancellationToken))
         {
             return CoreProblems.ItemNameAlreadyUsed();
         }
@@ -99,6 +99,6 @@ internal static class UpdateProjectItem
         log.ItemUpdated(caller.UserId, projectId, item.Id);
 
         var data = await source.LoadAsync(projectId, cancellationToken);
-        return TypedResults.Ok(ItemRow.From(item, data.Ledger.Of(item.Id)));
+        return TypedResults.Ok(ItemRow.From(item, data));
     }
 }

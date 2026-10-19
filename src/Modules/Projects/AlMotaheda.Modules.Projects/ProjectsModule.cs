@@ -97,6 +97,7 @@ public sealed class ProjectsModule : IModule
         var api = endpoints.MapGroup("").WithTags(Name).RequireAuthorization();
         CoreFeatures.Map(api, projects);
         PlanningFeatures.Map(api, projects);
+        Features.Prices.PriceFeatures.Map(api);
         ReportingFeatures.Map(projects);
         SiteLocationEndpoints.Map(projects);
         GetWorkInbox.Map(api);

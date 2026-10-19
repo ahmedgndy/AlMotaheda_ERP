@@ -15,11 +15,13 @@ namespace AlMotaheda.Modules.Projects.Features.Items;
 
 /// <summary>
 /// <c>POST /api/projects/{pid}/items</c>: add a project item ("بند"). An Executive or the project's manager, with
-/// projects Edit. Names are unique within the project.
+/// projects Edit. With <c>parentItemId</c> it is a sub-item of that main item (same project, a main item, active).
+/// Names are unique among siblings.
 /// </summary>
 internal static class CreateProjectItem
 {
-    internal sealed record Request(string? NameAr, string? NameEn, string? Category, string? Unit, string? Description, string? Notes)
+    internal sealed record Request(
+        string? NameAr, string? NameEn, string? Category, string? Unit, string? Description, string? Notes, int? ParentItemId = null)
         : IItemFieldsRequest;
 
     public static void Map(IEndpointRouteBuilder projects) =>
@@ -45,6 +47,11 @@ internal static class CreateProjectItem
 
         var errors = new ValidationErrors();
         var fields = ItemFields.Validate(request, errors);
+        if (request.ParentItemId is < 1)
+        {
+            errors.Add("parentItemId", "parentItemId is not valid.");
+        }
+
         if (errors.HasErrors)
         {
             return ProjectProblems.Validation(errors);
@@ -62,7 +69,29 @@ internal static class CreateProjectItem
             return refusal;
         }
 
-        if (await fields!.NameTakenAsync(db, projectId, exceptItemId: null, cancellationToken))
+        // A sub-item checks its parent under the project lock, so the parent can't be moved under another item or be
+        // deactivated in between. The lock is the same one every hierarchy change takes.
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        if (!await ProjectLock.TryAcquireAsync(db, projectId, cancellationToken))
+        {
+            return ProjectProblems.TryAgainLater();
+        }
+
+        if (request.ParentItemId is { } parentItemId)
+        {
+            var parentProblem = await ItemRules.ParentProblemAsync(db, projectId, parentItemId, errors, cancellationToken);
+            if (errors.HasErrors)
+            {
+                return ProjectProblems.Validation(errors);
+            }
+
+            if (parentProblem is not null)
+            {
+                return parentProblem;
+            }
+        }
+
+        if (await fields!.NameTakenAsync(db, projectId, request.ParentItemId, exceptItemId: null, cancellationToken))
         {
             return CoreProblems.ItemNameAlreadyUsed();
         }
@@ -70,6 +99,7 @@ internal static class CreateProjectItem
         var item = new ProjectItem
         {
             ProjectId = projectId,
+            ParentItemId = request.ParentItemId,
             NameAr = fields.NameAr,
             NameEn = fields.NameEn,
             Category = fields.Category,
@@ -89,8 +119,9 @@ internal static class CreateProjectItem
             return CoreProblems.ItemNameAlreadyUsed();
         }
 
+        await transaction.CommitAsync(cancellationToken);
         log.ItemCreated(caller.UserId, projectId, item.Id);
 
-        return TypedResults.Created($"/api/projects/{projectId}/items/{item.Id}", ItemRow.From(item, ItemFigures.Empty));
+        return TypedResults.Created($"/api/projects/{projectId}/items/{item.Id}", ItemRow.New(item));
     }
 }

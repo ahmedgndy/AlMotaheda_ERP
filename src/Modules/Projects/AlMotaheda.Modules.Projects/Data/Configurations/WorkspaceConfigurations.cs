@@ -43,9 +43,16 @@ internal sealed class SupplierConfiguration : IEntityTypeConfiguration<Supplier>
 
 internal sealed class ProjectItemConfiguration : IEntityTypeConfiguration<ProjectItem>
 {
-    /// <summary>Item names are unique within a project. A lost race is answered with 409 <c>item_name_taken</c>.</summary>
-    public const string NameArIndex = "UX_ProjectItem_NameAr";
-    public const string NameEnIndex = "UX_ProjectItem_NameEn";
+    /// <summary>
+    /// Item names are unique among siblings: among the main items of a project, and among the sub-items of one main
+    /// item (two main items may each have a "Cement" sub-item). A lost race is answered with 409 <c>item_name_taken</c>.
+    /// </summary>
+    public const string NameArIndex = "UX_ProjectItem_Parent_NameAr";
+    public const string NameEnIndex = "UX_ProjectItem_Parent_NameEn";
+
+    /// <summary>The key the sub-item foreign key points to, so a parent is always on the same project.</summary>
+    public const string ProjectAndIdKey = "AK_ProjectItem_Project_Id";
+    public const string ParentForeignKey = "FK_ProjectItem_ProjectItem_Parent";
 
     public const int NameMaxLength = 200;
     public const int TextMaxLength = 1000;
@@ -63,6 +70,9 @@ internal sealed class ProjectItemConfiguration : IEntityTypeConfiguration<Projec
                 "CK_ProjectItem_Deactivation",
                 "([Status] = 'Active' AND [DeactivatedAt] IS NULL AND [DeactivatedBy] IS NULL) "
                 + "OR ([Status] = 'Inactive' AND [DeactivatedAt] IS NOT NULL AND [DeactivatedBy] IS NOT NULL)");
+
+            // An item is never its own parent. Two levels only is a rule of the slices (it needs the parent's row).
+            table.HasCheckConstraint("CK_ProjectItem_Parent", "[ParentItemId] IS NULL OR [ParentItemId] <> [Id]");
         });
 
         builder.Property(item => item.NameAr).HasMaxLength(NameMaxLength).IsUnicode();
@@ -74,12 +84,23 @@ internal sealed class ProjectItemConfiguration : IEntityTypeConfiguration<Projec
         builder.Property(item => item.Status).HasConversion<string>().HasMaxLength(30).IsUnicode(false);
         builder.Property(item => item.RowVersion).IsRowVersion();
 
-        builder.HasIndex(item => new { item.ProjectId, item.NameAr }).IsUnique().HasDatabaseName(NameArIndex);
-        builder.HasIndex(item => new { item.ProjectId, item.NameEn }).IsUnique().HasDatabaseName(NameEnIndex);
+        // HasFilter(null): SQL Server treats NULL parents as equal in a unique index, which is exactly "unique among
+        // the main items". EF would otherwise add "WHERE [ParentItemId] IS NOT NULL" and leave main items unchecked.
+        builder.HasIndex(item => new { item.ProjectId, item.ParentItemId, item.NameAr }).IsUnique().HasFilter(null).HasDatabaseName(NameArIndex);
+        builder.HasIndex(item => new { item.ProjectId, item.ParentItemId, item.NameEn }).IsUnique().HasFilter(null).HasDatabaseName(NameEnIndex);
 
         builder.HasOne(item => item.Project)
             .WithMany()
             .HasForeignKey(item => item.ProjectId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.HasAlternateKey(item => new { item.ProjectId, item.Id }).HasName(ProjectAndIdKey);
+
+        builder.HasOne(item => item.ParentItem)
+            .WithMany()
+            .HasForeignKey(item => new { item.ProjectId, item.ParentItemId })
+            .HasPrincipalKey(parent => new { parent.ProjectId, parent.Id })
+            .HasConstraintName(ParentForeignKey)
             .OnDelete(DeleteBehavior.NoAction);
     }
 }
