@@ -74,12 +74,6 @@ internal static class CreateDailyReport
 
         var errors = new ValidationErrors();
         var reportDate = Input.RequiredDate(request.ReportDate, errors, "reportDate", "The report date");
-        if (reportDate is { } date && DailyReportRules.DateProblem(date, clock.Today) is { } dateProblem)
-        {
-            errors.Add("reportDate", dateProblem);
-        }
-
-        var fields = DailyReportFields.Validate(request, errors);
 
         Guid? idempotencyKey = null;
         if (Input.Clean(request.IdempotencyKey) is { } key)
@@ -94,6 +88,30 @@ internal static class CreateDailyReport
             }
         }
 
+        // A repeat of a report already stored (its answer was lost) gets that report back before any rule that can
+        // change with time: by now the day may be more than 7 days ago, or the project completed.
+        ProjectAccessInfo? project = null;
+        if (!errors.HasErrors && idempotencyKey is { } repeatKey)
+        {
+            project = await access.FindVisibleAsync(httpContext.User, projectId, cancellationToken);
+            if (project is null)
+            {
+                return ProjectProblems.ProjectNotFound();
+            }
+
+            if (await RepeatAsync(db, users, httpContext, project, projectId, caller.UserId, repeatKey, reportDate!.Value, cancellationToken) is { } repeat)
+            {
+                return repeat;
+            }
+        }
+
+        if (reportDate is { } date && DailyReportRules.DateProblem(date, clock.Today) is { } dateProblem)
+        {
+            errors.Add("reportDate", dateProblem);
+        }
+
+        var fields = DailyReportFields.Validate(request, errors);
+
         var now = clock.UtcNow;
         var writtenAt = request.WrittenAt?.ToUniversalTime();
         if (writtenAt is { } written && (written > now + MaxClockSkew || written < now - MaxWrittenAge))
@@ -106,7 +124,7 @@ internal static class CreateDailyReport
             return ProjectProblems.Validation(errors);
         }
 
-        var project = await access.FindVisibleAsync(httpContext.User, projectId, cancellationToken);
+        project ??= await access.FindVisibleAsync(httpContext.User, projectId, cancellationToken);
         if (project is null)
         {
             return ProjectProblems.ProjectNotFound();
@@ -115,12 +133,6 @@ internal static class CreateDailyReport
         if (project.WritesBlocked)
         {
             return ProjectProblems.CompletedProject();
-        }
-
-        if (idempotencyKey is { } repeatKey
-            && await RepeatAsync(db, users, httpContext, project, projectId, caller.UserId, repeatKey, reportDate!.Value, cancellationToken) is { } repeat)
-        {
-            return repeat;
         }
 
         await fields!.CheckReferencesAsync(db, owners, projectId, itemsAlreadyNamed: [], errors, cancellationToken);

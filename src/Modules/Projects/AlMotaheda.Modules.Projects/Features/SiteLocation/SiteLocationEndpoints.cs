@@ -208,7 +208,17 @@ internal static class SiteLocationEndpoints
         var responsibility = await access.ResponsibilityAsync(caller.UserId, projectId, cancellationToken);
         var sharing = await db.LocationSharings.FirstOrDefaultAsync(row => row.ProjectId == projectId && row.UserId == caller.UserId, cancellationToken);
 
-        // Turning off always works, so nobody is stuck sharing; turning on needs an active site engineer.
+        // Turning off works for the old opt-in sharing; once the engineer accepted the automatic tracking policy on a
+        // phone, that phone's uploads turn sharing back on, so the switch would only pretend: it is refused instead.
+        // Turning on needs an active site engineer.
+        var settings = options.Value;
+        if (!isOn
+            && sharing is { IsOn: true }
+            && await db.LocationDevices.AnyAsync(device => device.UserId == caller.UserId && device.PolicyVersion >= settings.PolicyVersion, cancellationToken))
+        {
+            return ProjectProblems.TrackingFollowsPolicy();
+        }
+
         if (isOn)
         {
             if (responsibility != MemberResponsibility.SiteEngineer)

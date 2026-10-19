@@ -16,6 +16,7 @@ internal static class ProjectProblems
     public const string Busy = "busy";
     public const string LocationSharingOff = "location_sharing_off";
     public const string TrackingPolicyNotAccepted = "tracking_policy_not_accepted";
+    public const string TrackingFollowsPolicyCode = "tracking_follows_policy";
 
     public static ValidationProblem Validation(ValidationErrors errors) => ApiProblem.Validation(errors.ToDictionary());
 
@@ -74,6 +75,16 @@ internal static class ProjectProblems
             StatusCodes.Status409Conflict,
             TrackingPolicyNotAccepted,
             "The current location tracking policy was not accepted on this phone. Open the app and accept it first.");
+
+    /// <summary>
+    /// The engineer accepted the automatic tracking policy on a phone: tracking follows the policy (it stops when they
+    /// sign out on that phone or stop being a site engineer), not a per-project switch that the next upload would undo.
+    /// </summary>
+    public static ProblemHttpResult TrackingFollowsPolicy() =>
+        ApiProblem.Create(
+            StatusCodes.Status409Conflict,
+            TrackingFollowsPolicyCode,
+            "Location tracking follows the company tracking policy accepted on your phone; it can't be turned off per project.");
 
     public static ProblemHttpResult SharingOff() =>
         ApiProblem.Create(StatusCodes.Status409Conflict, LocationSharingOff, "Location sharing is off. Turn it on to send your position.");

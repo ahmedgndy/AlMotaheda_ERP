@@ -305,4 +305,141 @@ public sealed class AutomaticTrackingTests(SqlServerFixture database)
         Assert.Equal("OnSite", (await EngineerOnMapAsync(api, team)).GetProperty("state").GetString());
         await WaitForNotificationAsync(api, team.Manager, "LocationAvailable");
     }
+
+    [DatabaseFact]
+    public async Task One_upload_that_leaves_and_comes_back_keeps_both_changes_and_the_next_exit_alerts_again()
+    {
+        var (api, team) = await StartAsync(database);
+        await using var _ = api;
+        await EnsureStatus(await AcceptAsync(api, team.Engineer), HttpStatusCode.OK);
+        var outside = SiteLatitude + 0.06m;
+        var now = DateTime.UtcNow;
+
+        // Out and back again within one upload (QA review M1): the alert is saved open, then closed.
+        var second = now.AddMinutes(-4);
+        var back = now.AddMinutes(-3);
+        await EnsureStatus(await BatchAsync(api, team.Engineer,
+        [
+            Point(Guid.NewGuid(), now.AddMinutes(-5), outside, SiteLongitude),
+            Point(Guid.NewGuid(), second, outside, SiteLongitude),
+            Point(Guid.NewGuid(), back, SiteLatitude, SiteLongitude),
+        ]), HttpStatusCode.OK);
+        var first = await AlertsAsync(api, team.ProjectId);
+        Assert.Equal(2, first.Count);
+        Assert.All(first, alert =>
+        {
+            Assert.Equal(LocationAlertStatus.Recovered, alert.Status);
+            Assert.Equal(second, alert.StartedAt, TimeSpan.FromMilliseconds(5));
+            Assert.Equal(back, alert.EndedAt!.Value, TimeSpan.FromMilliseconds(5));
+        });
+        await WaitForNotificationAsync(api, team.Manager, "OutsideSite");
+        await WaitForNotificationAsync(api, team.Manager, "BackInsideSite");
+
+        // The next exit is a new episode, not hidden by a row left open.
+        await EnsureStatus(await BatchAsync(api, team.Engineer,
+        [
+            Point(Guid.NewGuid(), now.AddMinutes(-2), outside, SiteLongitude),
+            Point(Guid.NewGuid(), now.AddMinutes(-1), outside, SiteLongitude),
+        ]), HttpStatusCode.OK);
+        var all = await AlertsAsync(api, team.ProjectId);
+        Assert.Equal(4, all.Count);
+        Assert.Equal(2, all.Count(alert => alert.Status == LocationAlertStatus.Open));
+    }
+
+    [DatabaseFact]
+    public async Task One_upload_that_comes_back_and_leaves_again_closes_the_old_alert_and_opens_a_new_one()
+    {
+        var (api, team) = await StartAsync(database);
+        await using var _ = api;
+        await EnsureStatus(await AcceptAsync(api, team.Engineer), HttpStatusCode.OK);
+        var outside = SiteLatitude + 0.06m;
+        var now = DateTime.UtcNow;
+        await EnsureStatus(await BatchAsync(api, team.Engineer,
+        [
+            Point(Guid.NewGuid(), now.AddMinutes(-8), outside, SiteLongitude),
+            Point(Guid.NewGuid(), now.AddMinutes(-7), outside, SiteLongitude),
+        ]), HttpStatusCode.OK);
+        Assert.All(await AlertsAsync(api, team.ProjectId), alert => Assert.Equal(LocationAlertStatus.Open, alert.Status));
+
+        var again = now.AddMinutes(-2);
+        await EnsureStatus(await BatchAsync(api, team.Engineer,
+        [
+            Point(Guid.NewGuid(), now.AddMinutes(-4), SiteLatitude, SiteLongitude),
+            Point(Guid.NewGuid(), now.AddMinutes(-3), outside, SiteLongitude),
+            Point(Guid.NewGuid(), again, outside, SiteLongitude),
+        ]), HttpStatusCode.OK);
+
+        var alerts = await AlertsAsync(api, team.ProjectId);
+        Assert.Equal(4, alerts.Count);
+        Assert.Equal(2, alerts.Count(alert => alert.Status == LocationAlertStatus.Recovered));
+        Assert.All(alerts.Where(alert => alert.Status == LocationAlertStatus.Open), alert => Assert.Equal(again, alert.StartedAt, TimeSpan.FromMilliseconds(5)));
+        Assert.Equal("OutsideSite", (await EngineerOnMapAsync(api, team)).GetProperty("state").GetString());
+    }
+
+    [DatabaseFact]
+    public async Task Positions_are_stored_for_a_project_whose_tracking_this_upload_turns_on()
+    {
+        var (api, team) = await StartAsync(database);
+        await using var _ = api;
+        await EnsureStatus(await AcceptAsync(api, team.Engineer), HttpStatusCode.OK);
+
+        // The engineer joins a second project while the phone is offline (QA review M2), and the first project's
+        // sharing was turned off meanwhile (for example by the monitor).
+        var response = await api.SendAsync(HttpMethod.Post, "/api/projects", team.Executive, ProjectsApi.ProjectBody("TRK-003", team.ManagerId, new()
+        {
+            ["siteEngineerUserIds"] = new[] { team.EngineerId },
+        }));
+        await EnsureStatus(response, HttpStatusCode.Created);
+        var joined = (await Json(response)).GetProperty("id").GetInt32();
+        await api.QueryAsync(db => db.LocationSharings.Where(row => row.ProjectId == team.ProjectId).ExecuteUpdateAsync(set => set.SetProperty(row => row.IsOn, false)));
+
+        var result = await Json(await BatchAsync(api, team.Engineer, [Point(Guid.NewGuid(), DateTime.UtcNow, SiteLatitude, SiteLongitude)]));
+
+        Assert.Equal(1, result.GetProperty("accepted").GetInt32());
+        Assert.Equal(2, result.GetProperty("projects").GetInt32());
+        Assert.Equal(1, await api.QueryAsync(db => db.LocationPings.CountAsync(ping => ping.ProjectId == joined)));
+        Assert.Equal(1, await api.QueryAsync(db => db.LocationPings.CountAsync(ping => ping.ProjectId == team.ProjectId)));
+    }
+
+    [DatabaseFact]
+    public async Task Once_the_policy_is_accepted_tracking_cannot_be_switched_off_per_project()
+    {
+        var (api, team) = await StartAsync(database);
+        await using var _ = api;
+        await EnsureStatus(await AcceptAsync(api, team.Engineer), HttpStatusCode.OK);
+
+        // The old per-project switch would be undone by the phone's next upload (QA review L2): it says so instead.
+        var off = await api.SendAsync(HttpMethod.Put, $"/api/projects/{team.ProjectId}/site-location/me", team.Engineer, new { isOn = false });
+        await EnsureStatus(off, HttpStatusCode.Conflict);
+        Assert.Equal("tracking_follows_policy", await CodeOf(off));
+        Assert.True((await EngineerOnMapAsync(api, team)).GetProperty("isOn").GetBoolean());
+    }
+
+    [DatabaseFact]
+    public async Task With_all_day_tracking_switched_off_positions_outside_working_hours_are_not_kept()
+    {
+        await using var api = await ProjectsApi.StartAsync(database, new Dictionary<string, string?>
+        {
+            ["SiteLocation:CheckEverySeconds"] = "3600",
+            ["SiteLocation:TrackAllDay"] = "false",
+            ["SiteLocation:WorkStart"] = "08:00",
+            ["SiteLocation:WorkEnd"] = "17:00",
+        });
+        var executive = await api.SignInExecutiveAsync();
+        var (managerId, _) = await api.CreateSignedInUserAsync(executive, "manager");
+        var (engineerId, engineer) = await api.CreateSignedInUserAsync(executive, "engineer");
+        await api.CreateProjectAsync(executive, "TRK-004", managerId, siteEngineers: [engineerId]);
+        await EnsureStatus(await AcceptAsync(api, engineer), HttpStatusCode.OK);
+
+        // 02:00 company time yesterday: outside working hours on any day (QA review L1).
+        var zone = api.Access.App.Services.GetRequiredService<AlMotaheda.BuildingBlocks.Time.CompanyClock>().Zone;
+        var localNight = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zone).Date.AddDays(-1).AddHours(2);
+        var night = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(localNight, DateTimeKind.Unspecified), zone);
+
+        var result = await Json(await BatchAsync(api, engineer, [Point(Guid.NewGuid(), night, SiteLatitude, SiteLongitude)]));
+
+        Assert.Equal(0, result.GetProperty("accepted").GetInt32());
+        Assert.Equal("outsideHours", Assert.Single(result.GetProperty("rejected").EnumerateArray()).GetProperty("reason").GetString());
+        Assert.Equal(0, await api.QueryAsync(db => db.LocationPings.CountAsync(ping => ping.UserId == engineerId)));
+    }
 }

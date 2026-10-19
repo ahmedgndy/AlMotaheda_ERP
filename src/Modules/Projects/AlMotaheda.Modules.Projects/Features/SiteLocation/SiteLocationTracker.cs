@@ -159,7 +159,15 @@ internal sealed class SiteLocationTracker(
                 continue;
             }
 
-            var id = Guid.Parse(point!.Id!.Trim());
+            // With all-day tracking switched off (a policy choice), positions outside working hours are not kept,
+            // like the old single-position endpoint: the phone deletes them and shows why.
+            if (!SiteLocationRules.InWorkingHours(point!.RecordedAt!.Value.ToUniversalTime(), clock.Zone, settings))
+            {
+                rejected.Add(new RejectedPoint(point.Id, "outsideHours"));
+                continue;
+            }
+
+            var id = Guid.Parse(point.Id!.Trim());
             if (seen.Add(id))
             {
                 valid.Add((id, point.RecordedAt!.Value.ToUniversalTime(), Math.Round(point.Latitude!.Value, 6), Math.Round(point.Longitude!.Value, 6), point.AccuracyMeters));
@@ -178,7 +186,8 @@ internal sealed class SiteLocationTracker(
 
         for (var attempt = 0; ; attempt++)
         {
-            await TurnOnAsync(userId, projects, now, cancellationToken);
+            // The sharings as tracked here, including any this upload just turned on (a query would miss those).
+            var sharings = await TurnOnAsync(userId, projects, now, cancellationToken);
 
             var known = ids.Count == 0
                 ? []
@@ -190,9 +199,22 @@ internal sealed class SiteLocationTracker(
             var fresh = valid.Where(point => !known.Contains(point.Id)).OrderBy(point => point.RecordedAt).ToList();
             duplicates = valid.Count - fresh.Count;
 
-            var sharings = await db.LocationSharings
-                .Where(sharing => sharing.UserId == userId && sharing.IsOn && projects.Select(project => project.ProjectId).Contains(sharing.ProjectId))
-                .ToListAsync(cancellationToken);
+            // Each alert change is its own record and its own notification. When one upload changes the same alert a
+            // second time (left and came back, or came back and left again), the first change is saved before the
+            // second is made: opening and closing look the alert up in the database.
+            var changedAlerts = new HashSet<(int ProjectId, string Kind)>();
+            var lost = false;
+            async Task<bool> ReadyToChangeAsync(int projectId, string kind)
+            {
+                if (changedAlerts.Add((projectId, kind)))
+                {
+                    return true;
+                }
+
+                changedAlerts.Clear();
+                changedAlerts.Add((projectId, kind));
+                return await TrySaveAsync(cancellationToken);
+            }
 
             foreach (var point in fresh)
             {
@@ -239,6 +261,12 @@ internal sealed class SiteLocationTracker(
 
                     if (sharing.UnavailableSince is not null)
                     {
+                        if (!await ReadyToChangeAsync(sharing.ProjectId, nameof(LocationUnavailableAlert)))
+                        {
+                            lost = true;
+                            break;
+                        }
+
                         // An outage is the server hearing nothing; it ends when positions arrive again (now), not at
                         // the capture time of a queued position, which can be earlier than the moment it was detected.
                         sharing.UnavailableSince = null;
@@ -252,6 +280,12 @@ internal sealed class SiteLocationTracker(
                         sharing.OutsidePings++;
                         if (sharing.OutsideSince is null && sharing.OutsidePings >= settings.OutsidePingsBeforeAlert)
                         {
+                            if (!await ReadyToChangeAsync(sharing.ProjectId, nameof(OutsideSiteAlert)))
+                            {
+                                lost = true;
+                                break;
+                            }
+
                             sharing.OutsideSince = point.RecordedAt;
                             var told = await alerts.OpenAsync<OutsideSiteAlert>(sharing.ProjectId, userId, point.RecordedAt, cancellationToken);
                             log.OutsideSite(userId, sharing.ProjectId, told);
@@ -262,17 +296,31 @@ internal sealed class SiteLocationTracker(
                         sharing.OutsidePings = 0;
                         if (sharing.OutsideSince is not null)
                         {
+                            if (!await ReadyToChangeAsync(sharing.ProjectId, nameof(OutsideSiteAlert)))
+                            {
+                                lost = true;
+                                break;
+                            }
+
                             sharing.OutsideSince = null;
                             await alerts.CloseAsync<OutsideSiteAlert>(sharing.ProjectId, userId, LocationAlertStatus.Recovered, point.RecordedAt, cancellationToken);
                             log.BackInsideSite(userId, sharing.ProjectId);
                         }
                     }
                 }
+
+                if (lost)
+                {
+                    break;
+                }
             }
 
-            await ApplyHeartbeatsAsync(userId, device, request.AppVersion, beats, sharings, now, cancellationToken);
+            if (!lost)
+            {
+                await ApplyHeartbeatsAsync(userId, device, request.AppVersion, beats, sharings, now, cancellationToken);
+            }
 
-            if (await TrySaveAsync(cancellationToken))
+            if (!lost && await TrySaveAsync(cancellationToken))
             {
                 log.TrackingBatch(userId, fresh.Count, duplicates, rejected.Count, beats.Count);
                 return new TrackingBatchResult(fresh.Count, duplicates, rejected, sharings.Count, settings.HeartbeatMinutes * 60, now);
@@ -346,12 +394,16 @@ internal sealed class SiteLocationTracker(
         }
     }
 
-    /// <summary>Tracking is on for every project where the engineer is a site engineer (added to the tracker, saved by the caller).</summary>
-    private async Task TurnOnAsync(int userId, IReadOnlyList<TrackedProject> projects, DateTime now, CancellationToken cancellationToken)
+    /// <summary>
+    /// Tracking is on for every project where the engineer is a site engineer (added to the tracker, saved by the
+    /// caller). Returns those sharings, as tracked.
+    /// </summary>
+    private async Task<List<LocationSharing>> TurnOnAsync(int userId, IReadOnlyList<TrackedProject> projects, DateTime now, CancellationToken cancellationToken)
     {
+        var sharings = new List<LocationSharing>();
         if (projects.Count == 0)
         {
-            return;
+            return sharings;
         }
 
         var projectIds = projects.Select(project => project.ProjectId).ToList();
@@ -378,7 +430,11 @@ internal sealed class SiteLocationTracker(
                 sharing.OutsidePings = 0;
                 log.LocationSharingOn(userId, projectId);
             }
+
+            sharings.Add(sharing);
         }
+
+        return sharings;
     }
 
     /// <summary>Why one queued position is refused for good, or <c>null</c> when it is fine.</summary>

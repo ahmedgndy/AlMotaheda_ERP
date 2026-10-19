@@ -87,11 +87,6 @@ internal static class UploadDocument
             return ArchiveProblems.ProjectNotFound();
         }
 
-        if (project.WritesBlocked)
-        {
-            return ArchiveProblems.CompletedProject();
-        }
-
         Guid? idempotencyKey = null;
         if (httpContext.Request.Headers.TryGetValue(IdempotencyHeader, out var keyHeader) && !string.IsNullOrWhiteSpace(keyHeader.ToString()))
         {
@@ -104,11 +99,17 @@ internal static class UploadDocument
 
             idempotencyKey = parsed;
 
-            // Checked before the body is read: a repeated upload never writes its bytes again.
+            // Checked before the body is read: a repeated upload never writes its bytes again. Also before the
+            // completed-project rule: a photo stored before the project was completed is answered as stored.
             if (await RepeatAsync(db, users, caller, project.WritesBlocked, projectId, parsed, cancellationToken) is { } repeat)
             {
                 return repeat;
             }
+        }
+
+        if (project.WritesBlocked)
+        {
+            return ArchiveProblems.CompletedProject();
         }
 
         // Raised for this request only, before the body is read. Kestrel's default (about 28.6 MB) stays everywhere else.

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using AlMotaheda.Modules.Access.Tests.Database;
+using Microsoft.EntityFrameworkCore;
 using static AlMotaheda.Modules.Access.Tests.Database.AccessApi;
 using static AlMotaheda.Modules.Projects.Tests.Database.Core.CoreApi;
 using static AlMotaheda.Modules.Projects.Tests.Database.Planning.PlanningApi;
@@ -116,6 +117,31 @@ public sealed class DailyReportWorkflowTests(SqlServerFixture database)
         Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
         var fields = (await Json(bad)).GetProperty("errors").EnumerateObject().Select(field => field.Name).Order(StringComparer.Ordinal).ToList();
         Assert.Equal(["idempotencyKey", "writtenAt"], fields);
+    }
+
+    [DatabaseFact]
+    public async Task A_repeat_of_a_stored_report_comes_back_even_when_its_day_is_now_too_old()
+    {
+        await using var api = await ProjectsApi.StartAsync(database);
+        var cast = await api.CastAsync("BDR-DAY-003");
+        var reports = $"/api/projects/{cast.ProjectId}/daily-reports";
+        var key = Guid.NewGuid().ToString();
+        var stored = await ExpectAsync(
+            await api.PostAsync(cast.Engineer, reports, new { reportDate = Date(CompanyToday.AddDays(-1)), issues = "Sent from site", idempotencyKey = key }),
+            HttpStatusCode.Created);
+
+        // The answer was lost and the phone only retries ten days later: the stored report comes back (QA review M3),
+        // not "the date is too old", which would leave the phone's copy and its photos stuck.
+        var tenDaysAgo = CompanyToday.AddDays(-10);
+        await api.QueryAsync(db => db.DailyReports.Where(report => report.Id == stored.Id()).ExecuteUpdateAsync(set => set.SetProperty(report => report.ReportDate, tenDaysAgo)));
+        var late = await ExpectAsync(
+            await api.PostAsync(cast.Engineer, reports, new { reportDate = Date(tenDaysAgo), issues = "Sent from site", idempotencyKey = key }),
+            HttpStatusCode.OK);
+        Assert.Equal(stored.Id(), late.Id());
+
+        // A new report for that day is still refused.
+        var fresh = await api.PostAsync(cast.Engineer, reports, new { reportDate = Date(tenDaysAgo.AddDays(-1)), issues = "Too old", idempotencyKey = Guid.NewGuid().ToString() });
+        Assert.Equal(HttpStatusCode.BadRequest, fresh.StatusCode);
     }
 
     [DatabaseFact]
