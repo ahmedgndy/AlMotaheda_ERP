@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace AlMotaheda.Modules.Projects.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class AutomaticTracking : Migration
+    internal partial class AutomaticTracking : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)

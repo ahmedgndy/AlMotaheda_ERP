@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace AlMotaheda.Modules.Archive.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class DocumentIdempotency : Migration
+    internal partial class DocumentIdempotency : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
