@@ -34,6 +34,9 @@
   <Folder Name="/src/Modules/HR/">
     <Project Path="src/Modules/HR/AlMotaheda.Modules.HR/AlMotaheda.Modules.HR.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/Office/">
+    <Project Path="src/Modules/Office/AlMotaheda.Modules.Office/AlMotaheda.Modules.Office.csproj" />
+  </Folder>
   <Folder Name="/src/Modules/Procurement/">
     <Project Path="src/Modules/Procurement/AlMotaheda.Modules.Procurement.Contracts/AlMotaheda.Modules.Procurement.Contracts.csproj" />
     <Project Path="src/Modules/Procurement/AlMotaheda.Modules.Procurement/AlMotaheda.Modules.Procurement.csproj" />
@@ -68,6 +71,7 @@
   <Folder Name="/tests/Modules/">
     <Project Path="tests/Modules/AlMotaheda.Modules.Finance.Tests/AlMotaheda.Modules.Finance.Tests.csproj" />
     <Project Path="tests/Modules/AlMotaheda.Modules.HR.Tests/AlMotaheda.Modules.HR.Tests.csproj" />
+    <Project Path="tests/Modules/AlMotaheda.Modules.Office.Tests/AlMotaheda.Modules.Office.Tests.csproj" />
     <Project Path="tests/Modules/AlMotaheda.Modules.Procurement.Tests/AlMotaheda.Modules.Procurement.Tests.csproj" />
     <Project Path="tests/Modules/AlMotaheda.Modules.Reports.Tests/AlMotaheda.Modules.Reports.Tests.csproj" />
     <Project Path="tests/Modules/AlMotaheda.Modules.Platform.Tests/AlMotaheda.Modules.Platform.Tests.csproj" />

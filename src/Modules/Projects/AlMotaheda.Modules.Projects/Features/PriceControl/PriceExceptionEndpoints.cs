@@ -433,7 +433,10 @@ internal static class PriceExceptionEndpoints
         return TypedResults.Ok((await PriceExceptionQueries.OneAsync(db, users, exception.Id, cancellationToken))!);
     }
 
-    /// <summary>The cases the caller may see: on the projects they may see, plus their own submissions.</summary>
+    /// <summary>
+    /// The cases the caller may see: on the projects they may see, company-office cases for office reviewers, plus
+    /// their own submissions.
+    /// </summary>
     private static async Task<IQueryable<PriceException>> ScopedAsync(
         ProjectsDbContext db, IVisibleProjects visibleProjects, HttpContext httpContext, int userId, CancellationToken cancellationToken)
     {
@@ -442,7 +445,10 @@ internal static class PriceExceptionEndpoints
         if (visible is not null)
         {
             var ids = visible.ToList();
-            query = query.Where(exception => (exception.ProjectId != null && ids.Contains(exception.ProjectId.Value)) || exception.SubmittedBy == userId);
+            var officeReviewer = httpContext.User.HasPermission("office", PermissionAction.Approve);
+            query = query.Where(exception => (exception.ProjectId != null && ids.Contains(exception.ProjectId.Value))
+                                             || (exception.ProjectId == null && officeReviewer)
+                                             || exception.SubmittedBy == userId);
         }
 
         return query;

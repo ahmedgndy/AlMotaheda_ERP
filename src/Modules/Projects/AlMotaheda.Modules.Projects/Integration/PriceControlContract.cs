@@ -63,4 +63,32 @@ internal sealed class PriceControlContract(
         var newest = await PriceExceptionCases.NewestAsync(db, sourceType, sourceIds, cancellationToken);
         return newest.ToDictionary(pair => pair.Key, pair => new PriceExceptionState(pair.Value.Id, pair.Key, pair.Value.Status.ToString()));
     }
+
+    public async Task<IReadOnlyList<PriceItemListing>> ListItemsAsync(IReadOnlyCollection<string> categoryCodes, DateOnly date, CancellationToken cancellationToken)
+    {
+        var items = await db.PriceItems.AsNoTracking()
+            .Where(item => item.Status == PriceItemStatus.Active && categoryCodes.Contains(item.Category.Code))
+            .OrderBy(item => item.Category.SortOrder).ThenBy(item => item.NameAr)
+            .Select(item => new PriceItemRef(item.Id, item.NameAr, item.NameEn, item.Unit, item.Category.Code, true))
+            .ToListAsync(cancellationToken);
+
+        // A short catalog (office items), so one range query per item is fine.
+        var listings = new List<PriceItemListing>(items.Count);
+        foreach (var item in items)
+        {
+            var range = await PriceRanges.ApplicableAsync(db, item.Id, null, date, cancellationToken);
+            listings.Add(new PriceItemListing(item, range?.RangeId, range?.MinPrice, range?.MaxPrice, range?.ReferencePrice));
+        }
+
+        return listings;
+    }
+
+    public async Task<int> WithdrawExceptionsAsync(string sourceType, int sourceId, int userId, SharedTransaction transaction, CancellationToken cancellationToken)
+    {
+        await using var joined = await transaction.JoinAsync(options, ProjectsDatabase.Configure, joinedOptions => new ProjectsDbContext(joinedOptions), cancellationToken);
+        var joinedCases = new PriceExceptionCases(joined, new Features.Expenses.CostAlerts(joined, cases.Users), settings, cases.Clock, log);
+        var withdrawn = await joinedCases.WithdrawOpenAsync(sourceType, sourceId, userId, cancellationToken);
+        await joined.SaveChangesAsync(cancellationToken);
+        return withdrawn;
+    }
 }

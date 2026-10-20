@@ -27,6 +27,18 @@ public interface IPriceControl
 
     /// <summary>The newest case of each transaction (any status), by transaction id. Transactions with no case are left out.</summary>
     Task<IReadOnlyDictionary<int, PriceExceptionState>> StatesAsync(string sourceType, IReadOnlyCollection<int> sourceIds, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The active price items of these categories (by category code) with the general range that applies on
+    /// <paramref name="date"/>, for a module that offers a short catalog of its own (the office expenses).
+    /// </summary>
+    Task<IReadOnlyList<PriceItemListing>> ListItemsAsync(IReadOnlyCollection<string> categoryCodes, DateOnly date, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The transaction was corrected by its submitter: every case still counting against it (pending or rejected) is
+    /// withdrawn in the caller's transaction, so a corrected price starts clean. Returns how many were withdrawn.
+    /// </summary>
+    Task<int> WithdrawExceptionsAsync(string sourceType, int sourceId, int userId, SharedTransaction transaction, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -57,6 +69,9 @@ public static class PriceExceptionSources
 }
 
 public sealed record PriceItemRef(int Id, string NameAr, string NameEn, string Unit, string CategoryCode, bool IsActive);
+
+/// <summary>A price item with the general reference range in force on the asked date (all <c>null</c> when none applies).</summary>
+public sealed record PriceItemListing(PriceItemRef Item, int? RangeId, decimal? MinPrice, decimal? MaxPrice, decimal? ReferencePrice);
 
 /// <param name="Quantity">For the total variance; 1 for a lump sum.</param>
 public sealed record PriceCheckRequest(int PriceItemId, int? SupplierId, DateOnly Date, string Unit, decimal UnitPrice, decimal Quantity);
