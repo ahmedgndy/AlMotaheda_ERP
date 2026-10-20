@@ -72,6 +72,19 @@ internal sealed class ProjectExpense
     public decimal? CatalogPriceAtRecording { get; set; }
 
     /// <summary>
+    /// Supply only, optional: the supply agreement this delivery is under (same project and supplier). Its work item is
+    /// the record's work item.
+    /// </summary>
+    public int? SupplyAgreementId { get; set; }
+    public SupplyAgreement? SupplyAgreement { get; set; }
+
+    /// <summary>
+    /// Who was paid when there is no registered supplier: a direct purchase paid in cash from a custody (the shop,
+    /// the merchant). Never a supplier account: nothing is owed to it.
+    /// </summary>
+    public string? PayeeName { get; set; }
+
+    /// <summary>
     /// Supply only, optional: the company price list item (price management) this purchase is compared with. Same
     /// unit as the supply.
     /// </summary>

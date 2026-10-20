@@ -21,7 +21,8 @@ namespace AlMotaheda.Modules.Fleet.Features.Costs;
 /// Needs equipment Create or equipment Edit; the endpoint checks the two itself, because <c>RequirePermission</c>
 /// asks for exactly one action. The server computes the amount, and the machine must have been on the project
 /// (409 <c>never_on_project</c>). Equipment fuel, rental and maintenance are recorded only here, never as project
-/// expenses, so they are counted once.
+/// expenses, so they are counted once. An optional <c>projectItemId</c> puts the cost on a work item (main or
+/// sub-item) of this project: 400 when it is not on the project, 409 <c>item_inactive</c> when it is inactive.
 /// </remarks>
 internal static class CreateEquipmentCost
 {
@@ -38,12 +39,13 @@ internal static class CreateEquipmentCost
         string? Description,
         int? SupplierId,
         string? Channel,
-        string? InvoiceNo) : IEquipmentCostFieldsRequest;
+        string? InvoiceNo,
+        int? ProjectItemId = null) : IEquipmentCostFieldsRequest;
 
     public static void Map(IEndpointRouteBuilder api) =>
         api.MapPost("/projects/{projectId:int}/equipment-costs", HandleAsync)
             .WithName("CreateEquipmentCost")
-            .WithSummary("Record an equipment cost on a project (equipment Create or Edit; saved as Recorded, waiting for review). 409 never_on_project");
+            .WithSummary("Record an equipment cost on a project, optionally on one of its work items (equipment Create or Edit; saved as Recorded, waiting for review). 409 never_on_project, item_inactive");
 
     internal static async Task<Results<Created<EquipmentCostView>, ValidationProblem, ProblemHttpResult>> HandleAsync(
         int projectId,
@@ -53,6 +55,7 @@ internal static class CreateEquipmentCost
         IProjectAccess access,
         IUserDirectory users,
         ISupplierDirectory suppliers,
+        IProjectItems projectItems,
         CompanyClock clock,
         FleetLog log,
         CancellationToken cancellationToken)
@@ -85,15 +88,15 @@ internal static class CreateEquipmentCost
             return FleetProblems.CompletedProject();
         }
 
-        var wasOnProject = await EquipmentCostReferences.CheckAsync(db, suppliers, projectId, fields!, errors, cancellationToken);
+        var conflict = await EquipmentCostReferences.CheckAsync(db, suppliers, projectItems, projectId, fields!, currentItemId: null, errors, cancellationToken);
         if (errors.HasErrors)
         {
             return FleetProblems.Validation(errors);
         }
 
-        if (!wasOnProject)
+        if (EquipmentCostReferences.ProblemOf(conflict) is { } problem)
         {
-            return FleetProblems.NotOnProject();
+            return problem;
         }
 
         var cost = new EquipmentCost
@@ -106,7 +109,15 @@ internal static class CreateEquipmentCost
         fields!.ApplyTo(cost);
 
         db.EquipmentCosts.Add(cost);
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (cost.ProjectItemId is not null && SqlViolations.IsReferenceOrCheck(exception))
+        {
+            // The work item was deleted by someone else after our check: a lost race is a 409, never a 500.
+            return FleetProblems.ItemRemoved();
+        }
         log.CostRecorded(caller.UserId, projectId, cost.Id, cost.EquipmentId, cost.Type.ToString(), cost.Channel.ToString());
 
         var view = await EquipmentCostView.LoadAsync(db, users, suppliers, projectId, cost.Id, cancellationToken);
@@ -114,16 +125,41 @@ internal static class CreateEquipmentCost
     }
 }
 
+/// <summary>A rule conflict found on the ids of the cost form (409), or none.</summary>
+internal enum CostReferenceConflict
+{
+    None,
+
+    /// <summary>The machine never had a stay on the project (409 <c>never_on_project</c>).</summary>
+    NeverOnProject,
+
+    /// <summary>The work item was newly chosen and is inactive (409 <c>item_inactive</c>).</summary>
+    InactiveItem,
+}
+
 /// <summary>What the database says about the ids on the cost form.</summary>
 internal static class EquipmentCostReferences
 {
     /// <summary>
-    /// Checks that the machine is in the register and that the supplier exists and is active, reporting each
-    /// problem on its own field. Returns whether the machine has, or had, a stay on the project: not a form error
-    /// but a rule conflict (409), so it is returned, not judged.
+    /// Checks that the machine is in the register, that the supplier exists and is active, and that the work item
+    /// is on this project, reporting each problem on its own field. The work item is asked from Projects through
+    /// <see cref="IProjectItems"/>, which leaves out the items of other projects; a main item or a sub-item may be
+    /// chosen. Returns the rule conflict, if any: not form errors but conflicts (409), so they are returned, not
+    /// judged.
     /// </summary>
-    public static async Task<bool> CheckAsync(
-        FleetDbContext db, ISupplierDirectory suppliers, int projectId, EquipmentCostFields fields, ValidationErrors errors, CancellationToken cancellationToken)
+    /// <param name="currentItemId">
+    /// The work item the cost has now (<c>null</c> for a new cost). Keeping it is allowed even if it was deactivated
+    /// since; only a newly chosen item must be active.
+    /// </param>
+    public static async Task<CostReferenceConflict> CheckAsync(
+        FleetDbContext db,
+        ISupplierDirectory suppliers,
+        IProjectItems projectItems,
+        int projectId,
+        EquipmentCostFields fields,
+        int? currentItemId,
+        ValidationErrors errors,
+        CancellationToken cancellationToken)
     {
         if (!await db.Equipment.AnyAsync(equipment => equipment.Id == fields.EquipmentId, cancellationToken))
         {
@@ -136,6 +172,33 @@ internal static class EquipmentCostReferences
             SupplierChoice.Check(supplierId, found, errors, "supplierId");
         }
 
-        return await EquipmentCostQueries.StaysOn(db, projectId, fields.EquipmentId).AnyAsync(cancellationToken);
+        var inactiveItem = false;
+        if (fields.ProjectItemId is { } itemId)
+        {
+            var items = await projectItems.FindAsync(projectId, [itemId], cancellationToken);
+            if (!items.TryGetValue(itemId, out var item))
+            {
+                errors.Add("projectItemId", "The work item was not found on this project.");
+            }
+            else
+            {
+                inactiveItem = !item.IsActive && itemId != currentItemId;
+            }
+        }
+
+        if (!await EquipmentCostQueries.StaysOn(db, projectId, fields.EquipmentId).AnyAsync(cancellationToken))
+        {
+            return CostReferenceConflict.NeverOnProject;
+        }
+
+        return inactiveItem ? CostReferenceConflict.InactiveItem : CostReferenceConflict.None;
     }
+
+    /// <summary>The answer to a conflict, or <c>null</c> when there is none.</summary>
+    public static ProblemHttpResult? ProblemOf(CostReferenceConflict conflict) => conflict switch
+    {
+        CostReferenceConflict.NeverOnProject => FleetProblems.NotOnProject(),
+        CostReferenceConflict.InactiveItem => FleetProblems.InactiveItem(),
+        _ => null,
+    };
 }

@@ -115,6 +115,9 @@ internal sealed class PurchaseOrderLine
 
     public int? CatalogItemId { get; set; }
 
+    /// <summary>Copied from the requisition line: the Price Control item the invoice price is compared with.</summary>
+    public int? PriceItemId { get; set; }
+
     public int? ProjectItemId { get; set; }
 
     public string Description { get; set; } = "";

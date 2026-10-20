@@ -16,7 +16,7 @@ public sealed class DatabaseSchemaTests
         using var db = CreateContext();
 
         Assert.False(db.Database.HasPendingModelChanges(), "The model changed without a migration. Run dotnet ef migrations add.");
-        Assert.Equal(["InitialProcurement"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
+        Assert.Equal(["InitialProcurement", "PriceControlLinks"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
     }
 
     [Theory]
@@ -31,6 +31,8 @@ public sealed class DatabaseSchemaTests
     [InlineData("CONSTRAINT [CK_RequisitionEvent_Actor] CHECK ([ActorUserId] IS NOT NULL OR ([ActorLabel] IS NOT NULL AND [PolicyName] IS NOT NULL))")]
     [InlineData("CONSTRAINT [CK_GoodsReceiptLine_Quantity] CHECK ([Quantity] > 0)")]
     [InlineData("[Quantity] decimal(18,3) NOT NULL")]
+    [InlineData("CONSTRAINT [CK_SupplierInvoice_Status] CHECK ([Status] IN ('Matched', 'Mismatch', 'Posted', 'Returned', 'PriceHold'))")]
+    [InlineData("CREATE INDEX [IX_PurchaseOrderLine_PriceItemId] ON [proc].[PurchaseOrderLine] ([PriceItemId])")]
     public void The_create_script_contains(string expected)
     {
         using var db = CreateContext();

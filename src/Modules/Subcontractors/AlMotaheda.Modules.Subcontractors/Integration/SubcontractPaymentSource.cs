@@ -38,7 +38,7 @@ internal sealed class SubcontractPaymentSource(
 
         var contract = await joined.SubContracts.AsNoTracking()
             .Where(candidate => candidate.Id == line.RecordId && candidate.ProjectId == projectId && candidate.SubcontractorId == settlement.PayeeId)
-            .Select(candidate => new { candidate.Value })
+            .Select(candidate => new { Value = candidate.Value + (joined.ContractVariations.Where(variation => variation.ContractId == candidate.Id && variation.Status == VariationStatus.Approved).Sum(variation => (decimal?)variation.Amount) ?? 0) })
             .SingleOrDefaultAsync(cancellationToken)
             ?? throw new PaymentNotPayableException("The contract is no longer on this project for this subcontractor.");
 

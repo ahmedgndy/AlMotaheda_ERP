@@ -34,6 +34,13 @@ internal sealed class WorkerPayment
     public int? VoidedBy { get; set; }
     public string? VoidReason { get; set; }
 
+    /// <summary>
+    /// The weekly settlement that paid it in cash out of a custody, or <c>null</c> for a payment made through a
+    /// Finance payment request. Such a payment is voided only by reversing its settlement.
+    /// </summary>
+    public int? SettlementId { get; set; }
+    public PayrollSettlement? Settlement { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public int CreatedBy { get; set; }
 

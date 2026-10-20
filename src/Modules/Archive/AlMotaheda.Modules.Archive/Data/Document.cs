@@ -110,4 +110,8 @@ internal enum LinkedEntityType
     Equipment,
     EquipmentCost,
     Budget,
+    CustodyEntry,
+    SupplyAgreement,
+    PayrollSettlement,
+    ContractVariation,
 }

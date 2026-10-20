@@ -6,13 +6,13 @@ using Microsoft.EntityFrameworkCore;
 namespace AlMotaheda.Modules.Fleet.Integration;
 
 /// <summary>
-/// The equipment cost group of a project, for the overview, the budget comparison, the reports and the "other
-/// project costs" of the items screen. Recognized = approved equipment costs in the period; paid = custody at
+/// The equipment cost group of a project, for the overview, the budget comparison and the reports. Recognized = approved equipment costs in the period; paid = custody at
 /// approval and credit once its payment is recorded; pending review = recorded costs; committed = 0.
 /// </summary>
 /// <remarks>
 /// Only this project's rows are read, flat, and the arithmetic is <see cref="EquipmentCostSettlement.Figures"/>, the
-/// same rule as the equipment screens (decision G5). Equipment costs are never split over project items (F1).
+/// same rule as the equipment screens (decision G5). A cost is never split over items (F1): it names one work item
+/// or none, and <see cref="EquipmentItemCosts"/> reports the same rows by item.
 /// </remarks>
 internal sealed class EquipmentCostSource(FleetDbContext db) : IProjectCostSource
 {
@@ -22,5 +22,69 @@ internal sealed class EquipmentCostSource(FleetDbContext db) : IProjectCostSourc
     {
         var rows = await EquipmentCostQueries.SettlementRows(db, projectId, from, to).ToListAsync(cancellationToken);
         return EquipmentCostSettlement.Figures(rows);
+    }
+}
+
+/// <summary>
+/// The Fleet answer to <see cref="IEquipmentItemCosts"/>: approved equipment costs per project work item, for the
+/// Projects items screens. Projects never reads this module's tables.
+/// </summary>
+/// <remarks>
+/// The same flat rows and the same arithmetic as <see cref="EquipmentCostSource"/>
+/// (<see cref="EquipmentCostSettlement"/>), grouped by work item: the item totals and the total of the costs on no
+/// item add up to the Equipment group, so linking a cost to an item moves it and never counts it twice.
+/// </remarks>
+internal sealed class EquipmentItemCosts(FleetDbContext db) : IEquipmentItemCosts
+{
+    public async Task<IReadOnlyList<ItemCostTotal>> TotalsByItemAsync(int projectId, CancellationToken cancellationToken)
+    {
+        var rows = await EquipmentCostQueries.SettlementRows(db, projectId).ToListAsync(cancellationToken);
+        return EquipmentCostSettlement.ItemTotals(rows);
+    }
+
+    public async Task<IReadOnlyDictionary<int, IReadOnlyList<EquipmentItemLine>>> LinesByItemAsync(
+        int projectId, IReadOnlyCollection<int> itemIds, CancellationToken cancellationToken)
+    {
+        if (itemIds.Count == 0)
+        {
+            return new Dictionary<int, IReadOnlyList<EquipmentItemLine>>();
+        }
+
+        var rows = await EquipmentCostQueries.ApprovedOnItems(db, projectId, itemIds.Distinct().ToArray()).ToListAsync(cancellationToken);
+
+        return rows
+            .GroupBy(row => row.ProjectItemId)
+            .ToDictionary(group => group.Key, group => (IReadOnlyList<EquipmentItemLine>)group.Select(ToLine).ToList());
+    }
+
+    public Task<bool> HasLinksAsync(int projectId, int itemId, CancellationToken cancellationToken) =>
+        EquipmentCostQueries.LinkedTo(db, projectId, itemId).AnyAsync(cancellationToken);
+
+    /// <summary>Fuel is litres at a price per litre; a day, month or hour basis is a quantity at a rate; a lump sum has neither.</summary>
+    private static EquipmentItemLine ToLine(EquipmentItemCostRow row)
+    {
+        var settlement = row.Settlement;
+        var paid = EquipmentCostSettlement.Paid(settlement);
+        var fuel = row.Type == EquipmentCostType.Fuel;
+
+        return new EquipmentItemLine(
+            row.Id,
+            row.CostDate,
+            row.EquipmentId,
+            row.AssetNo,
+            row.EquipmentNameAr,
+            row.EquipmentNameEn,
+            row.Type.ToString(),
+            row.Description,
+            fuel ? row.Liters : row.Quantity,
+            fuel ? MeasurementUnits.Liter : row.Basis is { } basis && basis != CostBasis.Lump ? basis.ToString() : null,
+            fuel ? row.PricePerLiter : row.Rate,
+            row.AdjustedAmount,
+            paid,
+            row.AdjustedAmount - paid,
+            PaymentStates.Of(row.AdjustedAmount, paid),
+            row.Channel.ToString(),
+            row.InvoiceNo,
+            row.SupplierId);
     }
 }

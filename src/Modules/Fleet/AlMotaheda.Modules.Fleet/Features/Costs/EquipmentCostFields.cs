@@ -21,12 +21,16 @@ internal interface IEquipmentCostFieldsRequest
     int? SupplierId { get; }
     string? Channel { get; }
     string? InvoiceNo { get; }
+
+    /// <summary>The work item the machine worked for (main or sub-item of the project); empty for the whole site.</summary>
+    int? ProjectItemId { get; }
 }
 
 /// <summary>
 /// The form after validation, with the amount set by the server (<see cref="EquipmentCostAmounts"/>). Fuel has
 /// litres and a price per litre; every other type has a basis, and a quantity and rate unless it is a lump sum.
-/// Rental and credit need a supplier.
+/// Rental and credit need a supplier. The work item is optional; whether it is on the project and active is asked
+/// from Projects later (<see cref="EquipmentCostReferences"/>).
 /// </summary>
 internal sealed record EquipmentCostFields(
     int EquipmentId,
@@ -41,7 +45,8 @@ internal sealed record EquipmentCostFields(
     string Description,
     int? SupplierId,
     CostChannel Channel,
-    string? InvoiceNo)
+    string? InvoiceNo,
+    int? ProjectItemId = null)
 {
     /// <param name="today">The company's business date; a cost can't be dated after it.</param>
     public static EquipmentCostFields? Validate(IEquipmentCostFieldsRequest request, DateOnly today, ValidationErrors errors)
@@ -68,6 +73,11 @@ internal sealed record EquipmentCostFields(
         {
             // 05-fleet.md: rental needs a supplier, and so does credit (someone is owed).
             errors.Add("supplierId", "A rental, and anything bought on credit, needs its supplier.");
+        }
+
+        if (request.ProjectItemId is < 1)
+        {
+            errors.Add("projectItemId", "projectItemId is not valid.");
         }
 
         var description = Input.OptionalText(request.Description, EquipmentCostConfiguration.DescriptionMaxLength, errors, "description", "The description");
@@ -147,7 +157,8 @@ internal sealed record EquipmentCostFields(
             description,
             request.SupplierId,
             channel!.Value,
-            invoiceNo);
+            invoiceNo,
+            request.ProjectItemId);
     }
 
     public void ApplyTo(EquipmentCost cost)
@@ -165,5 +176,6 @@ internal sealed record EquipmentCostFields(
         cost.SupplierId = SupplierId;
         cost.Channel = Channel;
         cost.InvoiceNo = InvoiceNo;
+        cost.ProjectItemId = ProjectItemId;
     }
 }

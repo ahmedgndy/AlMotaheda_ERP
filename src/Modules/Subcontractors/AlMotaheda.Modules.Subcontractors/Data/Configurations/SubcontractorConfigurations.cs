@@ -45,13 +45,16 @@ internal sealed class SubcontractorConfiguration : IEntityTypeConfiguration<Subc
 internal sealed class SubContractConfiguration : IEntityTypeConfiguration<SubContract>
 {
     /// <summary>One contract per company per project. A lost race is answered with 409 <c>already_contracted</c>.</summary>
-    public const string ProjectCompanyIndex = "UX_SubContract_Project_Subcontractor";
+    public const string ProjectCompanyIndex = "UX_SubContract_Project_Subcontractor_Item";
 
     /// <summary>A contract number is used once. A lost race is answered with 409 <c>contract_no_taken</c>.</summary>
     public const string ContractNoIndex = "UX_SubContract_ContractNo";
 
     /// <summary>The foreign key to <c>projects.Project</c>. Added by hand in the migration: Projects owns that table.</summary>
     public const string ProjectForeignKey = "FK_SubContract_Project_ProjectId";
+
+    /// <summary>The main work item the engagement is for (<c>projects.ProjectItem</c>), a key added by hand in the migration.</summary>
+    public const string ProjectItemForeignKey = "FK_SubContract_ProjectItem_ProjectItemId";
 
     public const int ContractNoMaxLength = 50;
     public const int ScopeMaxLength = 1000;
@@ -80,7 +83,13 @@ internal sealed class SubContractConfiguration : IEntityTypeConfiguration<SubCon
         builder.Property(contract => contract.Scope).HasMaxLength(ScopeMaxLength).IsUnicode();
         builder.Property(contract => contract.RowVersion).IsRowVersion();
 
-        builder.HasIndex(contract => new { contract.ProjectId, contract.SubcontractorId }).IsUnique().HasDatabaseName(ProjectCompanyIndex);
+        // One engagement per company, project and main work item. HasFilter(null): SQL Server treats NULL items as
+        // equal, so the older project-wide contracts stay one per company and project.
+        builder.HasIndex(contract => new { contract.ProjectId, contract.SubcontractorId, contract.ProjectItemId })
+            .IsUnique()
+            .HasFilter(null)
+            .HasDatabaseName(ProjectCompanyIndex);
+        builder.HasIndex(contract => contract.ProjectItemId, "IX_SubContract_ProjectItemId");
         builder.HasIndex(contract => contract.ContractNo).IsUnique().HasFilter("[ContractNo] IS NOT NULL").HasDatabaseName(ContractNoIndex);
 
         // A company's contracts across projects.
@@ -305,6 +314,44 @@ internal sealed class SubPaymentAllocationConfiguration : IEntityTypeConfigurati
         builder.HasOne(allocation => allocation.ManpowerSheet)
             .WithMany()
             .HasForeignKey(allocation => allocation.ManpowerSheetId)
+            .OnDelete(DeleteBehavior.NoAction);
+    }
+}
+
+internal sealed class ContractVariationConfiguration : IEntityTypeConfiguration<ContractVariation>
+{
+    /// <summary>The project (<c>projects.Project</c>), a key added by hand in the migration.</summary>
+    public const string ProjectForeignKey = "FK_ContractVariation_Project_ProjectId";
+
+    /// <summary>One variation waits for a decision per contract at a time (409 <c>variation_pending</c>).</summary>
+    public const string PendingIndex = "UX_ContractVariation_Pending";
+
+    public const int ReasonMaxLength = 500;
+    public const int ReferenceMaxLength = 50;
+
+    public void Configure(EntityTypeBuilder<ContractVariation> builder)
+    {
+        builder.ToTable(nameof(ContractVariation), table =>
+        {
+            table.HasCheckConstraint("CK_ContractVariation_Status", $"[Status] IN ({SqlList.Of(Enum.GetNames<VariationStatus>())})");
+            table.HasCheckConstraint("CK_ContractVariation_Amount", "[Amount] <> 0");
+            table.HasCheckConstraint(
+                "CK_ContractVariation_Decision",
+                "([Status] = 'Pending' AND [DecidedAt] IS NULL AND [DecidedBy] IS NULL) "
+                + "OR ([Status] <> 'Pending' AND [DecidedAt] IS NOT NULL AND [DecidedBy] IS NOT NULL)");
+        });
+
+        builder.Property(variation => variation.Status).HasConversion<string>().HasMaxLength(30).IsUnicode(false);
+        builder.Property(variation => variation.Reason).HasMaxLength(ReasonMaxLength).IsUnicode();
+        builder.Property(variation => variation.Reference).HasMaxLength(ReferenceMaxLength).IsUnicode();
+        builder.Property(variation => variation.DecisionNote).HasMaxLength(ReasonMaxLength).IsUnicode();
+
+        builder.HasIndex(variation => variation.ContractId, PendingIndex).IsUnique().HasFilter("[Status] = 'Pending'");
+        builder.HasIndex(variation => new { variation.ContractId, variation.Status }, "IX_ContractVariation_Contract_Status");
+
+        builder.HasOne(variation => variation.Contract)
+            .WithMany(contract => contract.Variations)
+            .HasForeignKey(variation => variation.ContractId)
             .OnDelete(DeleteBehavior.NoAction);
     }
 }

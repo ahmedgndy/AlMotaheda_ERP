@@ -14,6 +14,8 @@ internal sealed class ProjectRecordOwnership(ProjectsDbContext db) : IProjectRec
         ProjectRecordKinds.DailyReport,
         ProjectRecordKinds.ReportRequest,
         ProjectRecordKinds.Budget,
+        ProjectRecordKinds.CustodyEntry,
+        ProjectRecordKinds.SupplyAgreement,
     ];
 
     public async Task<IReadOnlySet<int>> FindOnProjectAsync(
@@ -39,6 +41,10 @@ internal sealed class ProjectRecordOwnership(ProjectsDbContext db) : IProjectRec
         ProjectRecordKinds.ReportRequest => db.ReportRequests.AsNoTracking()
             .Where(record => record.ProjectId == projectId && ids.Contains(record.Id)).Select(record => record.Id),
         ProjectRecordKinds.Budget => db.Budgets.AsNoTracking()
+            .Where(record => record.ProjectId == projectId && ids.Contains(record.Id)).Select(record => record.Id),
+        ProjectRecordKinds.CustodyEntry => db.CustodyEntries.AsNoTracking()
+            .Where(record => record.ProjectId == projectId && ids.Contains(record.Id)).Select(record => record.Id),
+        ProjectRecordKinds.SupplyAgreement => db.SupplyAgreements.AsNoTracking()
             .Where(record => record.ProjectId == projectId && ids.Contains(record.Id)).Select(record => record.Id),
         _ => null,
     };

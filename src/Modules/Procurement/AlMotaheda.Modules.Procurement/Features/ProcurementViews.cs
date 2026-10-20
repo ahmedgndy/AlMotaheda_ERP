@@ -16,7 +16,7 @@ internal sealed record RequisitionView(
 
 internal sealed record RequisitionLineView(
     int Id, int? CatalogItemId, int? ProjectItemId, string Description, string Unit, decimal Quantity, decimal Ordered, decimal StillNeeded,
-    decimal? EstimatedUnitPrice, decimal? EstimatedAmount);
+    decimal? EstimatedUnitPrice, decimal? EstimatedAmount, int? PriceItemId = null);
 
 /// <param name="Actor">The person; <c>null</c> for a system step, which has <c>actorLabel</c> and <c>policyName</c>.</param>
 internal sealed record RequisitionEventView(string Action, string Status, ProcurementPersonRef? Actor, string? ActorLabel, string? PolicyName, DateTime At, string? Note);
@@ -41,7 +41,7 @@ internal sealed record OrderView(
 
 internal sealed record OrderLineView(
     int Id, int RequisitionLineId, int? CatalogItemId, int? ProjectItemId, string Description, string Unit, decimal Quantity, decimal? UnitPrice,
-    decimal? Amount, decimal Received, decimal Invoiced, decimal StillDue);
+    decimal? Amount, decimal Received, decimal Invoiced, decimal StillDue, int? PriceItemId = null);
 
 /// <param name="PreviousLines">The lines before the revision (JSON); prices are left out without See money.</param>
 internal sealed record OrderRevisionView(int RevisionNo, string Reason, DateTime CreatedAt, ProcurementPersonRef? CreatedBy, string? PreviousLines);
@@ -60,9 +60,12 @@ internal sealed record InvoiceView(
     decimal? Paid, string? PaymentState, IReadOnlyList<InvoiceLineView> Lines, string RowVersion);
 
 /// <param name="PostedRecordId">The project's supply record this line became (pay it through the supplier payments).</param>
+/// <param name="PriceCheck">Price Control's comparison on the invoice date (WithinRange, AboveRange…), when the order line names a price item.</param>
+/// <param name="PriceExceptionId">The case the Executive decides when the price was above its range.</param>
 internal sealed record InvoiceLineView(
     int Id, int OrderLineId, string Description, string Unit, decimal Ordered, decimal Received, decimal Quantity,
-    decimal? OrderUnitPrice, decimal? UnitPrice, bool PriceMatches, decimal? Amount, int? PostedRecordId, decimal? Paid);
+    decimal? OrderUnitPrice, decimal? UnitPrice, bool PriceMatches, decimal? Amount, int? PostedRecordId, decimal? Paid,
+    int? PriceItemId = null, string? PriceCheck = null, int? PriceExceptionId = null);
 
 /// <summary>Builds the views. Reads names from Access and Projects through their contracts.</summary>
 internal sealed class ProcurementViews(ProcurementDbContext db, IUserDirectory users, ISupplierDirectory suppliers, IInvoicePosting posting)
@@ -91,7 +94,7 @@ internal sealed class ProcurementViews(ProcurementDbContext db, IUserDirectory u
             var done = ordered.GetValueOrDefault(line.Id);
             var estimate = line.EstimatedUnitPrice is { } price ? ProcurementRules.Amount(line.Quantity, price) : (decimal?)null;
             return new RequisitionLineView(line.Id, line.CatalogItemId, line.ProjectItemId, line.Description, line.Unit, line.Quantity, done,
-                ProcurementRules.StillNeeded(line.Quantity, done), seesMoney ? line.EstimatedUnitPrice : null, seesMoney ? estimate : null);
+                ProcurementRules.StillNeeded(line.Quantity, done), seesMoney ? line.EstimatedUnitPrice : null, seesMoney ? estimate : null, line.PriceItemId);
         }).ToList();
 
         return new RequisitionView(
@@ -167,7 +170,7 @@ internal sealed class ProcurementViews(ProcurementDbContext db, IUserDirectory u
             var got = received.GetValueOrDefault(line.Id);
             return new OrderLineView(line.Id, line.RequisitionLineId, line.CatalogItemId, line.ProjectItemId, line.Description, line.Unit, line.Quantity,
                 seesMoney ? line.UnitPrice : null, seesMoney ? ProcurementRules.Amount(line.Quantity, line.UnitPrice) : null,
-                got, invoiced.GetValueOrDefault(line.Id), ProcurementRules.StillDue(line.Quantity, got));
+                got, invoiced.GetValueOrDefault(line.Id), ProcurementRules.StillDue(line.Quantity, got), line.PriceItemId);
         }).ToList();
         var committed = order.Status == PurchaseOrderStatus.Cancelled
             ? 0
@@ -239,7 +242,7 @@ internal sealed class ProcurementViews(ProcurementDbContext db, IUserDirectory u
                 return new InvoiceLineView(line.Id, line.OrderLineId, orderLine.Description, orderLine.Unit, orderLine.Quantity,
                     received.GetValueOrDefault(line.OrderLineId), line.Quantity, seesMoney ? line.OrderUnitPrice : null, seesMoney ? line.UnitPrice : null,
                     line.PriceMatches, seesMoney ? ProcurementRules.Amount(line.Quantity, line.UnitPrice) : null, state?.RecordId,
-                    seesMoney ? state?.Paid : null);
+                    seesMoney ? state?.Paid : null, orderLine.PriceItemId, line.PriceCheck, line.PriceExceptionId);
             }).ToList(),
             RowVersions.Format(invoice.RowVersion));
     }

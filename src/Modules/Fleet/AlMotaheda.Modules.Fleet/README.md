@@ -30,7 +30,8 @@ in `docs/project-workspace/05-fleet.md`; the shared rules are in `00-overview.md
   expense form has no equipment category, and the cost reports keep `Equipment` as its own cost group.
 - **For the Projects module:** `EquipmentCostSource` implements `IProjectCostSource` with `Group = Equipment`:
   recognized = approved costs in the period, paid as above, pending review = `Recorded` costs, committed = 0.
-  Equipment costs are not split over project items (F1); the items screen shows them in "other project costs".
+  A cost names one work item or none (F1, never split). `EquipmentItemCosts` implements `IEquipmentItemCosts`
+  with the same rows by item; costs on no item stay in the items screen's "other project costs".
 - One rule for the money: `EquipmentCostSettlement` and `EquipmentSummary` (pure classes) are used by the list,
   the detail, the summary and the cost source, so they can't disagree.
 

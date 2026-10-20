@@ -25,6 +25,10 @@ internal static class WorkforceProblems
     public const string IdempotencyKeyReused = "idempotency_key_reused";
     public const string PaymentAlreadyVoided = "payment_already_voided";
     public const string ItemGone = "item_removed";
+    public const string SettlementTooLarge = "over_payment";
+    public const string EmptySettlement = "nothing_to_settle";
+    public const string SettlementStale = "settlement_not_payable";
+    public const string SettledPayment = "settlement_payment";
 
     public static ProblemHttpResult TradeNotFound() => NotFound("trade");
 
@@ -37,6 +41,22 @@ internal static class WorkforceProblems
     public static ProblemHttpResult LineNotFound() => NotFound("labor line");
 
     public static ProblemHttpResult PaymentNotFound() => NotFound("payment");
+
+    public static ProblemHttpResult SettlementNotFound() => NotFound("settlement");
+
+    public static ProblemHttpResult SettlesTooMuch(int workerId, decimal outstanding) =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, SettlementTooLarge,
+            $"Worker {workerId} is owed {outstanding:0.00} for this period on this project: a settlement can't pay more.");
+
+    public static ProblemHttpResult NothingToSettle() =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, EmptySettlement, "Nobody is owed anything for this period on this project.");
+
+    public static ProblemHttpResult SettlementNotPayable(int lineId) =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, SettlementStale,
+            $"Day {lineId} was paid another way since this settlement was recorded. Reject the settlement and record it again.");
+
+    public static ProblemHttpResult PaidBySettlement() =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, SettledPayment, "This payment was made by a weekly settlement: reverse the settlement instead.");
 
     public static ProblemHttpResult CodeTaken() =>
         Conflict(TradeCodeTaken, "A trade with this code already exists.");

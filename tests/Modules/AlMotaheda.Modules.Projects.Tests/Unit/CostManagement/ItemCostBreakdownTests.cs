@@ -84,6 +84,48 @@ public sealed class ItemCostBreakdownTests
     }
 
     [Fact]
+    public void Machinery_is_listed_per_machine_with_its_own_type_and_never_as_a_supplier_debt()
+    {
+        var lines = new Dictionary<int, IReadOnlyList<EquipmentItemLine>>
+        {
+            [Cement] =
+            [
+                Machine(31, equipmentId: 4, "Rental", 15m, "Day", 3_500m, 52_500m, paid: 0m, channel: "Credit", supplierId: 7),
+                Machine(32, equipmentId: 4, "Fuel", 182.5m, "Liter", 15.25m, 2_783.13m, paid: 2_783.13m, channel: "Custody"),
+            ],
+            [Concrete] = [Machine(33, equipmentId: 5, "Repair", null, null, null, 1_200m, paid: 1_200m, channel: "Custody")],
+        };
+        var all = ItemCostBreakdown.FromEquipment(lines)
+            .Append(Supply(1, supplierId: 7, quantity: 2m, unitPrice: 1_400m, channel: "Credit", paid: 0m))
+            .ToList();
+
+        var rows = ItemCostBreakdown.Filter(all, BreakdownFilter.None);
+        var totals = ItemCostBreakdown.Totals(rows);
+        var machines = ItemCostBreakdown.Machines(rows);
+
+        var equipment = totals.ByType.Single(type => type.Type == BreakdownTypes.Equipment);
+        Assert.Equal(3, equipment.RecordCount);
+        Assert.Equal(56_483.13m, equipment.Amount);
+        Assert.Equal(52_500m, equipment.Outstanding);
+        Assert.Equal(59_283.13m, totals.Amount);
+        Assert.Equal([4, 5], machines.Select(machine => machine.EquipmentId));
+        Assert.Equal(55_283.13m, machines[0].Cost);
+        Assert.Equal(2_783.13m, machines[0].Paid);
+        Assert.Equal(2, machines[0].RecordCount);
+
+        // The rental's supplier is owed through Fleet's own payment: only the supply is a supplier debt here.
+        Assert.Equal(2_800m, Assert.Single(ItemCostBreakdown.Suppliers(rows)).Invoiced);
+
+        var rental = rows.Single(row => row.RecordId == 31);
+        Assert.Equal(("Rental", BreakdownParties.Equipment, 4, Cement), (rental.RecordKind, rental.PartyType, rental.PartyId!.Value, rental.ItemId));
+        Assert.Equal([31, 32], ItemCostBreakdown.Filter(all, BreakdownFilter.None with { EquipmentId = 4 }).Select(row => row.RecordId).Order());
+        Assert.Equal(3, ItemCostBreakdown.Filter(all, BreakdownFilter.None with { Type = BreakdownTypes.Equipment }).Count);
+        Assert.Empty(ItemCostBreakdown.Filter(all, BreakdownFilter.None with { EquipmentId = 4, SupplierId = 7 }));
+        Assert.True(BreakdownTypes.TryParse("equipment", out var parsed));
+        Assert.Equal(BreakdownTypes.Equipment, parsed);
+    }
+
+    [Fact]
     public void The_remaining_budget_is_budgeted_minus_actual_and_has_no_meaning_without_a_budget()
     {
         var within = ItemCostBreakdown.Budget(4, 2, hasApprovedBudget: true, budgeted: 100_000m, actual: 77_800m);
@@ -106,6 +148,12 @@ public sealed class ItemCostBreakdownTests
         WorkType: "Concrete", Days: 1m, OvertimeHours: 0m, DailyRate: dailyRate, BaseAmount: dailyRate, OvertimeAmount: 0m,
         AllowancesAmount: 0m, DeductionsAmount: 0m, DeductionReasons: null, LineNet: dailyRate, Portion: 1m, Amount: dailyRate,
         Paid: 0m, Outstanding: dailyRate, PaymentState: PaymentStates.Unpaid, RecordedByUserId: 5);
+
+    private static EquipmentItemLine Machine(
+        int costId, int equipmentId, string type, decimal? quantity, string? unit, decimal? unitPrice, decimal amount, decimal paid, string channel,
+        int? supplierId = null) => new(
+        costId, new DateOnly(2026, 1, 15), equipmentId, $"EX-{equipmentId}", $"حفار {equipmentId}", $"Excavator {equipmentId}", type, $"{type} cost",
+        quantity, unit, unitPrice, amount, paid, amount - paid, PaymentStates.Of(amount, paid), channel, null, supplierId);
 
     private static BreakdownTransaction Supply(
         int id, int supplierId, decimal quantity, decimal unitPrice, string channel, decimal paid, int item = Cement, int day = 10)

@@ -286,6 +286,9 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
                     b.Property<int>("ProjectId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("ProjectItemId")
+                        .HasColumnType("int");
+
                     b.Property<decimal?>("Quantity")
                         .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
@@ -337,6 +340,8 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
                     b.HasIndex(new[] { "EquipmentId" }, "IX_EquipmentCost_EquipmentId");
 
                     b.HasIndex(new[] { "ProjectId", "CostDate" }, "IX_EquipmentCost_Project_Date");
+
+                    b.HasIndex(new[] { "ProjectId", "ProjectItemId" }, "IX_EquipmentCost_Project_Item");
 
                     b.HasIndex(new[] { "ProjectId", "Status" }, "IX_EquipmentCost_Project_Status");
 

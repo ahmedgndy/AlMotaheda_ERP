@@ -27,6 +27,9 @@ internal static class ProcurementProblems
     public const string NotOnProject = "not_project_member";
     public const string HasReceipts = "has_receipts";
     public const string Busy = "busy";
+    public const string PriceAboveRange = "price_above_range";
+    public const string PriceExceptionPending = "price_exception_pending";
+    public const string PriceExceptionRejected = "price_exception_rejected";
 
     public static ValidationProblem Validation(ValidationErrors errors) => ApiProblem.Validation(errors.ToDictionary());
 
@@ -89,6 +92,16 @@ internal static class ProcurementProblems
         Conflict(SupplierInactive, "The supplier is inactive or unknown.");
 
     public static ProblemHttpResult CannotPost(string reason) => Conflict(NotPostable, reason);
+
+    /// <summary>The company policy refuses a price above its Price Control range outright.</summary>
+    public static ProblemHttpResult PriceBlocked(string line, decimal unitPrice, decimal maxPrice) =>
+        Conflict(PriceAboveRange, $"Line {line}: the unit price {unitPrice:0.00} is above the highest reference price {maxPrice:0.00}. The company policy doesn't allow it.");
+
+    public static ProblemHttpResult PriceExceptionIsPending(int exceptionId) =>
+        Conflict(PriceExceptionPending, $"Price exception #{exceptionId} on this invoice waits for the Executive's decision in Price Control.");
+
+    public static ProblemHttpResult PriceExceptionWasRejected(int exceptionId) =>
+        Conflict(PriceExceptionRejected, $"The Executive rejected the price (price exception #{exceptionId}): return the invoice to the supplier or take a credit note.");
 
     public static ProblemHttpResult NotAMember() =>
         ApiProblem.Create(StatusCodes.Status403Forbidden, NotOnProject, "Goods are received by a member of the project's team.");

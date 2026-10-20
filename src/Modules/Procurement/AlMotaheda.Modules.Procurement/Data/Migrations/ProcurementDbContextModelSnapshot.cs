@@ -272,6 +272,9 @@ namespace AlMotaheda.Modules.Procurement.Data.Migrations
                     b.Property<int>("OrderId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("PriceItemId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("ProjectItemId")
                         .HasColumnType("int");
 
@@ -295,6 +298,8 @@ namespace AlMotaheda.Modules.Procurement.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("OrderId");
+
+                    b.HasIndex(new[] { "PriceItemId" }, "IX_PurchaseOrderLine_PriceItemId");
 
                     b.HasIndex(new[] { "RequisitionLineId" }, "IX_PurchaseOrderLine_RequisitionLineId");
 
@@ -669,6 +674,9 @@ namespace AlMotaheda.Modules.Procurement.Data.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<int?>("PriceItemId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("ProjectItemId")
                         .HasColumnType("int");
 
@@ -688,6 +696,8 @@ namespace AlMotaheda.Modules.Procurement.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("RequisitionId");
+
+                    b.HasIndex(new[] { "PriceItemId" }, "IX_RequisitionLine_PriceItemId");
 
                     b.ToTable("RequisitionLine", "proc", t =>
                         {
@@ -808,7 +818,7 @@ namespace AlMotaheda.Modules.Procurement.Data.Migrations
 
                             t.HasCheckConstraint("CK_SupplierInvoice_Resolution", "[Resolution] IS NULL OR [Resolution] IN ('Accept', 'CreditNote', 'ReturnToSupplier')");
 
-                            t.HasCheckConstraint("CK_SupplierInvoice_Status", "[Status] IN ('Matched', 'Mismatch', 'Posted', 'Returned')");
+                            t.HasCheckConstraint("CK_SupplierInvoice_Status", "[Status] IN ('Matched', 'Mismatch', 'Posted', 'Returned', 'PriceHold')");
 
                             t.HasCheckConstraint("CK_SupplierInvoice_Total", "[Total] > 0");
                         });
@@ -832,6 +842,14 @@ namespace AlMotaheda.Modules.Procurement.Data.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("PriceCheck")
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<int?>("PriceExceptionId")
+                        .HasColumnType("int");
+
                     b.Property<bool>("PriceMatches")
                         .HasColumnType("bit");
 
@@ -850,6 +868,8 @@ namespace AlMotaheda.Modules.Procurement.Data.Migrations
                     b.HasIndex(new[] { "OrderLineId" }, "IX_SupplierInvoiceLine_OrderLineId");
 
                     SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex(new[] { "OrderLineId" }, "IX_SupplierInvoiceLine_OrderLineId"), new[] { "InvoiceId", "Quantity" });
+
+                    b.HasIndex(new[] { "PriceExceptionId" }, "IX_SupplierInvoiceLine_PriceExceptionId");
 
                     b.ToTable("SupplierInvoiceLine", "proc", t =>
                         {

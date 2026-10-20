@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace AlMotaheda.Modules.Projects.Features.Prices;
 
 /// <summary>The reference range a purchase is compared with, as found on the purchase date.</summary>
-internal sealed record ApplicableRange(int RangeId, int? SupplierId, decimal MinPrice, decimal MaxPrice, string Currency, DateOnly EffectiveFrom, DateOnly? EffectiveTo);
+internal sealed record ApplicableRange(int RangeId, int? SupplierId, decimal MinPrice, decimal MaxPrice, string Currency, DateOnly EffectiveFrom, DateOnly? EffectiveTo, decimal? ReferencePrice = null);
 
 /// <summary>
 /// The outcome of comparing one unit price with one range, with no database access. Calculated on the server for
@@ -19,6 +19,75 @@ internal sealed record ApplicableRange(int RangeId, int? SupplierId, decimal Min
 internal sealed record PriceComparison(PriceCheckResult Result, decimal DifferencePerUnit, decimal TotalDifference)
 {
     public bool IsAboveRange => Result == PriceCheckResult.AboveRange;
+
+    /// <summary>Above the range: the excess per unit as a percentage of the highest accepted price (2 decimals); otherwise 0.</summary>
+    public decimal PercentAbove(decimal? maxPrice) =>
+        IsAboveRange && maxPrice is { } max && max > 0 ? decimal.Round(DifferencePerUnit / max * 100, 2, MidpointRounding.AwayFromZero) : 0;
+}
+
+/// <summary>
+/// The bounds a rule compares with, from how it was expressed: a range keeps its bounds; a fixed price is its
+/// reference price, widened by the tolerance (percent) on both sides; a lump sum is a range on the whole amount.
+/// </summary>
+internal static class PriceRule
+{
+    public static (decimal MinPrice, decimal MaxPrice) Bounds(PriceRuleKind kind, decimal? minPrice, decimal? maxPrice, decimal? referencePrice, decimal? tolerancePercent)
+    {
+        if (kind == PriceRuleKind.Fixed && referencePrice is { } reference)
+        {
+            var tolerance = (tolerancePercent ?? 0) / 100;
+            return (Money.Round(reference * (1 - tolerance)), Money.Round(reference * (1 + tolerance)));
+        }
+
+        return (minPrice ?? referencePrice ?? 0, maxPrice ?? referencePrice ?? 0);
+    }
+}
+
+/// <summary>
+/// What a price exception does to its transaction, with no database access. Under <see cref="PriceCheckPolicy.ExecutiveApproval"/>
+/// a transaction above its range waits for the Executive's decision in Price Control: it can't be approved and nothing
+/// can be paid on it until the case is approved; a rejected case keeps it waiting until the submitter corrects it.
+/// Under <see cref="PriceCheckPolicy.Warn"/> the case is opened for the inbox and the reports only.
+/// </summary>
+internal static class PriceGate
+{
+    /// <summary>Whether cases gate transactions under <paramref name="policy"/>.</summary>
+    public static bool Gates(PriceCheckPolicy policy) => policy == PriceCheckPolicy.ExecutiveApproval;
+
+    /// <summary>The refusal to answer when approving a record, or <c>null</c> to go ahead.</summary>
+    /// <param name="exception">The record's newest case, or <c>null</c> when it has none.</param>
+    /// <param name="legacyAboveRange">The record was compared above its range before cases existed (no case row).</param>
+    public static PriceGateRefusal? ApprovalRefusal(PriceExceptionStatus? exception, bool legacyAboveRange, PriceCheckPolicy policy, bool callerIsExecutive)
+    {
+        if (!Gates(policy))
+        {
+            return null;
+        }
+
+        return exception switch
+        {
+            PriceExceptionStatus.Pending => PriceGateRefusal.Pending,
+            PriceExceptionStatus.Rejected => PriceGateRefusal.Rejected,
+            PriceExceptionStatus.ApprovedOnce or PriceExceptionStatus.ApprovedWithPriceChange => null,
+            _ => legacyAboveRange && !callerIsExecutive ? PriceGateRefusal.NeedsExecutive : null,
+        };
+    }
+
+    /// <summary>Money leaves on a record only once its case is approved (or it never had one).</summary>
+    public static bool PaymentBlocked(PriceExceptionStatus? exception, PriceCheckPolicy policy) =>
+        Gates(policy) && exception is PriceExceptionStatus.Pending or PriceExceptionStatus.Rejected;
+}
+
+internal enum PriceGateRefusal
+{
+    /// <summary>409 <c>price_exception_pending</c>: the Executive has not decided.</summary>
+    Pending,
+
+    /// <summary>409 <c>price_exception_rejected</c>: the submitter must correct the price or the reviewer return the record.</summary>
+    Rejected,
+
+    /// <summary>403 <c>price_needs_executive</c>: a record from before cases existed; only an Executive approves it.</summary>
+    NeedsExecutive,
 }
 
 internal static class PriceCheck
@@ -114,7 +183,7 @@ internal static class PriceRanges
 
     private static Task<ApplicableRange?> FirstAsync(IQueryable<PriceRange> ranges, CancellationToken cancellationToken) =>
         ranges
-            .Select(range => new ApplicableRange(range.Id, range.SupplierId, range.MinPrice, range.MaxPrice, range.Currency, range.EffectiveFrom, range.EffectiveTo))
+            .Select(range => new ApplicableRange(range.Id, range.SupplierId, range.MinPrice, range.MaxPrice, range.Currency, range.EffectiveFrom, range.EffectiveTo, range.ReferencePrice))
             .FirstOrDefaultAsync(cancellationToken)!;
 }
 
@@ -135,7 +204,10 @@ internal sealed record PriceCheckView(
     decimal Quantity,
     decimal DifferencePerUnit,
     decimal TotalDifference,
-    string? Justification)
+    string? Justification,
+    decimal? ReferencePrice = null,
+    decimal PercentAbove = 0,
+    PriceExceptionRef? Exception = null)
 {
     public static PriceCheckView? From(ExpenseRow row)
     {
@@ -147,7 +219,9 @@ internal sealed record PriceCheckView(
         var comparison = PriceCheck.Compare(price, quantity, row.ReferenceMinPrice, row.ReferenceMaxPrice);
         return new PriceCheckView(
             priceItemId, row.PriceItemNameAr, row.PriceItemNameEn, row.PriceRangeId, row.ReferenceMinPrice, row.ReferenceMaxPrice,
-            PriceCurrencies.Egp, result.ToString(), price, quantity, comparison.DifferencePerUnit, comparison.TotalDifference, row.PriceJustification);
+            PriceCurrencies.Egp, result.ToString(), price, quantity, comparison.DifferencePerUnit, comparison.TotalDifference, row.PriceJustification,
+            null, comparison.PercentAbove(row.ReferenceMaxPrice),
+            row.ExceptionId is { } exceptionId ? new PriceExceptionRef(exceptionId, row.ExceptionStatus ?? "") : null);
     }
 
     public static PriceCheckView Of(
@@ -156,6 +230,10 @@ internal sealed record PriceCheckView(
         var comparison = PriceCheck.Compare(unitPrice, quantity, range?.MinPrice, range?.MaxPrice);
         return new PriceCheckView(
             priceItemId, nameAr, nameEn, range?.RangeId, range?.MinPrice, range?.MaxPrice, range?.Currency ?? PriceCurrencies.Egp,
-            comparison.Result.ToString(), unitPrice, quantity, comparison.DifferencePerUnit, comparison.TotalDifference, justification);
+            comparison.Result.ToString(), unitPrice, quantity, comparison.DifferencePerUnit, comparison.TotalDifference, justification,
+            range?.ReferencePrice, comparison.PercentAbove(range?.MaxPrice));
     }
 }
+
+/// <summary>The price case of a record, as its views show it: the case id and its status.</summary>
+internal sealed record PriceExceptionRef(int Id, string Status);

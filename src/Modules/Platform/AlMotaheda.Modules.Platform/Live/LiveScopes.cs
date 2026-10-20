@@ -50,13 +50,13 @@ internal static class LiveScopes
 
     private static readonly Dictionary<string, Route> Routes = new(StringComparer.Ordinal)
     {
-        ["ProjectExpense"] = new(["Expenses", "SupplierBalances", .. ProjectCost], true, [Finance]),
-        ["ExpenseAdjustment"] = new(["Expenses", "SupplierBalances", .. ProjectCost], true, [Finance]),
-        ["SupplierPayment"] = new(["SupplierPayments", "SupplierBalances", .. ProjectCost], true, [Finance]),
+        ["ProjectExpense"] = new(["Expenses", "SupplierBalances", "ProjectSuppliers", "Custody", .. ProjectCost], true, [Finance]),
+        ["ExpenseAdjustment"] = new(["Expenses", "SupplierBalances", "ProjectSuppliers", "Custody", .. ProjectCost], true, [Finance]),
+        ["SupplierPayment"] = new(["SupplierPayments", "SupplierBalances", "ProjectSuppliers", .. ProjectCost], true, [Finance]),
         ["DailySheet"] = new(["LaborSheets", "LaborSummary", .. ProjectCost], true, [Finance]),
         ["LaborAllocation"] = new(["LaborSheets", "LaborSummary", .. ProjectCost], true, [Finance]),
         // A worker payment settles days on several projects: it has no project, so the overview of every project is refreshed.
-        ["WorkerPayment"] = new(["WorkerAccount", "LaborSummary", "ProjectOverview", "CompanyDashboard"], true, [Finance]),
+        ["WorkerPayment"] = new(["WorkerAccount", "LaborSummary", "LaborPayable", "ProjectOverview", "CompanyDashboard"], true, [Finance]),
         ["SubContract"] = new(["Subcontracts", "Obligations", .. ProjectCost], true, [Finance]),
         ["ProgressMeasurement"] = new(["Subcontracts", "Obligations", .. ProjectCost], true, [Finance]),
         ["ManpowerSheet"] = new(["Subcontracts", "Obligations", .. ProjectCost], true, [Finance]),
@@ -69,6 +69,10 @@ internal static class LiveScopes
         // The company price list has no project: it is heard by purchasing and refetched by the price screens.
         ["PriceItem"] = new(["PriceManagement"], false, [Procurement]),
         ["PriceRange"] = new(["PriceManagement", "PriceRangeRequests"], false, [Procurement]),
+        // Price Control: a case changes the inbox, the item's screen and the record it is about (its project's lists).
+        ["PriceException"] = new(["PriceExceptions", "PriceManagement", "Expenses", "SupplierInvoices"], false, [Procurement, Finance]),
+        ["PriceCategory"] = new(["PriceManagement"], false, [Procurement]),
+        ["PriceUnit"] = new(["PriceManagement"], false, [Procurement]),
         // Moving an item under another main item changes the roll-ups of the items table.
         ["ProjectItem"] = new(["ProjectItems", "ProjectOverview", "BudgetComparison"], true, []),
         ["PaymentRequest"] = new(["PaymentRequests", "CompanyDashboard"], true, [Finance]),
@@ -85,6 +89,11 @@ internal static class LiveScopes
         ["GoodsReceipt"] = new(["Receipts", "PurchaseOrders"], false, [Procurement]),
         ["PurchaseOrder"] = new(["PurchaseOrders", "CommittedCost", "ProjectOverview"], true, [Procurement]),
         ["SupplierInvoice"] = new(["SupplierInvoices", "CommittedCost", .. ProjectCost], true, [Procurement, Finance]),
+        // Cash custody: the custody screens and, through payroll, the labor figures.
+        ["CustodyEntry"] = new(["Custody", "ProjectOverview", "CompanyDashboard"], true, [Finance]),
+        ["PayrollSettlement"] = new(["LaborSettlements", "LaborPayable", "LaborSummary", "WorkerAccount", "Custody", .. ProjectCost], true, [Finance]),
+        ["SupplyAgreement"] = new(["SupplyAgreements", "ProjectSuppliers"], true, [Procurement]),
+        ["ContractVariation"] = new(["Subcontracts", "Obligations", .. ProjectCost], true, [Finance]),
     };
 
     /// <summary>Records that only add detail to a parent that changes in the same save; they send nothing alone.</summary>
@@ -93,7 +102,8 @@ internal static class LiveScopes
         "AttendanceLine", "LineAdjustment", "SupplierPaymentAllocation", "WorkerPaymentAllocation", "SubPaymentAllocation",
         "PaymentRequestLine", "PaymentRequestEvent", "RequisitionLine", "RequisitionEvent", "QuotationLine", "PurchaseOrderLine",
         "PurchaseOrderRevision", "GoodsReceiptLine", "SupplierInvoiceLine", "SalarySheetLine", "BudgetLine", "VoidedEquipmentCostPayment",
-        "ReportRun", "RefreshToken", "UserSignInState", "PriceAboveRangeAlert", "CostRecordedAlert",
+        "ReportRun", "RefreshToken", "UserSignInState", "PriceAboveRangeAlert", "CostRecordedAlert", "PriceExceptionAlert",
+        "PayrollSettlementLine", "PayrollSettlementAllocation", "SettlementAlert",
     };
 
     /// <summary>The signals one changed record sends.</summary>

@@ -19,4 +19,15 @@ public sealed class RecordOwnershipQueryTests
         Assert.Contains("[ProjectId] = @", sql);
         Assert.Null(WorkforceRecordOwnership.Query(db, 3, ProjectRecordKinds.Expense, [5]));
     }
+
+    [Fact]
+    public void A_weekly_settlement_is_on_its_own_project_only()
+    {
+        using var db = new WorkforceDbContextDesignTimeFactory().CreateDbContext([]);
+
+        var sql = WorkforceRecordOwnership.Query(db, 3, ProjectRecordKinds.PayrollSettlement, [5])!.ToQueryString();
+
+        Assert.Contains("[workforce].[PayrollSettlement]", sql);
+        Assert.Contains("[ProjectId] = @", sql);
+    }
 }

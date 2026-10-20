@@ -37,6 +37,8 @@ internal sealed class ExpenseRow
     public string? CatalogItemNameAr { get; init; }
     public string? CatalogItemNameEn { get; init; }
     public decimal? CatalogPriceAtRecording { get; init; }
+    public int? SupplyAgreementId { get; init; }
+    public string? PayeeName { get; init; }
     public int? PriceItemId { get; init; }
     public string? PriceItemNameAr { get; init; }
     public string? PriceItemNameEn { get; init; }
@@ -45,6 +47,10 @@ internal sealed class ExpenseRow
     public decimal? ReferenceMaxPrice { get; init; }
     public PriceCheckResult? PriceCheck { get; init; }
     public string? PriceJustification { get; init; }
+
+    /// <summary>The record's newest price case (any status), when it has one.</summary>
+    public int? ExceptionId { get; init; }
+    public string? ExceptionStatus { get; init; }
     public int? ProjectItemId { get; init; }
     public string? ProjectItemNameAr { get; init; }
     public string? ProjectItemNameEn { get; init; }
@@ -298,6 +304,8 @@ internal static class ExpenseQueries
             CatalogItemNameAr = expense.CatalogItem != null ? expense.CatalogItem.NameAr : null,
             CatalogItemNameEn = expense.CatalogItem != null ? expense.CatalogItem.NameEn : null,
             CatalogPriceAtRecording = expense.CatalogPriceAtRecording,
+            SupplyAgreementId = expense.SupplyAgreementId,
+            PayeeName = expense.PayeeName,
             PriceItemId = expense.PriceItemId,
             PriceItemNameAr = expense.PriceItem != null ? expense.PriceItem.NameAr : null,
             PriceItemNameEn = expense.PriceItem != null ? expense.PriceItem.NameEn : null,
@@ -306,6 +314,19 @@ internal static class ExpenseQueries
             ReferenceMaxPrice = expense.ReferenceMaxPrice,
             PriceCheck = expense.PriceCheck,
             PriceJustification = expense.PriceJustification,
+            // The record's newest live case; a withdrawn one (the record was changed) is history, not shown.
+            ExceptionId = db.PriceExceptions
+                .Where(exception => exception.SourceType == PriceExceptionSources.ProjectExpense && exception.SourceId == expense.Id
+                                    && exception.Status != PriceExceptionStatus.Withdrawn)
+                .OrderByDescending(exception => exception.Id)
+                .Select(exception => (int?)exception.Id)
+                .FirstOrDefault(),
+            ExceptionStatus = db.PriceExceptions
+                .Where(exception => exception.SourceType == PriceExceptionSources.ProjectExpense && exception.SourceId == expense.Id
+                                    && exception.Status != PriceExceptionStatus.Withdrawn)
+                .OrderByDescending(exception => exception.Id)
+                .Select(exception => exception.Status.ToString())
+                .FirstOrDefault(),
             ProjectItemId = expense.ProjectItemId,
             ProjectItemNameAr = expense.ProjectItem != null ? expense.ProjectItem.NameAr : null,
             ProjectItemNameEn = expense.ProjectItem != null ? expense.ProjectItem.NameEn : null,

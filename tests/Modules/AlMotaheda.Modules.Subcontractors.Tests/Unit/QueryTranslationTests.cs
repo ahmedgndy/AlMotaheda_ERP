@@ -127,4 +127,25 @@ public sealed class QueryTranslationTests
             Assert.Contains(itemId is null ? "[ProjectItemId] IS NULL" : "[ProjectItemId] = @", sql);
         }
     }
+
+    [Fact]
+    public void The_company_account_reads_work_and_payments_in_separate_queries_that_translate()
+    {
+        using var db = CreateContext();
+
+        Assert.Contains("[sub].[ProgressMeasurement]", CompanyQueries.Measurements(db, [1, 2]).ToQueryString());
+        Assert.Contains("[sub].[ManpowerSheet]", CompanyQueries.Manpower(db, [1, 2]).ToQueryString());
+        Assert.Contains("[sub].[SubPayment]", CompanyQueries.Payments(db, [1, 2]).ToQueryString());
+    }
+
+    [Fact]
+    public void A_contract_is_worth_its_value_plus_approved_variations_only()
+    {
+        using var db = CreateContext();
+
+        var sql = ContractValues.ApprovedVariations(db, 4).ToQueryString();
+
+        Assert.Contains("[sub].[ContractVariation]", sql);
+        Assert.Contains("'Approved'", sql);
+    }
 }

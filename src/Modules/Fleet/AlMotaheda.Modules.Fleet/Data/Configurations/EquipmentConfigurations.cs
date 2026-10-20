@@ -136,6 +136,15 @@ internal sealed class EquipmentCostConfiguration : IEntityTypeConfiguration<Equi
     /// <summary>Written by hand in the migration: the supplier is a <c>projects.Supplier</c>.</summary>
     public const string SupplierForeignKey = "FK_EquipmentCost_Supplier_SupplierId";
 
+    /// <summary>
+    /// Written by hand in the migration: <c>(ProjectId, ProjectItemId)</c> → <c>projects.ProjectItem (ProjectId, Id)</c>,
+    /// so the database itself refuses a work item of another project.
+    /// </summary>
+    public const string ProjectItemForeignKey = "FK_EquipmentCost_ProjectItem_Project_Item";
+
+    /// <summary>The costs on a project's work items; also the index behind <see cref="ProjectItemForeignKey"/>.</summary>
+    public const string ProjectItemIndex = "IX_EquipmentCost_Project_Item";
+
     public const int DescriptionMaxLength = 500;
     public const int InvoiceNoMaxLength = 50;
     public const int ReviewNoteMaxLength = 500;
@@ -210,6 +219,7 @@ internal sealed class EquipmentCostConfiguration : IEntityTypeConfiguration<Equi
         builder.HasIndex(cost => new { cost.ProjectId, cost.Status }, "IX_EquipmentCost_Project_Status");
         builder.HasIndex(cost => cost.EquipmentId, "IX_EquipmentCost_EquipmentId");
         builder.HasIndex(cost => cost.SupplierId, "IX_EquipmentCost_SupplierId");
+        builder.HasIndex(cost => new { cost.ProjectId, cost.ProjectItemId }, ProjectItemIndex);
 
         builder.HasOne(cost => cost.Equipment)
             .WithMany()

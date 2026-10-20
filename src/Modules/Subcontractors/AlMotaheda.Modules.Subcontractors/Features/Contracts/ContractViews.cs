@@ -15,6 +15,10 @@ internal sealed record CompanyRef(int Id, string NameAr, string NameEn, string S
 /// One contract, as the list, the detail and the contract writes return it. Money (<see cref="Value"/>,
 /// <see cref="DailyRate"/>, <see cref="Account"/>) is <c>null</c> without subcontractors See money.
 /// </summary>
+/// <remarks>
+/// <see cref="Value"/> is the signed value (what the edit form changes); <see cref="EffectiveValue"/> adds the
+/// approved variations, and every figure of <see cref="Account"/> uses it.
+/// </remarks>
 internal sealed record SubcontractView(
     int Id,
     int ProjectId,
@@ -34,9 +38,28 @@ internal sealed record SubcontractView(
     int CreatedBy,
     DateTime? UpdatedAt,
     int? UpdatedBy,
-    string RowVersion)
+    string RowVersion,
+    int? ProjectItemId = null,
+    string? ProjectItemNameAr = null,
+    string? ProjectItemNameEn = null,
+    decimal? ApprovedVariations = null,
+    decimal? EffectiveValue = null)
 {
-    public static SubcontractView From(ContractListRow row, ContractAccount account, bool seesMoney) => new(
+    public static SubcontractView From(
+        ContractListRow row, ContractAccount account, bool seesMoney, IReadOnlyDictionary<int, ProjectItemRef>? itemNames = null)
+    {
+        var item = row.ProjectItemId is { } itemId && itemNames is not null ? itemNames.GetValueOrDefault(itemId) : null;
+        return From(row, account, seesMoney) with
+        {
+            ProjectItemId = row.ProjectItemId,
+            ProjectItemNameAr = item?.NameAr,
+            ProjectItemNameEn = item?.NameEn,
+            ApprovedVariations = seesMoney ? row.ApprovedVariations : null,
+            EffectiveValue = seesMoney ? row.Value + row.ApprovedVariations : null,
+        };
+    }
+
+    private static SubcontractView From(ContractListRow row, ContractAccount account, bool seesMoney) => new(
         row.Id,
         row.ProjectId,
         new CompanyRef(row.SubcontractorId, row.SubcontractorNameAr, row.SubcontractorNameEn, row.Specialty.ToString(), row.SubcontractorStatus.ToString()),
@@ -313,12 +336,34 @@ internal sealed record SubPaymentView(
 /// One contract with everything under it: company, items (with measured and remaining quantity), measurements,
 /// manpower sheets, payments and the account. Payments are <c>null</c> without See money.
 /// </summary>
+/// <param name="Variations">The contract's changes, newest first; amounts are <c>null</c> without See money.</param>
 internal sealed record SubcontractDetailView(
     SubcontractView Contract,
     IReadOnlyList<ContractItemView> Items,
     IReadOnlyList<MeasurementView> Measurements,
     IReadOnlyList<ManpowerView> ManpowerSheets,
-    IReadOnlyList<SubPaymentView>? Payments);
+    IReadOnlyList<SubPaymentView>? Payments,
+    IReadOnlyList<VariationView>? Variations = null);
+
+/// <summary>One change of the contract value: requested, then approved or rejected by someone else.</summary>
+internal sealed record VariationView(
+    int Id,
+    int ContractId,
+    decimal? Amount,
+    string Reason,
+    string? Reference,
+    string Status,
+    DateTime RequestedAt,
+    SubPersonRef RequestedBy,
+    DateTime? DecidedAt,
+    SubPersonRef? DecidedBy,
+    string? DecisionNote)
+{
+    public static VariationView From(ContractVariation row, IReadOnlyDictionary<int, UserSummary> people, bool seesMoney) => new(
+        row.Id, row.ContractId, seesMoney ? row.Amount : null, row.Reason, row.Reference, row.Status.ToString(), row.RequestedAt,
+        SubPersonRef.From(row.RequestedBy, people), row.DecidedAt, row.DecidedBy is { } decider ? SubPersonRef.From(decider, people) : null,
+        row.DecisionNote);
+}
 
 /// <summary>
 /// Loads the views of one contract and of the records under it, for the detail and for the answers of the writes.
@@ -338,12 +383,19 @@ internal sealed class ContractDetails(SubcontractorsDbContext db, IUserDirectory
         var measurements = await ContractQueries.Measurements(db, projectId, contractId).ToListAsync(cancellationToken);
         var sheets = await ContractQueries.ManpowerSheets(db, projectId, contractId).ToListAsync(cancellationToken);
         var payments = await ContractQueries.Payments(db, projectId, contractId).ToListAsync(cancellationToken);
+        var variations = await db.ContractVariations.AsNoTracking()
+            .Where(variation => variation.ContractId == contractId)
+            .OrderByDescending(variation => variation.RequestedAt)
+            .ThenByDescending(variation => variation.Id)
+            .ToListAsync(cancellationToken);
 
-        var itemIds = items.Select(item => item.ProjectItemId).Concat(sheets.Select(sheet => sheet.ProjectItemId)).OfType<int>().Distinct().ToList();
+        var itemIds = items.Select(item => item.ProjectItemId).Concat(sheets.Select(sheet => sheet.ProjectItemId))
+            .Append(contract.ProjectItemId).OfType<int>().Distinct().ToList();
         var names = await projectItems.FindAsync(projectId, itemIds, cancellationToken);
 
         var userIds = measurements.SelectMany(row => new[] { (int?)row.CreatedBy, row.ReviewedBy })
             .Concat(sheets.SelectMany(row => new[] { (int?)row.CreatedBy, row.ReviewedBy }))
+            .Concat(variations.SelectMany(row => new[] { (int?)row.RequestedBy, row.DecidedBy }))
             .Concat(payments.Select(row => (int?)row.CreatedBy))
             .OfType<int>()
             .Distinct()
@@ -354,11 +406,12 @@ internal sealed class ContractDetails(SubcontractorsDbContext db, IUserDirectory
         var account = ContractAccount.Compute(contract.Terms, work, payments.Select(row => row.Figures));
 
         return new SubcontractDetailView(
-            SubcontractView.From(contract, account, seesMoney),
+            SubcontractView.From(contract, account, seesMoney, names),
             items.Select(item => ContractItemView.From(item, measurements, names, seesMoney)).ToList(),
             measurements.Select(row => MeasurementView.From(row, people, seesMoney)).ToList(),
             sheets.Select(row => ManpowerView.From(row, people, names, seesMoney)).ToList(),
-            seesMoney ? payments.Select(row => SubPaymentView.From(row, people)).ToList() : null);
+            seesMoney ? payments.Select(row => SubPaymentView.From(row, people)).ToList() : null,
+            variations.Select(row => VariationView.From(row, people, seesMoney)).ToList());
     }
 
     /// <summary>One contract item with its progress, or <c>null</c> when it is not on this contract of this project.</summary>

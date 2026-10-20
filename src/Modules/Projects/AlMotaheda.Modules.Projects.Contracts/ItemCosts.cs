@@ -1,14 +1,14 @@
 namespace AlMotaheda.Modules.Projects.Contracts;
 
 /// <summary>
-/// The recognized cost that one source (labor, or subcontract work) puts on one project item.
+/// The recognized cost that one source (labor, subcontract work, or equipment) puts on one project item.
 /// Only approved records are ever included.
 /// </summary>
 /// <param name="ItemId">The project item, or <c>null</c> for approved records not linked to an item yet.</param>
 /// <param name="Cost">Recognized cost.</param>
 /// <param name="Paid">The part of <paramref name="Cost"/> settled by payments.</param>
 /// <param name="RecordCount">How many source records contribute.</param>
-/// <param name="PartyCount">How many different workers or subcontractors contribute.</param>
+/// <param name="PartyCount">How many different workers, subcontractors or machines contribute.</param>
 public sealed record ItemCostTotal(int? ItemId, decimal Cost, decimal Paid, int RecordCount, int PartyCount);
 
 /// <summary>
@@ -142,3 +142,58 @@ public sealed record SubcontractItemLine(
     decimal Paid,
     decimal Outstanding,
     string PaymentState);
+
+/// <summary>
+/// Approved equipment costs (machinery: rental, fuel, maintenance, repair, transport, other), as the project items
+/// screens need them. Implemented by the Fleet module.
+/// </summary>
+/// <remarks>
+/// Linking an equipment cost to a work item is optional. A cost on no item serves the whole site: it stays in the
+/// project's other costs (next to the Equipment group of the overview), never in "not linked yet". A cost on an item
+/// is counted on that item instead, so the project total doesn't change when a cost is linked.
+/// </remarks>
+public interface IEquipmentItemCosts
+{
+    /// <summary>
+    /// One total per item that has approved equipment costs, plus one with a <c>null</c> item for the approved costs
+    /// on no item. The totals add up to the recognized cost of the project's Equipment group.
+    /// </summary>
+    Task<IReadOnlyList<ItemCostTotal>> TotalsByItemAsync(int projectId, CancellationToken cancellationToken);
+
+    /// <summary>The approved equipment costs of several items at once (a main item and its sub-items), by item id, in one query. Items with none are absent.</summary>
+    Task<IReadOnlyDictionary<int, IReadOnlyList<EquipmentItemLine>>> LinesByItemAsync(
+        int projectId, IReadOnlyCollection<int> itemIds, CancellationToken cancellationToken);
+
+    /// <summary>True when any equipment cost, approved or not, is linked to the item. Such an item can't be deleted.</summary>
+    Task<bool> HasLinksAsync(int projectId, int itemId, CancellationToken cancellationToken);
+}
+
+/// <summary>One approved equipment cost on a project item: the originating Fleet record.</summary>
+/// <param name="CostId">The equipment cost (<c>fleet.EquipmentCost</c>).</param>
+/// <param name="CostType"><c>Rental</c>, <c>Fuel</c>, <c>Maintenance</c>, <c>Repair</c>, <c>Transport</c> or <c>Other</c>.</param>
+/// <param name="Quantity">Litres for fuel, days, months or hours otherwise; <c>null</c> for a lump sum.</param>
+/// <param name="Unit"><c>Liter</c> for fuel, the basis (<c>Day</c>, <c>Month</c>, <c>Hour</c>) otherwise; <c>null</c> for a lump sum.</param>
+/// <param name="UnitPrice">The price per litre or the rate; <c>null</c> for a lump sum.</param>
+/// <param name="Amount">The recognized amount: the recorded amount with its approved corrections.</param>
+/// <param name="Paid">Custody: the whole amount. Credit: the whole amount once its payment is recorded, else 0.</param>
+/// <param name="PaymentState">One of <see cref="PaymentStates"/>.</param>
+/// <param name="Channel"><c>Custody</c> (paid on site) or <c>Credit</c> (a supplier invoice).</param>
+public sealed record EquipmentItemLine(
+    int CostId,
+    DateOnly CostDate,
+    int EquipmentId,
+    string AssetNo,
+    string EquipmentNameAr,
+    string EquipmentNameEn,
+    string CostType,
+    string Description,
+    decimal? Quantity,
+    string? Unit,
+    decimal? UnitPrice,
+    decimal Amount,
+    decimal Paid,
+    decimal Outstanding,
+    string PaymentState,
+    string Channel,
+    string? InvoiceNo,
+    int? SupplierId);

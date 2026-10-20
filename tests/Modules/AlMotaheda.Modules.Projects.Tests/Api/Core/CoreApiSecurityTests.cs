@@ -304,6 +304,32 @@ public sealed class CoreApiSecurityTests
         Assert.All(
             database.Commands.Where(sql => sql.Contains("[projects].[ProjectExpense]", StringComparison.Ordinal)),
             sql => Assert.Contains("[ProjectId] = @", sql));
+
+        // Machinery on the items comes from Fleet's own table, read for this project only.
+        Assert.Contains(database.Commands, sql => sql.Contains("[fleet].[EquipmentCost]", StringComparison.Ordinal));
+        Assert.All(
+            database.Commands.Where(sql => sql.Contains("[fleet].[EquipmentCost]", StringComparison.Ordinal)),
+            sql => Assert.Contains("[ProjectId] = @", sql));
+    }
+
+    [Theory]
+    [InlineData("type=Equipment&equipmentId=4", HttpStatusCode.NotFound)]
+    [InlineData("type=equipment", HttpStatusCode.NotFound)]
+    [InlineData("type=Machinery", HttpStatusCode.BadRequest)]
+    public async Task The_breakdown_takes_the_equipment_type_and_machine_filter(string query, HttpStatusCode expected)
+    {
+        var (app, _) = await StartAsync(new VisibleProject(IsCompleted: false, Responsibility: null, Executive: true));
+        await using var __ = app;
+        var token = TestTokens.Create(role: Executive, permissions: [("projects", "VCEAF")]);
+
+        // Past validation, the stand-in database knows no item: 404. An unknown type stops at validation.
+        var response = await Send(app, "GET", $"/api/projects/1/items/2/cost-breakdown?{query}", token);
+
+        Assert.Equal(expected, response.StatusCode);
+        if (expected == HttpStatusCode.BadRequest)
+        {
+            Assert.Equal(["type"], await ErrorFields(response));
+        }
     }
 
     [Fact]

@@ -45,6 +45,10 @@ public sealed class SubcontractorsApiSecurityTests
         { "PUT", "/api/projects/1/subcontract-manpower/4/project-item", "subcontractors:E" },
         { "POST", "/api/projects/1/subcontracts/2/payments", "payments:C" },
         { "POST", "/api/projects/1/subcontract-payments/5/void", "payments:A" },
+        { "GET", "/api/subcontractors/1/account", "subcontractors:F" },
+        { "POST", "/api/projects/1/subcontracts/2/variations", "subcontractors:E" },
+        { "POST", "/api/projects/1/subcontract-variations/6/approve", "subcontractors:A" },
+        { "POST", "/api/projects/1/subcontract-variations/6/reject", "subcontractors:A" },
     };
 
     [Theory]
@@ -436,6 +440,11 @@ public sealed class SubcontractorsApiSecurityTests
         if (path.EndsWith("/payments", StringComparison.Ordinal))
         {
             return new { paymentDate = "2026-01-20", amount = 1000, method = "BankTransfer", purpose = "Progress", reference = "TRF-1", idempotencyKey = Guid.NewGuid() };
+        }
+
+        if (path.EndsWith("/variations", StringComparison.Ordinal))
+        {
+            return new { amount = 50_000, reason = "Extra slab approved by the client", reference = "VO-1" };
         }
 
         if (path.EndsWith("/manpower", StringComparison.Ordinal))

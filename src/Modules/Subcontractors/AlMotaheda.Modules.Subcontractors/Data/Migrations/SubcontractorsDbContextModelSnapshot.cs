@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AlMotaheda.Modules.Subcontractors.Data.Migrations
 {
     [DbContext(typeof(SubcontractorsDbContext))]
-    internal partial class SubcontractorsDbContextModelSnapshot : ModelSnapshot
+    partial class SubcontractorsDbContextModelSnapshot : ModelSnapshot
     {
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
@@ -106,6 +106,76 @@ namespace AlMotaheda.Modules.Subcontractors.Data.Migrations
                             t.HasCheckConstraint("CK_ContractItem_UnitPrice", "[UnitPrice] > 0");
 
                             t.HasCheckConstraint("CK_ContractItem_WorkType", "[WorkType] IN ('Concrete', 'SteelFixing', 'Formwork', 'Brickwork', 'Plastering', 'Tiling', 'Painting', 'Excavation', 'Waterproofing', 'Piling', 'Mep', 'Guarding', 'EquipmentOperation', 'General')");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Subcontractors.Data.ContractVariation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("ContractId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("DecidedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(50)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("RequestedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "ContractId", "Status" }, "IX_ContractVariation_Contract_Status");
+
+                    b.HasIndex(new[] { "ContractId" }, "UX_ContractVariation_Pending")
+                        .IsUnique()
+                        .HasFilter("[Status] = 'Pending'");
+
+                    b.ToTable("ContractVariation", "sub", t =>
+                        {
+                            t.HasCheckConstraint("CK_ContractVariation_Amount", "[Amount] <> 0");
+
+                            t.HasCheckConstraint("CK_ContractVariation_Decision", "([Status] = 'Pending' AND [DecidedAt] IS NULL AND [DecidedBy] IS NULL) OR ([Status] <> 'Pending' AND [DecidedAt] IS NOT NULL AND [DecidedBy] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_ContractVariation_Status", "[Status] IN ('Pending', 'Approved', 'Rejected')");
                         });
                 });
 
@@ -325,6 +395,9 @@ namespace AlMotaheda.Modules.Subcontractors.Data.Migrations
                     b.Property<int>("ProjectId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("ProjectItemId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("RetentionPercent")
                         .HasPrecision(5, 2)
                         .HasColumnType("decimal(5,2)");
@@ -369,9 +442,11 @@ namespace AlMotaheda.Modules.Subcontractors.Data.Migrations
                         .HasDatabaseName("UX_SubContract_ContractNo")
                         .HasFilter("[ContractNo] IS NOT NULL");
 
-                    b.HasIndex("ProjectId", "SubcontractorId")
+                    b.HasIndex("ProjectId", "SubcontractorId", "ProjectItemId")
                         .IsUnique()
-                        .HasDatabaseName("UX_SubContract_Project_Subcontractor");
+                        .HasDatabaseName("UX_SubContract_Project_Subcontractor_Item");
+
+                    b.HasIndex(new[] { "ProjectItemId" }, "IX_SubContract_ProjectItemId");
 
                     b.HasIndex(new[] { "SubcontractorId" }, "IX_SubContract_SubcontractorId");
 
@@ -629,6 +704,17 @@ namespace AlMotaheda.Modules.Subcontractors.Data.Migrations
                     b.Navigation("Contract");
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.Subcontractors.Data.ContractVariation", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Subcontractors.Data.SubContract", "Contract")
+                        .WithMany("Variations")
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Contract");
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.Subcontractors.Data.ManpowerSheet", b =>
                 {
                     b.HasOne("AlMotaheda.Modules.Subcontractors.Data.SubContract", "Contract")
@@ -701,6 +787,8 @@ namespace AlMotaheda.Modules.Subcontractors.Data.Migrations
             modelBuilder.Entity("AlMotaheda.Modules.Subcontractors.Data.SubContract", b =>
                 {
                     b.Navigation("Items");
+
+                    b.Navigation("Variations");
                 });
 
             modelBuilder.Entity("AlMotaheda.Modules.Subcontractors.Data.SubPayment", b =>

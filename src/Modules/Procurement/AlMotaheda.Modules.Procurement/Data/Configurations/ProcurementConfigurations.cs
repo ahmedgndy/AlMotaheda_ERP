@@ -77,6 +77,7 @@ internal sealed class RequisitionLineConfiguration : IEntityTypeConfiguration<Re
         builder.Property(line => line.Description).HasMaxLength(ProcurementColumns.DescriptionMaxLength).IsUnicode();
         builder.Property(line => line.Unit).HasMaxLength(20);
         builder.Property(line => line.Quantity).HasPrecision(18, 3);
+        builder.HasIndex(line => line.PriceItemId, "IX_RequisitionLine_PriceItemId");
     }
 }
 
@@ -197,6 +198,7 @@ internal sealed class PurchaseOrderLineConfiguration : IEntityTypeConfiguration<
         builder.Property(line => line.Unit).HasMaxLength(20);
         builder.Property(line => line.Quantity).HasPrecision(18, 3);
         builder.HasIndex(line => line.RequisitionLineId, "IX_PurchaseOrderLine_RequisitionLineId");
+        builder.HasIndex(line => line.PriceItemId, "IX_PurchaseOrderLine_PriceItemId");
         builder.HasOne<RequisitionLine>().WithMany().HasForeignKey(line => line.RequisitionLineId).OnDelete(DeleteBehavior.NoAction);
     }
 }
@@ -290,7 +292,9 @@ internal sealed class SupplierInvoiceLineConfiguration : IEntityTypeConfiguratio
         });
 
         builder.Property(line => line.Quantity).HasPrecision(18, 3);
+        builder.Property(line => line.PriceCheck).HasMaxLength(20).IsUnicode(false);
         builder.HasIndex(line => line.OrderLineId, "IX_SupplierInvoiceLine_OrderLineId").IncludeProperties(line => new { line.InvoiceId, line.Quantity });
+        builder.HasIndex(line => line.PriceExceptionId, "IX_SupplierInvoiceLine_PriceExceptionId");
         builder.HasOne<PurchaseOrderLine>().WithMany().HasForeignKey(line => line.OrderLineId).OnDelete(DeleteBehavior.NoAction);
     }
 }

@@ -23,6 +23,16 @@ public sealed class PriceApiSecurityTests
         { "GET", "/api/price-ranges", "V" },
         { "POST", "/api/price-ranges/1/approve", "A" },
         { "POST", "/api/price-ranges/1/reject", "A" },
+        { "POST", "/api/price-categories", "C" },
+        { "PUT", "/api/price-categories/1", "C" },
+        { "POST", "/api/price-units", "C" },
+        { "PUT", "/api/price-units/1", "C" },
+        { "GET", "/api/price-exceptions", "V" },
+        { "GET", "/api/price-exceptions/summary", "V" },
+        { "GET", "/api/price-exceptions/1", "V" },
+        { "POST", "/api/price-exceptions/1/approve", "A" },
+        { "POST", "/api/price-exceptions/1/approve-with-price", "A" },
+        { "POST", "/api/price-exceptions/1/reject", "A" },
     };
 
     [Theory]
@@ -72,11 +82,12 @@ public sealed class PriceApiSecurityTests
         await using var app = await TestApplication.StartAsync();
         var token = TestTokens.Create(role: "executive", permissions: [("catalog", "VCEAF")]);
 
+        // The category and the unit are looked up in the price list (a database test covers an unknown one).
         var response = await Send(app, "POST", "/api/price-items", token, new
         {
             nameEn = "Cement",
-            classification = "Food",
-            unit = "Barrel",
+            classification = "CementAggregates",
+            unit = "Ton",
             minPrice = 1_200m,
             maxPrice = 1_000m,
             currency = "USD",
@@ -85,7 +96,20 @@ public sealed class PriceApiSecurityTests
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(["classification", "currency", "effectiveTo", "maxPrice", "nameAr", "unit"], (await ErrorFields(response)).Order());
+        Assert.Equal(["currency", "effectiveTo", "maxPrice", "nameAr"], (await ErrorFields(response)).Order());
+    }
+
+    [Fact]
+    public async Task A_price_exception_decision_needs_a_note_and_a_price_change_its_range()
+    {
+        await using var app = await TestApplication.StartAsync();
+        var token = TestTokens.Create(role: "executive", permissions: [("catalog", "VCEAF")]);
+
+        var approve = await Send(app, "POST", "/api/price-exceptions/1/approve", token, new { rowVersion = RowVersion });
+        var change = await Send(app, "POST", "/api/price-exceptions/1/approve-with-price", token, new { note = "Market", rowVersion = RowVersion, minPrice = 1_500m, maxPrice = 1_300m });
+
+        Assert.Equal(["note"], await ErrorFields(approve));
+        Assert.Equal(["maxPrice"], await ErrorFields(change));
     }
 
     [Fact]
@@ -105,8 +129,11 @@ public sealed class PriceApiSecurityTests
     {
         "GET" => null,
         "PUT" => new { nameAr = "أسمنت", nameEn = "Cement", classification = "CementAggregates", status = "Active", rowVersion = RowVersion },
+        _ when path.Contains("/price-categories", StringComparison.Ordinal) || path.Contains("/price-units", StringComparison.Ordinal) =>
+            new { code = "Barrel", nameAr = "برميل", nameEn = "Barrel", rowVersion = RowVersion },
+        _ when path.EndsWith("/approve-with-price", StringComparison.Ordinal) => new { note = "Market price", minPrice = 1_300m, maxPrice = 1_500m, rowVersion = RowVersion },
         _ when path.EndsWith("/ranges", StringComparison.Ordinal) => new { minPrice = 1_000m, maxPrice = 1_200m, reason = "New list" },
-        _ when path.EndsWith("/approve", StringComparison.Ordinal) || path.EndsWith("/reject", StringComparison.Ordinal) => new { note = "Checked" },
+        _ when path.EndsWith("/approve", StringComparison.Ordinal) || path.EndsWith("/reject", StringComparison.Ordinal) => new { note = "Checked", rowVersion = RowVersion },
         _ => new { nameAr = "أسمنت", nameEn = "Cement", classification = "CementAggregates", unit = "Ton", minPrice = 1_000m, maxPrice = 1_200m },
     };
 }

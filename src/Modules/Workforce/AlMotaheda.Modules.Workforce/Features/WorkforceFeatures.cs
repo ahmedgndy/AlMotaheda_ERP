@@ -52,5 +52,7 @@ internal static class WorkforceFeatures
         ListWorkerPayments.Map(api);
         RecordWorkerPayment.Map(api);
         VoidWorkerPayment.Map(api);
+
+        Settlements.SettlementEndpoints.Map(api);
     }
 }

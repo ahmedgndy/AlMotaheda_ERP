@@ -124,6 +124,10 @@ internal static class RecordWorkerPayment
             PaidRecordTypes.AttendanceLine, payable.Select(line => line.LineId).ToList(), shared, cancellationToken);
         var held = reserved.Select(entry => new PaidPart(entry.Key, entry.Value, PaymentVoided: false));
 
+        // Days held by pending weekly settlements (cash already paid on site, waiting for review) are taken too.
+        var settling = await Settlements.SettlementQueries.HeldParts(db, payable.Select(line => line.LineId).ToList()).ToListAsync(cancellationToken);
+        held = held.Concat(settling);
+
         var plan = PaymentFifo.Plan(amount.Value, PaymentFifo.Settle(payable, paidParts.Concat(held)));
         if (!plan.Fits)
         {

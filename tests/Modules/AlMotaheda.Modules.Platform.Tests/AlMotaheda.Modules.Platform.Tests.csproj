@@ -54,6 +54,8 @@
     <!-- The Projects test helpers: projects, suppliers and the expense review flow, the way the frontend calls them. -->
     <Compile Include="..\AlMotaheda.Modules.Projects.Tests\Database\ProjectsApi.cs" Link="Shared\ProjectsApi.cs" />
     <Compile Include="..\AlMotaheda.Modules.Projects.Tests\Database\Core\CoreApi.cs" Link="Shared\CoreApi.cs" />
+    <Compile Include="..\AlMotaheda.Modules.Projects.Tests\Database\CostManagement\CostManagementApi.cs" Link="Shared\CostManagementApi.cs" />
+    <Compile Include="..\AlMotaheda.Modules.Projects.Tests\Database\Workspace\FinancialWorkspaceApi.cs" Link="Shared\FinancialWorkspaceApi.cs" />
   </ItemGroup>
 
 </Project>

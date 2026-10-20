@@ -33,6 +33,7 @@ public sealed class FleetModule : IModule
 
         services.AddCompanyClock();
         services.AddScoped<IProjectCostSource, EquipmentCostSource>();
+        services.AddScoped<IEquipmentItemCosts, EquipmentItemCosts>();
         services.AddScoped<IWorkInboxSource, FleetInboxSource>();
         services.AddScoped<IPaymentSource, EquipmentCostPaymentSource>();
         services.AddScoped<IProjectRecordOwnership, FleetRecordOwnership>();

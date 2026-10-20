@@ -164,6 +164,60 @@ public sealed class EquipmentCostRulesTests
     }
 
     [Fact]
+    public void Approved_costs_are_totalled_per_work_item_and_together_equal_the_equipment_group()
+    {
+        const int Excavation = 5, Backfill = 6;
+        EquipmentCostSettlementRow[] rows =
+        [
+            // Excavation: fuel 3,000 paid from custody, rental 12,000 on credit and unpaid; two machines.
+            Row(1, EquipmentCostType.Fuel, EquipmentCostStatus.Approved, CostChannel.Custody, 3_000m, paid: false, equipmentId: 10, item: Excavation),
+            Row(2, EquipmentCostType.Rental, EquipmentCostStatus.Approved, CostChannel.Credit, 12_000m, paid: false, equipmentId: 11, item: Excavation),
+            // Backfill: the same rented machine, 8,000 on credit and paid.
+            Row(3, EquipmentCostType.Rental, EquipmentCostStatus.Approved, CostChannel.Credit, 8_000m, paid: true, equipmentId: 11, item: Backfill),
+            // A repair for the whole site, on no work item.
+            Row(4, EquipmentCostType.Repair, EquipmentCostStatus.Approved, CostChannel.Custody, 1_500m, paid: false, equipmentId: 12),
+            // Not costs yet, or never: they count nowhere.
+            Row(5, EquipmentCostType.Fuel, EquipmentCostStatus.Recorded, CostChannel.Custody, 900m, paid: false, item: Excavation),
+            Row(6, EquipmentCostType.Fuel, EquipmentCostStatus.Returned, CostChannel.Custody, 400m, paid: false, item: Backfill),
+            Row(7, EquipmentCostType.Other, EquipmentCostStatus.Rejected, CostChannel.Custody, 250m, paid: false, item: Excavation),
+        ];
+
+        var totals = EquipmentCostSettlement.ItemTotals(rows);
+
+        Assert.Equal(
+            [
+                new ItemCostTotal(Excavation, 15_000m, 3_000m, 2, 2),
+                new ItemCostTotal(Backfill, 8_000m, 8_000m, 1, 1),
+                new ItemCostTotal(null, 1_500m, 1_500m, 1, 1),
+            ],
+            totals);
+
+        // Linking moves a cost between an item and the site; the sum is always the Equipment group of the project.
+        var group = EquipmentCostSettlement.Figures(rows);
+        Assert.Equal(group.Recognized, totals.Sum(total => total.Cost));
+        Assert.Equal(group.Paid, totals.Sum(total => total.Paid));
+        Assert.Equal(group.RecognizedRecords, totals.Sum(total => total.RecordCount));
+    }
+
+    [Fact]
+    public void Without_approved_costs_there_is_no_item_total()
+    {
+        Assert.Empty(EquipmentCostSettlement.ItemTotals(
+            [Row(1, EquipmentCostType.Fuel, EquipmentCostStatus.Recorded, CostChannel.Custody, 900m, paid: false, item: 5)]));
+    }
+
+    [Fact]
+    public void The_work_item_is_optional_and_a_bad_id_is_refused_before_any_lookup()
+    {
+        var errors = new ValidationErrors();
+        EquipmentCostFields.Validate(Request(new() { Type = "Fuel", Liters = 10m, PricePerLiter = 15m, ProjectItemId = 0 }), Today, errors);
+        Assert.Equal(["projectItemId"], errors.ToDictionary().Keys);
+
+        Assert.Equal(5, Valid(new() { Type = "Fuel", Liters = 10m, PricePerLiter = 15m, ProjectItemId = 5 }).ProjectItemId);
+        Assert.Null(Valid(new() { Type = "Fuel", Liters = 10m, PricePerLiter = 15m }).ProjectItemId);
+    }
+
+    [Fact]
     public void Repair_counts_with_maintenance_and_transport_with_other()
     {
         Assert.Equal(CostGroup.Rental, EquipmentCostGroups.Of(EquipmentCostType.Rental));
@@ -254,8 +308,8 @@ public sealed class EquipmentCostRulesTests
 
     private static EquipmentCostSettlementRow Row(
         int id, EquipmentCostType type, EquipmentCostStatus status, CostChannel channel, decimal amount, bool paid,
-        int equipmentId = 10, DateOnly? date = null, decimal? liters = null) =>
-        new(id, equipmentId, type, status, channel, date ?? Today, amount, liters, paid);
+        int equipmentId = 10, DateOnly? date = null, decimal? liters = null, int? item = null) =>
+        new(id, equipmentId, type, status, channel, date ?? Today, amount, liters, paid, item);
 
     private static EquipmentCostFields Valid(Form form)
     {
@@ -267,7 +321,7 @@ public sealed class EquipmentCostRulesTests
 
     private static CreateEquipmentCost.Request Request(Form form) => new(
         form.EquipmentId, form.CostDate, form.Type, form.Basis, form.Quantity, form.Rate, form.Liters, form.PricePerLiter, form.Amount,
-        form.Description, form.SupplierId, form.Channel, form.InvoiceNo);
+        form.Description, form.SupplierId, form.Channel, form.InvoiceNo, form.ProjectItemId);
 
     /// <summary>A cost form with sensible defaults; each test sets what it is about.</summary>
     private sealed class Form
@@ -285,5 +339,6 @@ public sealed class EquipmentCostRulesTests
         public int? SupplierId { get; init; }
         public string? Channel { get; init; } = "Custody";
         public string? InvoiceNo { get; init; }
+        public int? ProjectItemId { get; init; }
     }
 }

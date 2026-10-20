@@ -26,6 +26,13 @@ internal sealed class EquipmentCost
     /// <summary>The project (<c>projects.Project</c>). A plain id: the Projects module owns the table.</summary>
     public int ProjectId { get; set; }
 
+    /// <summary>
+    /// The work item the machine worked for (<c>projects.ProjectItem</c>): a main item or a sub-item of
+    /// <see cref="ProjectId"/> (a composite key written by hand in the migration). Optional: empty means the cost
+    /// serves the whole site and stays in the project's other costs, on no item.
+    /// </summary>
+    public int? ProjectItemId { get; set; }
+
     /// <summary>The business date of the cost.</summary>
     public DateOnly CostDate { get; set; }
 

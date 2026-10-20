@@ -74,7 +74,7 @@ internal static class LinkContractItem
             return SubcontractorsProblems.CompletedProject();
         }
 
-        var item = await db.ContractItems.SingleOrDefaultAsync(
+        var item = await db.ContractItems.Include(candidate => candidate.Contract).SingleOrDefaultAsync(
             candidate => candidate.Id == itemId && candidate.ContractId == contractId && candidate.Contract.ProjectId == projectId,
             cancellationToken);
         if (item is null)
@@ -84,13 +84,15 @@ internal static class LinkContractItem
 
         if (request.ProjectItemId is { } projectItemId && projectItemId != item.ProjectItemId)
         {
-            switch (await ProjectItemLinks.CheckAsync(projectItems, projectId, projectItemId, cancellationToken))
+            switch (await ProjectItemLinks.CheckAsync(projectItems, projectId, projectItemId, cancellationToken, item.Contract.ProjectItemId))
             {
                 case ProjectItemCheck.NotFound:
                     errors.Add("projectItemId", "The project item was not found on this project.");
                     return SubcontractorsProblems.Validation(errors);
                 case ProjectItemCheck.Inactive:
                     return SubcontractorsProblems.InactiveItem();
+                case ProjectItemCheck.OutsideScope:
+                    return SubcontractorsProblems.OutsideContractScope();
             }
         }
 

@@ -54,6 +54,7 @@ internal static class EquipmentCostGroups
 /// Loaded flat, per project, by <see cref="EquipmentCostQueries.SettlementRows"/>.
 /// </summary>
 /// <param name="PaymentRecorded">True when the one payment of a credit cost is recorded (and not voided).</param>
+/// <param name="ProjectItemId">The work item of the cost; <c>null</c> for a cost of the whole site.</param>
 internal sealed record EquipmentCostSettlementRow(
     int CostId,
     int EquipmentId,
@@ -63,7 +64,8 @@ internal sealed record EquipmentCostSettlementRow(
     DateOnly CostDate,
     decimal Amount,
     decimal? Liters,
-    bool PaymentRecorded);
+    bool PaymentRecorded,
+    int? ProjectItemId = null);
 
 /// <summary>
 /// The one rule for what an equipment cost costs and what of it is paid (overview, sections 3.1 and 3.3). The
@@ -125,6 +127,25 @@ internal static class EquipmentCostSettlement
 
         return new ProjectCostFigures(recognized, paid, recognizedCount, pending, pendingCount, Committed: 0);
     }
+
+    /// <summary>
+    /// The approved costs per work item, for the Projects items screens: one total per item, plus one with a
+    /// <c>null</c> item for the costs of the whole site. Cost and paid follow the rule of <see cref="Figures"/>, so the
+    /// totals add up to its recognized and paid amounts: linking a cost to an item moves it, never adds it twice.
+    /// The party count is the number of different machines.
+    /// </summary>
+    public static IReadOnlyList<ItemCostTotal> ItemTotals(IEnumerable<EquipmentCostSettlementRow> rows) =>
+        rows.Where(row => row.Status == EquipmentCostStatus.Approved)
+            .GroupBy(row => row.ProjectItemId)
+            .OrderBy(group => group.Key is null)
+            .ThenBy(group => group.Key)
+            .Select(group => new ItemCostTotal(
+                group.Key,
+                group.Sum(row => row.Amount),
+                group.Sum(Paid),
+                group.Count(),
+                group.Select(row => row.EquipmentId).Distinct().Count()))
+            .ToList();
 }
 
 /// <summary>The answer to "may this caller do this to this cost?", with the reason when not.</summary>

@@ -48,7 +48,20 @@ internal sealed record ItemRow(
     int? ParentItemId,
     int Level,
     int SubItemCount,
-    ItemFiguresView? WithSubItems)
+    ItemFiguresView? WithSubItems,
+    int DirectRecordCount = 0,
+    decimal DirectCost = 0,
+    decimal DirectPaid = 0,
+    decimal SupplierOutstanding = 0,
+    decimal SubcontractorOutstanding = 0,
+    decimal LaborOutstanding = 0,
+    decimal DirectOutstanding = 0,
+    int EquipmentRecordCount = 0,
+    int EquipmentCount = 0,
+    decimal EquipmentCost = 0,
+    decimal EquipmentPaid = 0,
+    decimal EquipmentOutstanding = 0,
+    ItemPlanView? Plan = null)
 {
     /// <param name="withSubItems">The roll-up of a main item (<see cref="ItemTree.WithSubItems"/>); <c>null</c> for a sub-item.</param>
     public static ItemRow From(ItemHeader item, ItemFigures figures, int subItemCount, ItemFigures? withSubItems) => new(
@@ -87,7 +100,19 @@ internal sealed record ItemRow(
         item.ParentItemId,
         item.IsMainItem ? 1 : 2,
         subItemCount,
-        withSubItems is null ? null : ItemFiguresView.From(withSubItems));
+        withSubItems is null ? null : ItemFiguresView.From(withSubItems),
+        figures.DirectRecordCount,
+        figures.DirectCost,
+        figures.DirectPaid,
+        figures.SupplierCost - figures.SupplierPaid,
+        figures.SubcontractorCost - figures.SubcontractorPaid,
+        figures.LaborCost - figures.LaborPaid,
+        figures.DirectCost - figures.DirectPaid,
+        figures.EquipmentRecordCount,
+        figures.EquipmentCount,
+        figures.EquipmentCost,
+        figures.EquipmentPaid,
+        figures.EquipmentCost - figures.EquipmentPaid);
 
     public static ItemHeader Header(ProjectItem item) => new(
         item.Id, item.NameAr, item.NameEn, item.Category, item.Unit, item.Description, item.Notes, item.Status,
@@ -120,7 +145,19 @@ internal sealed record ItemFiguresView(
     decimal SubcontractorPaid,
     decimal LaborPaid,
     decimal Paid,
-    decimal Outstanding)
+    decimal Outstanding,
+    int DirectRecordCount = 0,
+    decimal DirectCost = 0,
+    decimal DirectPaid = 0,
+    decimal SupplierOutstanding = 0,
+    decimal SubcontractorOutstanding = 0,
+    decimal LaborOutstanding = 0,
+    decimal DirectOutstanding = 0,
+    int EquipmentRecordCount = 0,
+    int EquipmentCount = 0,
+    decimal EquipmentCost = 0,
+    decimal EquipmentPaid = 0,
+    decimal EquipmentOutstanding = 0)
 {
     public static ItemFiguresView From(ItemFigures figures) => new(
         figures.SupplierRecordCount,
@@ -139,11 +176,42 @@ internal sealed record ItemFiguresView(
         figures.SubcontractorPaid,
         figures.LaborPaid,
         figures.Paid,
-        figures.Outstanding);
+        figures.Outstanding,
+        figures.DirectRecordCount,
+        figures.DirectCost,
+        figures.DirectPaid,
+        figures.SupplierCost - figures.SupplierPaid,
+        figures.SubcontractorCost - figures.SubcontractorPaid,
+        figures.LaborCost - figures.LaborPaid,
+        figures.DirectCost - figures.DirectPaid,
+        figures.EquipmentRecordCount,
+        figures.EquipmentCount,
+        figures.EquipmentCost,
+        figures.EquipmentPaid,
+        figures.EquipmentCost - figures.EquipmentPaid);
 }
 
+/// <summary>
+/// What is planned and committed for a row of the items table (with its sub-items for a main item), next to its
+/// actual cost. Never added to a cost: a budget is a plan, a commitment is signed or ordered but not executed.
+/// </summary>
+/// <param name="Budgeted">Lines of the approved budget on the item (and its sub-items); 0 without an approved budget.</param>
+/// <param name="RemainingBudget">Budgeted − actual cost; <c>null</c> when nothing is budgeted.</param>
+/// <param name="SubcontractCommitted">Contract lines on the item not executed yet (contracts not completed).</param>
+/// <param name="OrdersCommitted">Purchase order lines on the item not invoiced yet (Procurement).</param>
+/// <param name="PendingReviewCount">Supplier and direct records on the item waiting for review: not cost yet.</param>
+/// <param name="PriceWarningCount">Records on the item bought above their reference price range.</param>
+internal sealed record ItemPlanView(
+    decimal Budgeted,
+    decimal? RemainingBudget,
+    bool OverBudget,
+    decimal SubcontractCommitted,
+    decimal OrdersCommitted,
+    int PendingReviewCount,
+    int PriceWarningCount);
+
 /// <summary>Where the project's recognized cost comes from, so the screen can show that the parts add up.</summary>
-/// <param name="OtherCosts">Site expenses outside the items screens plus equipment costs (Fleet).</param>
+/// <param name="OtherCosts">Site expenses outside the items screens plus equipment costs (Fleet) on no work item.</param>
 internal sealed record ItemsReconciliation(decimal ItemsTotalCost, decimal UnallocatedTotalCost, decimal OtherCosts, decimal ProjectRecognizedCost);
 
 /// <summary>One supplier record on an item, or in the not-linked group.</summary>
@@ -202,10 +270,14 @@ internal sealed record SupplierLine(
 
 /// <summary>
 /// The detail of one item, or of the "not linked yet" group (<see cref="Item"/> is then <c>null</c>): the approved
-/// lines from the three sources, the lines still waiting for review, and the same figures as the table row.
+/// lines from every source, the lines still waiting for review, and the same figures as the table row.
 /// </summary>
 /// <param name="SubItems">A main item's sub-items, as rows of the table (own figures each). Empty otherwise.</param>
 /// <param name="WithSubItems">A main item's figures with its sub-items; <c>null</c> for a sub-item and the not-linked group.</param>
+/// <param name="EquipmentLines">
+/// The item's approved equipment costs. Always empty for the not-linked group: an equipment cost on no item is a
+/// cost of the whole site, not a record waiting for its item.
+/// </param>
 internal sealed record ItemDetail(
     ItemRow? Item,
     IReadOnlyList<SupplierLine> SupplierLines,
@@ -214,4 +286,5 @@ internal sealed record ItemDetail(
     IReadOnlyList<SupplierLine> PendingSupplierLines,
     ItemFiguresView Totals,
     IReadOnlyList<ItemRow> SubItems,
-    ItemFiguresView? WithSubItems);
+    ItemFiguresView? WithSubItems,
+    IReadOnlyList<EquipmentItemLine> EquipmentLines);

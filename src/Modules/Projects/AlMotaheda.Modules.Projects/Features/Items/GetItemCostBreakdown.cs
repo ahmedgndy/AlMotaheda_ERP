@@ -17,13 +17,13 @@ namespace AlMotaheda.Modules.Projects.Features.Items;
 /// <summary>
 /// <c>GET /api/projects/{pid}/items/{itemId}/cost-breakdown</c>: everything a work item has cost, from every source,
 /// for one main item with its sub-items (or one sub-item): purchases and site expenses with their supplier balances,
-/// internal labor, subcontract work and commitments, the approved budget against the actual cost, and the
-/// transaction history.
+/// internal labor, subcontract work and commitments, machinery (equipment costs linked to the item), the approved
+/// budget against the actual cost, and the transaction history.
 /// </summary>
 /// <remarks>
 /// <para><c>totals</c> is never filtered: it equals the item's row in the items table (with its sub-items for a main
 /// item), so the two screens can't disagree. The filters (<c>from</c>, <c>to</c>, <c>subItemId</c>,
-/// <c>supplierId</c>, <c>workerId</c>, <c>subcontractorId</c>, <c>type</c>) narrow <c>transactions</c>,
+/// <c>supplierId</c>, <c>workerId</c>, <c>subcontractorId</c>, <c>equipmentId</c>, <c>type</c>) narrow <c>transactions</c>,
 /// <c>filtered</c> and the per-party summaries. Only approved records are cost; pending ones are counted apart.</para>
 /// <para>projects See money and project scope, like the items table. One query per source, never one per sub-item.</para>
 /// </remarks>
@@ -40,6 +40,7 @@ internal static class GetItemCostBreakdown
         IReadOnlyList<BreakdownSupplier> Suppliers,
         IReadOnlyList<BreakdownWorker> Workers,
         IReadOnlyList<BreakdownSubcontractor> Subcontractors,
+        IReadOnlyList<BreakdownMachine> Machines,
         IReadOnlyList<BreakdownTransaction> Transactions,
         int Page,
         int PageSize,
@@ -49,7 +50,7 @@ internal static class GetItemCostBreakdown
         projects.MapGet("/{projectId:int}/items/{itemId:int}/cost-breakdown", HandleAsync)
             .RequirePermission(ProjectPermissions.Module, PermissionAction.SeeMoney)
             .WithName("GetItemCostBreakdown")
-            .WithSummary("A work item's cost breakdown with its sub-items: suppliers, labor, subcontractors, budget, commitments and transactions (filters: from, to, subItemId, supplierId, workerId, subcontractorId, type)");
+            .WithSummary("A work item's cost breakdown with its sub-items: suppliers, labor, subcontractors, machinery, budget, commitments and transactions (filters: from, to, subItemId, supplierId, workerId, subcontractorId, equipmentId, type)");
 
     internal static async Task<Results<Ok<Response>, ValidationProblem, ProblemHttpResult>> HandleAsync(
         int projectId,
@@ -60,6 +61,7 @@ internal static class GetItemCostBreakdown
         ItemsLedgerSource source,
         ILaborItemCosts labor,
         ISubcontractItemCosts subcontracts,
+        IEquipmentItemCosts equipment,
         CancellationToken cancellationToken,
         string? from = null,
         string? to = null,
@@ -67,6 +69,7 @@ internal static class GetItemCostBreakdown
         int? supplierId = null,
         int? workerId = null,
         int? subcontractorId = null,
+        int? equipmentId = null,
         string? type = null,
         int page = 1,
         int pageSize = Paging.DefaultPageSize)
@@ -128,19 +131,21 @@ internal static class GetItemCostBreakdown
         var laborLines = await labor.LinesByItemAsync(projectId, ids, cancellationToken);
         var workLines = await subcontracts.LinesByItemAsync(projectId, ids, cancellationToken);
         var commitments = await subcontracts.CommitmentsByItemAsync(projectId, ids, cancellationToken);
+        var machineLines = await equipment.LinesByItemAsync(projectId, ids, cancellationToken);
         var budget = await BudgetedAsync(db, projectId, idArray, cancellationToken);
 
         var all = ItemCostBreakdown.FromExpenses(approved)
             .Concat(ItemCostBreakdown.FromLabor(laborLines))
-            .Concat(ItemCostBreakdown.FromSubcontracts(workLines));
-        var filter = new BreakdownFilter(fromDate, toDate, subItemId, supplierId, workerId, subcontractorId, parsedType);
+            .Concat(ItemCostBreakdown.FromSubcontracts(workLines))
+            .Concat(ItemCostBreakdown.FromEquipment(machineLines));
+        var filter = new BreakdownFilter(fromDate, toDate, subItemId, supplierId, workerId, subcontractorId, parsedType, equipmentId);
         var rows = ItemCostBreakdown.Filter(all, filter);
 
         // A commitment has no date (it is "as of now"): only the item and subcontractor filters apply to it.
         var keptCommitments = commitments
             .Where(line => (subItemId is not { } sub || line.ItemId == sub) && (subcontractorId is not { } party || line.SubcontractorId == party))
             .Where(_ => parsedType is null || parsedType == BreakdownTypes.Subcontract)
-            .Where(_ => supplierId is null && workerId is null)
+            .Where(_ => supplierId is null && workerId is null && equipmentId is null)
             .ToList();
 
         var totals = data.Tree.WithSubItems(item, data.Ledger) ?? data.Ledger.Of(item.Id);
@@ -157,6 +162,7 @@ internal static class GetItemCostBreakdown
             ItemCostBreakdown.Suppliers(rows),
             ItemCostBreakdown.Workers(rows),
             ItemCostBreakdown.Subcontractors(rows, keptCommitments),
+            ItemCostBreakdown.Machines(rows),
             rows.Skip((page - 1) * pageSize).Take(pageSize).ToList(),
             page,
             pageSize,

@@ -86,6 +86,12 @@ internal enum ProjectItemCheck
 
     /// <summary>The item is inactive (409 <c>item_inactive</c>).</summary>
     Inactive,
+
+    /// <summary>
+    /// The contract is for one main work item, and this item is neither it nor one of its sub-items
+    /// (409 <c>item_outside_contract_scope</c>).
+    /// </summary>
+    OutsideScope,
 }
 
 /// <summary>
@@ -94,7 +100,9 @@ internal enum ProjectItemCheck
 /// </summary>
 internal static class ProjectItemLinks
 {
-    public static async Task<ProjectItemCheck> CheckAsync(IProjectItems projectItems, int projectId, int projectItemId, CancellationToken cancellationToken)
+    /// <param name="scopeItemId">The contract's main work item, when it has one: work may only go to it or its sub-items.</param>
+    public static async Task<ProjectItemCheck> CheckAsync(
+        IProjectItems projectItems, int projectId, int projectItemId, CancellationToken cancellationToken, int? scopeItemId = null)
     {
         var found = await projectItems.FindAsync(projectId, [projectItemId], cancellationToken);
         if (!found.TryGetValue(projectItemId, out var item))
@@ -102,6 +110,11 @@ internal static class ProjectItemLinks
             return ProjectItemCheck.NotFound;
         }
 
-        return item.IsActive ? ProjectItemCheck.Fits : ProjectItemCheck.Inactive;
+        if (!item.IsActive)
+        {
+            return ProjectItemCheck.Inactive;
+        }
+
+        return scopeItemId is not { } scope || item.Id == scope || item.ParentItemId == scope ? ProjectItemCheck.Fits : ProjectItemCheck.OutsideScope;
     }
 }

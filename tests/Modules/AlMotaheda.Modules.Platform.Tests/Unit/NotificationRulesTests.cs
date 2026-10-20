@@ -26,6 +26,20 @@ public sealed class NotificationRulesTests
         Assert.Equal(new NotificationDraft(Recorder, type, titleAr, titleEn), draft);
     }
 
+    [Theory]
+    [InlineData("ApprovedOnce", NotificationTypes.RecordApproved, "تم اعتماد استثناء السعر")]
+    [InlineData("ApprovedWithPriceChange", NotificationTypes.RecordApproved, "تم اعتماد استثناء السعر")]
+    [InlineData("Rejected", NotificationTypes.RecordRejected, "تم رفض استثناء السعر")]
+    public void The_submitter_hears_the_executive_decision_on_a_price_exception(string status, string type, string titleAr)
+    {
+        var change = Change("PriceException", "Modified", "Pending", status, ("SubmittedBy", Recorder), ("DecidedBy", Reviewer));
+
+        var draft = Assert.Single(NotificationRules.For(change, Reviewer));
+
+        Assert.Equal((Recorder, type, titleAr), (draft.RecipientUserId, draft.Type, draft.TitleAr));
+        Assert.Empty(NotificationRules.For(Change("PriceException", "Modified", "Pending", "Withdrawn", ("SubmittedBy", Recorder)), Recorder));
+    }
+
     [Fact]
     public void A_labor_sheet_notifies_the_person_in_recorded_by()
     {
@@ -96,5 +110,80 @@ public sealed class NotificationRulesTests
         Assert.Equal((Reviewer, opened), (open.RecipientUserId, open.Type));
         Assert.Equal((Reviewer, recovered), (over.RecipientUserId, over.Type));
         Assert.Empty(NotificationRules.For(Change(entity, "Modified", "Open", "Ended", people), engineer));
+    }
+
+    [Theory]
+    [InlineData("PriceAboveRangeAlert", NotificationTypes.PriceAboveRange, "تم تسجيل شراء بسعر أعلى من السعر المرجعي")]
+    [InlineData("PriceExceptionAlert", NotificationTypes.PriceAboveRange, "تم تسجيل شراء بسعر أعلى من السعر المرجعي")]
+    [InlineData("CostRecordedAlert", NotificationTypes.CostRecorded, "تكلفة موقع جديدة بانتظار المراجعة")]
+    public void A_cost_alert_tells_its_recipient_once_when_it_is_added(string entity, string type, string titleAr)
+    {
+        const int engineer = 34;
+        (string, int)[] people = [("RecipientUserId", Reviewer)];
+
+        var told = Assert.Single(NotificationRules.For(Change(entity, "Added", null, null, people), engineer));
+
+        Assert.Equal((Reviewer, type, titleAr), (told.RecipientUserId, told.Type, told.TitleAr));
+        Assert.Empty(NotificationRules.For(Change(entity, "Added", null, null, people), Reviewer));
+    }
+
+    [Theory]
+    [InlineData("Approved", NotificationTypes.RecordApproved)]
+    [InlineData("Rejected", NotificationTypes.RecordRejected)]
+    [InlineData("Paid", NotificationTypes.PaymentPaid)]
+    [InlineData("Failed", NotificationTypes.PaymentFailed)]
+    public void Whoever_asked_for_a_payment_hears_its_decision_and_outcome(string status, string type)
+    {
+        var change = Change("PaymentRequest", "Modified", "Submitted", status, ("CreatedBy", Recorder), ("DecidedBy", Reviewer));
+
+        var told = Assert.Single(NotificationRules.For(change, Reviewer));
+
+        Assert.Equal((Recorder, type), (told.RecipientUserId, told.Type));
+    }
+
+    [Fact]
+    public void A_price_range_request_is_answered_to_its_requester()
+    {
+        var change = Change("PriceRange", "Modified", "Pending", "Approved", ("RequestedBy", Recorder), ("DecidedBy", Reviewer));
+
+        Assert.Equal(Recorder, Assert.Single(NotificationRules.For(change, Reviewer)).RecipientUserId);
+    }
+
+    [Fact]
+    public void A_weekly_settlement_alert_row_tells_its_recipient_and_the_decision_tells_the_recorder_and_the_holder()
+    {
+        var alert = Change("SettlementAlert", "Added", null, null, ("RecipientUserId", Reviewer));
+        var draft = Assert.Single(NotificationRules.For(alert, Recorder));
+        Assert.Equal((Reviewer, NotificationTypes.PayrollSettled), (draft.RecipientUserId, draft.Type));
+
+        const int holder = 33;
+        var confirmed = Change("PayrollSettlement", "Modified", "Pending", "Confirmed", ("RecordedBy", Recorder), ("PaidByUserId", holder), ("ReviewedBy", Reviewer));
+        Assert.Equal([Recorder, holder], NotificationRules.For(confirmed, Reviewer).Select(item => item.RecipientUserId).Order());
+        Assert.All(NotificationRules.For(confirmed, Reviewer), item => Assert.Equal(NotificationTypes.RecordApproved, item.Type));
+
+        var reversed = Change("PayrollSettlement", "Modified", "Confirmed", "Reversed", ("RecordedBy", Recorder), ("PaidByUserId", Recorder));
+        var once = Assert.Single(NotificationRules.For(reversed, Reviewer));
+        Assert.Equal(("RecordReversed", "Your weekly labor settlement was reversed"), (once.Type, once.TitleEn));
+    }
+
+    [Fact]
+    public void The_custody_holder_hears_of_movements_others_record_but_not_of_their_own()
+    {
+        const int holder = 44;
+        var funded = Change("CustodyEntry", "Added", null, "Posted", ("HolderUserId", holder), ("CreatedBy", Reviewer));
+        Assert.Equal(NotificationTypes.CustodyChanged, Assert.Single(NotificationRules.For(funded, Reviewer)).Type);
+
+        var ownPayroll = Change("CustodyEntry", "Added", null, "Pending", ("HolderUserId", holder), ("CreatedBy", holder));
+        Assert.Empty(NotificationRules.For(ownPayroll, holder));
+    }
+
+    [Fact]
+    public void A_subcontract_variation_decision_tells_whoever_asked()
+    {
+        var approved = Change("ContractVariation", "Modified", "Pending", "Approved", ("RequestedBy", Recorder), ("DecidedBy", Reviewer));
+
+        var draft = Assert.Single(NotificationRules.For(approved, Reviewer));
+
+        Assert.Equal((Recorder, NotificationTypes.RecordApproved, "تم اعتماد تعديل قيمة عقد الباطن"), (draft.RecipientUserId, draft.Type, draft.TitleAr));
     }
 }

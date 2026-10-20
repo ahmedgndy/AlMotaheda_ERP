@@ -65,4 +65,24 @@ public sealed class LiveScopesTests
         Assert.DoesNotContain(properties, property => property.PropertyType == typeof(decimal) || property.PropertyType == typeof(decimal?));
         Assert.DoesNotContain(properties, property => property.Name.Contains("Name", StringComparison.Ordinal) || property.Name.Contains("Title", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void Custody_and_settlement_changes_refresh_the_custody_labor_and_cost_screens_of_their_project_and_finance()
+    {
+        var custody = Signals(Change("CustodyEntry", projectId: 5));
+        Assert.Equal(["project:5:money", "project:5", "company:finance"], custody.Select(signal => signal.Group));
+        Assert.Contains("Custody", custody[0].Signal.Aggregates);
+
+        var settlement = Signals(Change("PayrollSettlement", projectId: 5, statusAfter: "Confirmed"));
+        Assert.Contains("LaborPayable", settlement[0].Signal.Aggregates);
+        Assert.Contains("ProjectItems", settlement[0].Signal.Aggregates);
+        Assert.Contains("Custody", settlement[0].Signal.Aggregates);
+
+        Assert.Contains("ProjectSuppliers", Signals(Change("SupplyAgreement", projectId: 5))[0].Signal.Aggregates);
+        Assert.Contains("Custody", Signals(Change("ProjectExpense", projectId: 5))[0].Signal.Aggregates);
+
+        // The alert rows and the detail rows of a settlement send nothing of their own.
+        Assert.Empty(LiveScopes.For(Change("SettlementAlert", 5, "Added"), 1));
+        Assert.Empty(LiveScopes.For(Change("PayrollSettlementAllocation", 5, "Added"), 1));
+    }
 }

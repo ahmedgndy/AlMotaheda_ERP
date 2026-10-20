@@ -14,8 +14,9 @@ using Microsoft.EntityFrameworkCore;
 namespace AlMotaheda.Modules.Subcontractors.Features.Contracts;
 
 /// <summary>
-/// <c>POST /api/projects/{pid}/subcontracts</c>: give an existing, active company a contract on this project.
-/// One contract per company per project; the same company keeps its other projects' contracts apart.
+/// <c>POST /api/projects/{pid}/subcontracts</c>: give an existing, active company a contract on this project for one
+/// main work item (<c>projectItemId</c>). One contract per company, project and main item; the same company keeps its
+/// other items' and projects' contracts apart, under one company identity.
 /// </summary>
 /// <remarks>The contract value is recorded as a commitment. It never becomes cost by itself.</remarks>
 internal static class CreateSubcontract
@@ -30,7 +31,8 @@ internal static class CreateSubcontract
         string? EndDate,
         string? Status,
         string? ContractNo,
-        string? Scope) : IContractFieldsRequest;
+        string? Scope,
+        int? ProjectItemId = null) : IContractFieldsRequest;
 
     public static void Map(IEndpointRouteBuilder api) =>
         api.MapPost("/projects/{projectId:int}/subcontracts", HandleAsync)
@@ -44,6 +46,7 @@ internal static class CreateSubcontract
         HttpContext httpContext,
         SubcontractorsDbContext db,
         IProjectAccess access,
+        IProjectItems projectItems,
         ContractDetails details,
         CompanyClock clock,
         SubcontractorsLog log,
@@ -94,7 +97,19 @@ internal static class CreateSubcontract
             return SubcontractorsProblems.InactiveSubcontractor();
         }
 
-        if (await db.SubContracts.AnyAsync(contract => contract.ProjectId == projectId && contract.SubcontractorId == subcontractorId, cancellationToken))
+        if (await fields!.CheckWorkItemAsync(projectItems, projectId, null, errors, cancellationToken) is { } itemProblem)
+        {
+            return itemProblem;
+        }
+
+        if (errors.HasErrors)
+        {
+            return SubcontractorsProblems.Validation(errors);
+        }
+
+        if (await db.SubContracts.AnyAsync(
+                contract => contract.ProjectId == projectId && contract.SubcontractorId == subcontractorId && contract.ProjectItemId == fields.ProjectItemId,
+                cancellationToken))
         {
             return SubcontractorsProblems.CompanyAlreadyOnProject();
         }

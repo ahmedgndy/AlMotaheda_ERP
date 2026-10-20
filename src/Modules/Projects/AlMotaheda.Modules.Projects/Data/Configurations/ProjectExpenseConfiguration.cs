@@ -14,6 +14,7 @@ internal sealed class ProjectExpenseConfiguration : IEntityTypeConfiguration<Pro
     public const string SourceIndex = "UX_ProjectExpense_Source";
     public const string IdempotencyIndex = "UX_ProjectExpense_IdempotencyKey";
     public const int PriceJustificationMaxLength = 500;
+    public const int PayeeNameMaxLength = 200;
 
     public void Configure(EntityTypeBuilder<ProjectExpense> builder)
     {
@@ -28,12 +29,13 @@ internal sealed class ProjectExpenseConfiguration : IEntityTypeConfiguration<Pro
             table.HasCheckConstraint("CK_ProjectExpense_Unit", $"[Unit] IS NULL OR [Unit] IN ({SqlList.Of(MeasurementUnits.All)})");
             table.HasCheckConstraint("CK_ProjectExpense_Amount", "[Amount] > 0");
 
-            // A supply has a supplier, an item, a unit, a quantity and a price, and its amount is their product.
-            // An expense has a category and a description, and none of the supply columns.
+            // A supply has a supplier (or, paid from custody, a named payee), an item, a unit, a quantity and a price, and
+            // its amount is their product. An expense has a category and a description, and none of the supply columns.
             // Every column is tested with IS (NOT) NULL first: a CHECK passes when its result is unknown.
             table.HasCheckConstraint(
                 "CK_ProjectExpense_KindColumns",
-                "([Kind] = 'Supply' AND [SupplierId] IS NOT NULL AND [ItemName] IS NOT NULL AND [Unit] IS NOT NULL "
+                "([Kind] = 'Supply' AND ([SupplierId] IS NOT NULL OR ([Channel] = 'Custody' AND [PayeeName] IS NOT NULL)) "
+                + "AND [ItemName] IS NOT NULL AND [Unit] IS NOT NULL "
                 + "AND [Quantity] IS NOT NULL AND [UnitPrice] IS NOT NULL AND [Quantity] > 0 AND [UnitPrice] > 0 "
                 + "AND [Category] IS NULL AND ABS([Amount] - ROUND([Quantity] * [UnitPrice], 2)) < 0.01) "
                 + "OR ([Kind] = 'Expense' AND [Category] IS NOT NULL AND [Description] IS NOT NULL AND [ItemName] IS NULL "
@@ -86,6 +88,11 @@ internal sealed class ProjectExpenseConfiguration : IEntityTypeConfiguration<Pro
             .HasFilter("[IdempotencyKey] IS NOT NULL")
             .HasDatabaseName(IdempotencyIndex);
         builder.HasIndex(expense => expense.PriceItemId, "IX_ProjectExpense_PriceItemId");
+        builder.HasIndex(expense => expense.SupplyAgreementId, "IX_ProjectExpense_SupplyAgreementId");
+        builder.Property(expense => expense.PayeeName).HasMaxLength(PayeeNameMaxLength).IsUnicode();
+
+        // A custody record is the custody of its recorder on the project: "what has this person spent here".
+        builder.HasIndex(expense => new { expense.ProjectId, expense.CreatedBy, expense.Channel }, "IX_ProjectExpense_Project_Recorder_Channel");
 
         // The lists of a project: by date, and by status for the review queue.
         builder.HasIndex(expense => new { expense.ProjectId, expense.ExpenseDate }, "IX_ProjectExpense_Project_Date");
@@ -115,6 +122,11 @@ internal sealed class ProjectExpenseConfiguration : IEntityTypeConfiguration<Pro
         builder.HasOne(expense => expense.CatalogItem)
             .WithMany()
             .HasForeignKey(expense => expense.CatalogItemId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.HasOne(expense => expense.SupplyAgreement)
+            .WithMany()
+            .HasForeignKey(expense => expense.SupplyAgreementId)
             .OnDelete(DeleteBehavior.NoAction);
 
         builder.HasOne(expense => expense.PriceItem)

@@ -65,7 +65,8 @@ internal sealed record EquipmentCostView(
     FleetPerson Recorder,
     DateTime? UpdatedAt,
     int? UpdatedBy,
-    string RowVersion)
+    string RowVersion,
+    int? ProjectItemId = null)
 {
     public static EquipmentCostView From(
         EquipmentCostRow row, IReadOnlyDictionary<int, UserSummary> people, IReadOnlyDictionary<int, SupplierRef> suppliers)
@@ -123,7 +124,8 @@ internal sealed record EquipmentCostView(
             FleetPerson.From(row.CreatedBy, people),
             row.UpdatedAt,
             row.UpdatedBy,
-            RowVersions.Format(row.RowVersion));
+            RowVersions.Format(row.RowVersion),
+            row.ProjectItemId);
     }
 
     /// <summary>Builds the views of a page with one name lookup for every person and one for every supplier on it.</summary>

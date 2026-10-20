@@ -23,7 +23,8 @@ namespace AlMotaheda.Modules.Projects.Features.Items;
 /// </remarks>
 internal static class ListProjectItemOptions
 {
-    internal sealed record ItemOption(int Id, string NameAr, string NameEn, string Category, string Unit, string Status);
+    /// <param name="ParentItemId">The main item of a sub-item; <c>null</c> for a main item. A picker shows "main › sub".</param>
+    internal sealed record ItemOption(int Id, string NameAr, string NameEn, string Category, string Unit, string Status, int? ParentItemId);
 
     internal sealed record Response(IReadOnlyList<ItemOption> Items);
 
@@ -66,11 +67,18 @@ internal static class ListProjectItemOptions
 
         var rows = await query
             .OrderBy(item => item.NameEn)
-            .Select(item => new { item.Id, item.NameAr, item.NameEn, item.Category, item.Unit, item.Status })
+            .Select(item => new { item.Id, item.NameAr, item.NameEn, item.Category, item.Unit, item.Status, item.ParentItemId })
             .ToListAsync(cancellationToken);
 
-        return TypedResults.Ok(new Response(rows
-            .Select(item => new ItemOption(item.Id, item.NameAr, item.NameEn, item.Category, item.Unit, item.Status.ToString()))
+        // Each main item followed by its sub-items, like the items table.
+        var byParent = rows.Where(item => item.ParentItemId is not null).ToLookup(item => item.ParentItemId!.Value);
+        var listed = rows.Select(item => item.Id).ToHashSet();
+        var ordered = rows.Where(item => item.ParentItemId is null)
+            .SelectMany(main => new[] { main }.Concat(byParent[main.Id]))
+            .Concat(rows.Where(item => item.ParentItemId is { } parent && !listed.Contains(parent)));
+
+        return TypedResults.Ok(new Response(ordered
+            .Select(item => new ItemOption(item.Id, item.NameAr, item.NameEn, item.Category, item.Unit, item.Status.ToString(), item.ParentItemId))
             .ToList()));
     }
 }

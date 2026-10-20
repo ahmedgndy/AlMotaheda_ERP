@@ -31,6 +31,9 @@ public sealed class ProcurementModule : IModule
 
         services.AddCompanyClock();
         services.AddScoped<IProjectCostSource, CommittedCostSource>();
+        services.AddScoped<Contracts.ISupplierOrders, Integration.SupplierOrders>();
+        services.AddScoped<Integration.InvoicePriceChecks>();
+        services.AddScoped<IPriceExceptionSource, Integration.InvoicePriceExceptionSource>();
         ProcurementFeatures.AddServices(services);
 
         services.AddHostedService<ProcurementStartup>();

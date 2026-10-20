@@ -1,5 +1,6 @@
 using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Projects.Data;
+using AlMotaheda.Modules.Projects.Features.Expenses;
 using AlMotaheda.Modules.Projects.Features.Items;
 
 namespace AlMotaheda.Modules.Projects.Tests.Unit.CostManagement;
@@ -64,6 +65,62 @@ public sealed class ItemTreeTests
         var masonry = tree.WithSubItems(Items.Single(item => item.Id == Masonry), ledger)!;
         Assert.Equal(ledger.Totals.TotalCost, concrete.TotalCost + masonry.TotalCost);
     }
+
+    [Fact]
+    public void Machinery_on_a_sub_item_costs_it_once_rolls_up_to_its_main_item_and_a_site_cost_stays_out_of_the_items()
+    {
+        // Cement 2,800 on the sub-item; machinery: a crane rental 52,500 on the steel sub-item (credit, unpaid), fuel
+        // 2,783.13 on the main item (custody, paid), and a site repair 1,500 on no item (custody, paid).
+        var supplier = new[] { new SupplierLedgerRow(11, Cement, SupplierId: 7, Amount: 2_800m, Paid: 1_000m) };
+        var equipment = new[]
+        {
+            new ItemCostTotal(Steel, 52_500m, 0m, 1, 1),
+            new ItemCostTotal(Concrete, 2_783.13m, 2_783.13m, 1, 1),
+            new ItemCostTotal(null, 1_500m, 1_500m, 1, 1),
+        };
+
+        var ledger = ItemsLedger.Compute(supplier, [], [], equipment);
+        var tree = ItemTree.Build(Items);
+
+        var steel = ledger.Of(Steel);
+        Assert.Equal(52_500m, steel.EquipmentCost);
+        Assert.Equal(52_500m, steel.TotalCost);
+        Assert.Equal(0m, steel.Paid);
+        Assert.Equal(52_500m, steel.Outstanding);
+        Assert.Equal(1, steel.EquipmentRecordCount);
+        Assert.Equal(1, steel.LinkedRecordCount);
+
+        var concrete = tree.WithSubItems(Items.Single(item => item.Id == Concrete), ledger)!;
+        Assert.Equal(2_783.13m, ledger.Of(Concrete).TotalCost);
+        Assert.Equal(55_283.13m, concrete.EquipmentCost);
+        Assert.Equal(58_083.13m, concrete.TotalCost);
+        Assert.Equal(3_783.13m, concrete.Paid);
+        Assert.Equal(2, concrete.EquipmentCount);
+
+        // Each cost once: the items hold the linked ones, the site repair is neither an item cost nor "not linked yet".
+        Assert.Equal(55_283.13m, ledger.Totals.EquipmentCost);
+        Assert.Equal(58_083.13m, ledger.Totals.TotalCost);
+        Assert.Equal(0m, ledger.Unallocated.TotalCost);
+        Assert.Equal(1_500m, ledger.SiteEquipmentCost);
+    }
+
+    [Fact]
+    public void The_reconciliation_counts_an_equipment_cost_once_whether_or_not_it_is_on_a_work_item()
+    {
+        // A lab test paid on site with no supplier and no item: an other cost of the project.
+        ExpenseSettlementRow[] expenses = [new(1, ExpenseKind.Expense, ExpenseStatus.Approved, PaymentChannel.Custody, ExpenseCategory.Lab, null, null, 700m, 0m)];
+        ItemCostTotal[] onTheSite = [new(null, 52_500m, 0m, 1, 1), new(null, 1_500m, 1_500m, 1, 1)];
+        ItemCostTotal[] rentalOnSteel = [new(Steel, 52_500m, 0m, 1, 1), new(null, 1_500m, 1_500m, 1, 1)];
+
+        var before = ListProjectItems.Reconcile(Data(expenses, onTheSite));
+        var after = ListProjectItems.Reconcile(Data(expenses, rentalOnSteel));
+
+        Assert.Equal(new ItemsReconciliation(0m, 0m, 54_700m, 54_700m), before);
+        Assert.Equal(new ItemsReconciliation(52_500m, 0m, 2_200m, 54_700m), after);
+    }
+
+    private static ItemsLedgerData Data(IReadOnlyList<ExpenseSettlementRow> expenses, IReadOnlyList<ItemCostTotal> equipment) =>
+        new(Items, expenses, ItemsLedger.Compute(SupplierLedgerRow.From(expenses), [], [], equipment));
 
     private static ItemHeader Header(int id, string nameEn, int? parent) => new(
         id, $"بند {nameEn}", nameEn, WorkTypes.Concrete, MeasurementUnits.All[0], null, null, ProjectItemStatus.Active, null, null,

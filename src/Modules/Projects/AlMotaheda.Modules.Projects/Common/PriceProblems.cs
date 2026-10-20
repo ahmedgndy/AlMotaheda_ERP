@@ -38,3 +38,39 @@ internal static class PriceProblems
     public static ProblemHttpResult ApprovedByExecutive() =>
         ApiProblem.Create(StatusCodes.Status403Forbidden, PriceNeedsExecutive, "This purchase is above its reference price range: only an Executive can approve it.");
 }
+
+/// <summary>Error responses of Price Control: categories, units and price exceptions.</summary>
+internal static class PriceControlProblems
+{
+    public const string CategoryExists = "price_category_exists";
+    public const string UnitExists = "price_unit_exists";
+    public const string ExceptionPending = "price_exception_pending";
+    public const string ExceptionRejected = "price_exception_rejected";
+    public const string ExceptionOpen = "price_exception_open";
+
+    public static ProblemHttpResult CategoryNotFound() => WorkspaceProblems.NotFound("price category");
+
+    public static ProblemHttpResult UnitNotFound() => WorkspaceProblems.NotFound("price unit");
+
+    public static ProblemHttpResult ExceptionNotFound() => WorkspaceProblems.NotFound("price exception");
+
+    public static ProblemHttpResult CategoryCodeTaken() =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, CategoryExists, "A category with this code or name already exists.");
+
+    public static ProblemHttpResult UnitCodeTaken() =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, UnitExists, "A unit with this code or name already exists.");
+
+    /// <summary>The record's price is above its range and the Executive has not decided the case.</summary>
+    public static ProblemHttpResult ExceptionIsPending(int exceptionId) =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, ExceptionPending,
+            $"This price is above the reference range: price exception #{exceptionId} waits for the Executive's decision in Price Control.");
+
+    /// <summary>The Executive rejected the price: the record must be corrected (or returned) before it goes on.</summary>
+    public static ProblemHttpResult ExceptionWasRejected(int exceptionId) =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, ExceptionRejected,
+            $"The Executive rejected this price (price exception #{exceptionId}). Correct the price or return the record to its recorder.");
+
+    /// <summary>A case already waits for a decision on this transaction.</summary>
+    public static ProblemHttpResult AlreadyOpen() =>
+        ApiProblem.Create(StatusCodes.Status409Conflict, ExceptionOpen, "A price exception is already open for this transaction.");
+}

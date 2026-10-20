@@ -34,6 +34,12 @@ internal sealed partial class ProcurementLog(ILogger<ProcurementLog> logger)
     [LoggerMessage(EventId = 10051, Level = LogLevel.Information, Message = "User {ActorId} recorded supplier invoice {InvoiceId} on purchase order {OrderId}: {Status}")]
     public partial void InvoiceRecorded(int actorId, int orderId, int invoiceId, string status);
 
+    [LoggerMessage(EventId = 10053, Level = LogLevel.Warning, Message = "Supplier invoice {InvoiceId} held for price control: {LineCount} line(s) above their reference range")]
+    public partial void InvoiceHeldForPrice(int invoiceId, int lineCount);
+
+    [LoggerMessage(EventId = 10054, Level = LogLevel.Information, Message = "Price exception {ExceptionId} decided ({Status}) by user {ActorId}: supplier invoice {InvoiceId} is now {InvoiceStatus}")]
+    public partial void InvoicePriceDecided(int actorId, int exceptionId, string status, int invoiceId, string invoiceStatus);
+
     [LoggerMessage(EventId = 10052, Level = LogLevel.Information, Message = "User {ActorId} resolved supplier invoice {InvoiceId}: {Resolution}")]
     public partial void InvoiceResolved(int actorId, int invoiceId, string resolution);
 }

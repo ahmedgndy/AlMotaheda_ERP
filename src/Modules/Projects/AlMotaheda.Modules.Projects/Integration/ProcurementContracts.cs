@@ -7,6 +7,7 @@ using AlMotaheda.Modules.Projects.Features.Catalog;
 using AlMotaheda.Modules.Projects.Features.Expenses;
 using AlMotaheda.Modules.Projects.Security;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace AlMotaheda.Modules.Projects.Integration;
 
@@ -54,6 +55,7 @@ internal sealed class ProjectCatalogContract(ProjectsDbContext db) : IProjectCat
 internal sealed class InvoicePostingContract(
     DbContextOptions<ProjectsDbContext> options,
     ProjectsDbContext db,
+    IOptions<ProjectsOptions> settings,
     CompanyClock clock,
     ProjectsLog log) : IInvoicePosting
 {
@@ -94,10 +96,38 @@ internal sealed class InvoicePostingContract(
             throw new InvoiceNotPostableException("This invoice was already posted.");
         }
 
+        // Price Control, whichever module asks: a line whose case is pending is never posted; one whose price the
+        // Executive rejected is posted only at a price inside the range (a credit note to the order price), never at
+        // the rejected one.
+        var cases = await Features.PriceControl.PriceExceptionCases.NewestAsync(joined, PriceExceptionSources.SupplierInvoiceLine, lineIds, cancellationToken);
+        var gated = Features.Prices.PriceGate.Gates(settings.Value.PriceCheckPolicy);
+
         var now = clock.UtcNow;
         var created = new List<(int LineId, ProjectExpense Expense)>();
         foreach (var line in invoice.Lines)
         {
+            // The comparison with the price list, copied onto the record like a supply recorded by hand.
+            Features.Expenses.PriceReference? price = null;
+            if (line.PriceItemId is { } priceItemId)
+            {
+                var range = await Features.Prices.PriceRanges.ApplicableAsync(joined, priceItemId, invoice.SupplierId, invoice.InvoiceDate, cancellationToken);
+                var comparison = Features.Prices.PriceCheck.Compare(line.UnitPrice, line.Quantity, range?.MinPrice, range?.MaxPrice);
+                price = new Features.Expenses.PriceReference(priceItemId, true, range, comparison, line.Unit, line.UnitPrice, line.Quantity);
+            }
+
+            if (gated && cases.TryGetValue(line.InvoiceLineId, out var exception))
+            {
+                if (exception.Status == PriceExceptionStatus.Pending)
+                {
+                    throw new InvoiceNotPostableException($"Invoice line {line.InvoiceLineId} waits for the Executive's decision on price exception #{exception.Id}.");
+                }
+
+                if (exception.Status == PriceExceptionStatus.Rejected && (price is null || price.Comparison.IsAboveRange))
+                {
+                    throw new InvoiceNotPostableException($"The Executive rejected the price of invoice line {line.InvoiceLineId} (price exception #{exception.Id}); it is posted only at a price inside the reference range.");
+                }
+            }
+
             var expense = new ProjectExpense
             {
                 ProjectId = invoice.ProjectId,
@@ -124,6 +154,11 @@ internal sealed class InvoicePostingContract(
                 Notes = invoice.Reference,
                 CreatedAt = now,
                 CreatedBy = invoice.ApprovedBy,
+                PriceItemId = price?.PriceItemId,
+                PriceRangeId = price?.Range?.RangeId,
+                ReferenceMinPrice = price?.Range?.MinPrice,
+                ReferenceMaxPrice = price?.Range?.MaxPrice,
+                PriceCheck = price?.Comparison.Result,
             };
             // The Accountant's invoice review is the approval (3-way match passed or resolved).
             expense.Review(ExpenseStatus.Approved, invoice.ApprovedBy, now, $"Posted from {invoice.Reference}");

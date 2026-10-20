@@ -103,6 +103,14 @@ Details: [deploy/README.md](deploy/README.md).
 - Apply migrations with the reviewed scripts or migration bundles before starting a new version: Platform first,
   then Access, Projects, Workforce, Subcontractors, Fleet, Archive, HR, Procurement, Reports and Finance. Without the
   Platform tables every save fails.
+- `Projects__PriceCheckPolicy` decides what a purchase, expense or supplier invoice line above its reference price
+  range does: `ExecutiveApproval` (shipped in `appsettings.json`: saved as entered with a price exception for the
+  Executive; nobody approves or pays it, and a supplier invoice stays on price hold, until the Executive decides),
+  `Warn` (the code's default when the key is missing: saved with a justification and a case for the inbox and
+  reports, nothing gated) or `Block` (refused). See `docs/project-workspace/10-price-control.md`.
+- `Projects__CustodyBalanceCheck` decides what a payment out of a cash custody (a purchase, an expense or a weekly
+  payroll) does when it is more than the custody holds: `Warn` (default: saved, the balance goes negative until it is
+  funded) or `Block` (refused). See `docs/project-workspace/09-project-financial-workspace.md`.
 - `Projects__TimeZone` is the company time zone (default `Africa/Cairo`). The server needs time zone data; on a
   minimal container image without it, install `tzdata` or set `UTC`.
 - Turn on `READ_COMMITTED_SNAPSHOT` for the database.
@@ -149,6 +157,9 @@ History: Settings → Backup history (`GET /api/backups`).
 - [Access module](src/Modules/Access/AlMotaheda.Modules.Access/README.md): sign-in, users, roles and permissions
 - [Projects module](src/Modules/Projects/AlMotaheda.Modules.Projects/README.md): projects, teams and project-level access
 - [Project Workspace design](docs/project-workspace/00-overview.md) and its [decisions and open questions](docs/project-workspace/07-decisions.md)
+- [Project cost management](docs/project-workspace/08-cost-management.md): main items and sub-items, the work-item cost breakdown, price management and price checks, cost alerts
+- [Project financial workspace](docs/project-workspace/09-project-financial-workspace.md): subcontractor engagements per work item and variations, supply agreements and supplier accounts, cash custody, weekly labor settlements, the financial formulas
+- [Central Price Control](docs/project-workspace/10-price-control.md): configurable categories and units, price rules, the price exception a record above its range opens, the Executive's three decisions, the approval and payment gate on every path (site records, supplier payments, Procurement invoices), reports, offline rules
 - [Workforce module](src/Modules/Workforce/AlMotaheda.Modules.Workforce/README.md): workers, daily labor, allocation to items, worker payments
 - [Subcontractors module](src/Modules/Subcontractors/AlMotaheda.Modules.Subcontractors/README.md): companies, contracts, measured work, manpower, payments
 - [Fleet module](src/Modules/Fleet/AlMotaheda.Modules.Fleet/README.md): equipment, project assignment, equipment costs

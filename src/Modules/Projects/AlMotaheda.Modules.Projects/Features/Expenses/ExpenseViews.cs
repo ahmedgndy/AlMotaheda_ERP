@@ -85,7 +85,9 @@ internal sealed record ExpenseView(
     DateTime? UpdatedAt,
     int? UpdatedBy,
     string RowVersion,
-    PriceCheckView? PriceCheck)
+    PriceCheckView? PriceCheck,
+    int? SupplyAgreementId = null,
+    string? PayeeName = null)
 {
     public static ExpenseView From(ExpenseRow row, IReadOnlyDictionary<int, UserSummary> people, bool seesMoney)
     {
@@ -138,7 +140,9 @@ internal sealed record ExpenseView(
             row.UpdatedAt,
             row.UpdatedBy,
             RowVersions.Format(row.RowVersion),
-            PriceCheckView.From(row));
+            PriceCheckView.From(row),
+            row.SupplyAgreementId,
+            row.PayeeName);
     }
 
     /// <summary>Builds the views of a page with one name lookup for every recorder and reviewer on it.</summary>
@@ -163,5 +167,16 @@ internal sealed record ExpenseView(
     {
         var row = await ExpenseQueries.One(db, projectId, expenseId).SingleOrDefaultAsync(cancellationToken);
         return row is null ? null : (await FromAsync([row], users, seesMoney, cancellationToken))[0];
+    }
+}
+
+/// <summary>One line naming a record, for the price exception inbox.</summary>
+internal static class ExpenseLabel
+{
+    public static string Of(ProjectExpense expense)
+    {
+        var name = expense.Kind == ExpenseKind.Supply ? expense.ItemName : expense.Description;
+        var reference = expense.InvoiceNo is null ? null : $"INV {expense.InvoiceNo}";
+        return string.Join(" · ", new[] { name, reference }.Where(part => !string.IsNullOrWhiteSpace(part)));
     }
 }

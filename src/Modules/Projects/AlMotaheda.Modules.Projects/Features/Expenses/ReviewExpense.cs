@@ -134,13 +134,29 @@ internal static class ExpenseReview
                 return WorkspaceProblems.WrongStatus($"Only a recorded record can be reviewed. This one is {expense.Status}.");
         }
 
-        // A purchase above its reference range, under the ExecutiveApproval policy: only an Executive approves it.
-        // Returning or rejecting it stays with any reviewer. The comparison is the one copied at recording.
-        if (target == ExpenseStatus.Approved && !caller.IsExecutive
-            && Prices.PriceCheck.NeedsExecutive(expense.PriceCheck, options.Value.PriceCheckPolicy))
+        // A purchase above its reference range waits for the Executive's decision in Price Control (policy
+        // ExecutiveApproval): approving it is refused while the case is pending or rejected. Returning or rejecting
+        // the record stays with any reviewer. The comparison is the one copied at recording.
+        if (target == ExpenseStatus.Approved)
         {
-            log.ActionRefused(caller.UserId, "ReviewApproved", "price above range needs an Executive");
-            return PriceProblems.ApprovedByExecutive();
+            var exception = await db.PriceExceptions.AsNoTracking()
+                .Where(candidate => candidate.SourceType == PriceExceptionSources.ProjectExpense && candidate.SourceId == expense.Id)
+                .OrderByDescending(candidate => candidate.Id)
+                .Select(candidate => new { candidate.Id, candidate.Status })
+                .FirstOrDefaultAsync(cancellationToken);
+            var legacyAboveRange = exception is null && expense.PriceCheck == PriceCheckResult.AboveRange;
+            switch (Prices.PriceGate.ApprovalRefusal(exception?.Status, legacyAboveRange, options.Value.PriceCheckPolicy, caller.IsExecutive))
+            {
+                case Prices.PriceGateRefusal.Pending:
+                    log.PriceGateRefused(caller.UserId, PriceExceptionSources.ProjectExpense, expense.Id, exception!.Id, exception.Status.ToString());
+                    return PriceControlProblems.ExceptionIsPending(exception.Id);
+                case Prices.PriceGateRefusal.Rejected:
+                    log.PriceGateRefused(caller.UserId, PriceExceptionSources.ProjectExpense, expense.Id, exception!.Id, exception.Status.ToString());
+                    return PriceControlProblems.ExceptionWasRejected(exception.Id);
+                case Prices.PriceGateRefusal.NeedsExecutive:
+                    log.ActionRefused(caller.UserId, "ReviewApproved", "price above range needs an Executive");
+                    return PriceProblems.ApprovedByExecutive();
+            }
         }
 
         expense.Review(target, caller.UserId, clock.UtcNow, note);

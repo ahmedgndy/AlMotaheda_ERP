@@ -23,7 +23,8 @@ internal static class CreateRequisition
 {
     public const int MaxLines = 50;
 
-    internal sealed record LineRequest(int? CatalogItemId, int? ProjectItemId, string? Description, string? Unit, decimal? Quantity);
+    /// <param name="PriceItemId">The Price Control item the line is bought as (optional): orders and invoices are compared with its range.</param>
+    internal sealed record LineRequest(int? CatalogItemId, int? ProjectItemId, string? Description, string? Unit, decimal? Quantity, int? PriceItemId = null);
 
     internal sealed record Request(int? ProjectId, string? NeededBy, string? Notes, IReadOnlyList<LineRequest>? Lines);
 
@@ -40,6 +41,7 @@ internal static class CreateRequisition
         IProjectAccess access,
         IProjectCatalog catalog,
         IProjectItems projectItems,
+        IPriceControl priceControl,
         ProcurementViews views,
         CompanyClock clock,
         ProcurementLog log,
@@ -97,6 +99,7 @@ internal static class CreateRequisition
         var today = clock.Today;
         var catalogItems = await catalog.FindAsync(project.ProjectId, lines.Where(line => line.CatalogItemId is not null).Select(line => line.CatalogItemId!.Value).Distinct().ToList(), today, cancellationToken);
         var items = await projectItems.FindAsync(project.ProjectId, lines.Where(line => line.ProjectItemId is not null).Select(line => line.ProjectItemId!.Value).Distinct().ToList(), cancellationToken);
+        var priceItems = await priceControl.FindItemsAsync(lines.Where(line => line.PriceItemId is not null).Select(line => line.PriceItemId!.Value).Distinct().ToList(), cancellationToken);
 
         var requisition = new Requisition { ProjectId = project.ProjectId, NeededBy = neededBy, Notes = notes, CreatedAt = clock.UtcNow, CreatedBy = caller.UserId };
         for (var index = 0; index < lines.Count; index++)
@@ -114,12 +117,26 @@ internal static class CreateRequisition
             }
 
             MeasurementUnits.TryParse(line.Unit, out var unit);
+            var lineUnit = item?.Unit ?? unit;
+
+            // A Price Control item must be active and priced per the line's unit, or the invoice couldn't be compared.
+            PriceItemRef? priced = null;
+            if (line.PriceItemId is { } priceItemId && (!priceItems.TryGetValue(priceItemId, out priced) || !priced.IsActive))
+            {
+                errors.Add($"lines[{index}].priceItemId", "The price list item isn't an active item of Price Control.");
+            }
+            else if (priced is not null && !string.IsNullOrEmpty(lineUnit) && !string.Equals(priced.Unit, lineUnit, StringComparison.Ordinal))
+            {
+                errors.Add($"lines[{index}].priceItemId", $"The price list item is priced per {priced.Unit}: order it in {priced.Unit}.");
+            }
+
             requisition.Lines.Add(new RequisitionLine
             {
                 CatalogItemId = line.CatalogItemId,
+                PriceItemId = line.PriceItemId,
                 ProjectItemId = line.ProjectItemId,
-                Description = Input.Clean(line.Description) ?? item?.NameEn ?? "",
-                Unit = item?.Unit ?? unit,
+                Description = Input.Clean(line.Description) ?? item?.NameEn ?? priced?.NameEn ?? "",
+                Unit = string.IsNullOrEmpty(lineUnit) ? priced?.Unit ?? "" : lineUnit,
                 Quantity = line.Quantity!.Value,
                 EstimatedUnitPrice = item?.CurrentPrice,
             });
