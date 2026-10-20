@@ -95,3 +95,42 @@ internal sealed class SupplierDirectoryContract(ProjectsDbContext db) : ISupplie
         return suppliers.ToDictionary(supplier => supplier.Id);
     }
 }
+
+/// <summary>The Projects module's answer to <see cref="IProjectDirectory"/>: names and managers, never a permission.</summary>
+internal sealed class ProjectDirectoryContract(ProjectsDbContext db) : IProjectDirectory
+{
+    public async Task<IReadOnlyDictionary<int, ProjectName>> FindAsync(IReadOnlyCollection<int> projectIds, CancellationToken cancellationToken)
+    {
+        if (projectIds.Count == 0)
+        {
+            return new Dictionary<int, ProjectName>();
+        }
+
+        var ids = projectIds.Distinct().ToArray();
+        return await db.Projects.AsNoTracking()
+            .Where(project => ids.Contains(project.Id))
+            .Select(project => new ProjectName(project.Id, project.Code, project.NameAr, project.NameEn))
+            .ToDictionaryAsync(project => project.Id, cancellationToken);
+    }
+
+    public async Task<IReadOnlyDictionary<int, ProjectItemRef>> ItemsAsync(IReadOnlyCollection<int> itemIds, CancellationToken cancellationToken)
+    {
+        if (itemIds.Count == 0)
+        {
+            return new Dictionary<int, ProjectItemRef>();
+        }
+
+        var ids = itemIds.Distinct().ToArray();
+        return await db.ProjectItems.AsNoTracking()
+            .Where(item => ids.Contains(item.Id))
+            .Select(item => new ProjectItemRef(item.Id, item.ProjectId, item.NameAr, item.NameEn, item.Status == ProjectItemStatus.Active, item.ParentItemId))
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<int>> ManagerIdsAsync(int projectId, CancellationToken cancellationToken) =>
+        await db.ProjectMembers.AsNoTracking()
+            .Where(member => member.ProjectId == projectId && member.EndDate == null && member.Responsibility == MemberResponsibility.ProjectManager)
+            .Select(member => member.UserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+}

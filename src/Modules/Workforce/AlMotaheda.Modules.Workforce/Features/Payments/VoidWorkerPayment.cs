@@ -88,6 +88,12 @@ internal static class VoidWorkerPayment
             return WorkforceProblems.AlreadyVoided();
         }
 
+        // Paid in cash by a weekly settlement (no Finance request behind it): only reversing the settlement undoes it.
+        if (payment.SettlementId is not null)
+        {
+            return WorkforceProblems.PaidBySettlement();
+        }
+
         payment.VoidedAt = clock.UtcNow;
         payment.VoidedBy = caller.UserId;
         payment.VoidReason = reason;

@@ -7,8 +7,8 @@ using Microsoft.EntityFrameworkCore;
 namespace AlMotaheda.Modules.Subcontractors.Integration;
 
 /// <summary>
-/// Subcontractors' part of the work inbox: measured work and manpower sheets recorded for review (subcontractors
-/// Approve, never the recorder). Work has no "returned" state; rejected work is final. Amounts only with
+/// Subcontractors' part of the work inbox: measured work, manpower sheets and contract value changes recorded for
+/// review (subcontractors Approve, never the recorder). Work has no "returned" state; rejected work is final. Amounts only with
 /// subcontractors See money. The parent id is the subcontract, whose page lists the work.
 /// </summary>
 internal sealed class SubcontractorsInboxSource(SubcontractorsDbContext db) : IWorkInboxSource
@@ -46,8 +46,24 @@ internal sealed class SubcontractorsInboxSource(SubcontractorsDbContext db) : IW
             })
             .ToListAsync(cancellationToken);
 
+        // Value changes asked by someone else (a decision is never made by whoever asked).
+        var variations = await db.ContractVariations.AsNoTracking()
+            .Where(variation => ids.Contains(variation.ProjectId) && variation.Status == VariationStatus.Pending && variation.RequestedBy != me)
+            .OrderBy(variation => variation.RequestedAt)
+            .Take(query.Limit)
+            .Select(variation => new
+            {
+                variation.Id, variation.ProjectId, variation.ContractId, variation.RequestedAt, variation.RequestedBy, variation.Amount, variation.Reason,
+                variation.Contract.Subcontractor.NameAr, variation.Contract.Subcontractor.NameEn,
+            })
+            .ToListAsync(cancellationToken);
+
         return
         [
+            .. variations.Select(variation => new WorkInboxItem(
+                WorkInboxReasons.Review, WorkInboxRecordTypes.ContractVariation, variation.ProjectId, variation.Id, variation.ContractId,
+                DateOnly.FromDateTime(variation.RequestedAt), variation.RequestedAt, $"{Name(variation.NameAr, variation.NameEn)} · {variation.Reason}",
+                seesMoney ? variation.Amount : null, variation.RequestedBy, null)),
             .. measurements.Select(work => new WorkInboxItem(
                 WorkInboxReasons.Review, WorkInboxRecordTypes.Measurement, work.ProjectId, work.Id, work.ContractId, work.MeasuredOn, work.CreatedAt,
                 $"{Name(work.NameAr, work.NameEn)} · {work.Line}", seesMoney ? work.Amount : null, work.CreatedBy, null)),

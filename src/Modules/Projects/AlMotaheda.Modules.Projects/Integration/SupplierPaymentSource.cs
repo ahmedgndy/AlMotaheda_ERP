@@ -1,6 +1,7 @@
 using AlMotaheda.BuildingBlocks.Time;
 using AlMotaheda.Modules.Finance.Contracts;
 using AlMotaheda.Modules.Projects.Common;
+using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Projects.Data;
 using AlMotaheda.Modules.Projects.Features.Expenses;
 using AlMotaheda.Modules.Projects.Security;
@@ -15,6 +16,7 @@ namespace AlMotaheda.Modules.Projects.Integration;
 internal sealed class SupplierPaymentSource(
     DbContextOptions<ProjectsDbContext> options,
     ProjectsDbContext db,
+    Microsoft.Extensions.Options.IOptions<ProjectsOptions> settings,
     CompanyClock clock,
     ProjectsLog log) : IPaymentSource
 {
@@ -33,6 +35,13 @@ internal sealed class SupplierPaymentSource(
 
         var expenseIds = settlement.Lines.Select(line => line.RecordId).ToArray();
         var targets = await ExpenseQueries.SettlementRows(joined, projectId, expenseIds).ToListAsync(cancellationToken);
+
+        // Price Control: a record whose price case is pending or rejected is not paid, even from Finance's own screens.
+        var cases = await Features.PriceControl.PriceExceptionCases.NewestAsync(joined, PriceExceptionSources.ProjectExpense, expenseIds, cancellationToken);
+        if (cases.Values.FirstOrDefault(exception => Features.Prices.PriceGate.PaymentBlocked(exception.Status, settings.Value.PriceCheckPolicy)) is { } blocked)
+        {
+            throw new PaymentNotPayableException($"Record {blocked.SourceId} waits for the Executive's decision on price exception #{blocked.Id} ({blocked.Status}).");
+        }
 
         foreach (var line in settlement.Lines)
         {

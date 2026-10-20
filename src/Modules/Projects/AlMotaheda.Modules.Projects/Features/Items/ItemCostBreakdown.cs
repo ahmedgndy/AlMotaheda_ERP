@@ -14,13 +14,19 @@ internal static class BreakdownTypes
     /// <summary>A site expense linked to the item (Projects).</summary>
     public const string SiteExpense = "SiteExpense";
 
+    /// <summary>Materials bought in cash from custody with no registered supplier (Projects).</summary>
+    public const string DirectPurchase = "DirectPurchase";
+
     /// <summary>A worker's approved day, or its part on the item (Workforce).</summary>
     public const string Labor = "Labor";
 
     /// <summary>Approved measured work or a manpower sheet of a subcontract (Subcontractors).</summary>
     public const string Subcontract = "Subcontract";
 
-    public static IReadOnlyList<string> All { get; } = [Supply, SiteExpense, Labor, Subcontract];
+    /// <summary>An approved cost of a machine on the item: rental, fuel, maintenance, repair, transport, other (Fleet).</summary>
+    public const string Equipment = "Equipment";
+
+    public static IReadOnlyList<string> All { get; } = [Supply, DirectPurchase, SiteExpense, Labor, Subcontract, Equipment];
 
     /// <summary>Any letter case is accepted; the canonical name is returned.</summary>
     public static bool TryParse(string? value, out string type)
@@ -38,7 +44,8 @@ internal sealed record BreakdownFilter(
     int? SupplierId,
     int? WorkerId,
     int? SubcontractorId,
-    string? Type)
+    string? Type,
+    int? EquipmentId = null)
 {
     public static BreakdownFilter None { get; } = new(null, null, null, null, null, null, null);
 
@@ -49,6 +56,7 @@ internal sealed record BreakdownFilter(
         && (SupplierId is not { } supplier || (row.PartyType == BreakdownParties.Supplier && row.PartyId == supplier))
         && (WorkerId is not { } worker || (row.PartyType == BreakdownParties.Worker && row.PartyId == worker))
         && (SubcontractorId is not { } sub || (row.PartyType == BreakdownParties.Subcontractor && row.PartyId == sub))
+        && (EquipmentId is not { } machine || (row.PartyType == BreakdownParties.Equipment && row.PartyId == machine))
         && (Type is not { } type || row.Type == type);
 }
 
@@ -57,6 +65,10 @@ internal static class BreakdownParties
     public const string Supplier = "Supplier";
     public const string Worker = "Worker";
     public const string Subcontractor = "Subcontractor";
+
+    /// <summary>A machine of the register (Fleet): the party of an equipment cost.</summary>
+    public const string Equipment = "Equipment";
+
     public const string None = "None";
 }
 
@@ -64,11 +76,14 @@ internal static class BreakdownParties
 /// One recognized (approved) cost record on the item or one of its sub-items, whatever module owns it. Amount, paid
 /// and outstanding are the record's own figures on this item: nothing here is a copy of another row.
 /// </summary>
-/// <param name="RecordId">The source record: an expense, a labor line, a measurement or a manpower sheet.</param>
-/// <param name="RecordKind"><c>Measurement</c> or <c>Manpower</c> for subcontract work; <c>null</c> otherwise.</param>
+/// <param name="RecordId">The source record: an expense, a labor line, a measurement, a manpower sheet or an equipment cost.</param>
+/// <param name="RecordKind">
+/// <c>Measurement</c> or <c>Manpower</c> for subcontract work; the cost type (<c>Rental</c>, <c>Fuel</c>, …) for
+/// equipment; <c>null</c> otherwise.
+/// </param>
 /// <param name="SheetId">The labor sheet of a labor line.</param>
-/// <param name="Quantity">Supply quantity, labor days on this item (days × portion), or subcontract quantity.</param>
-/// <param name="Channel">Supply and site expense only: <c>Custody</c> (paid on site) or <c>Credit</c> (an invoice).</param>
+/// <param name="Quantity">Supply quantity, labor days on this item (days × portion), subcontract quantity, or equipment litres, days, months or hours.</param>
+/// <param name="Channel">Supply, site expense and equipment only: <c>Custody</c> (paid on site) or <c>Credit</c> (an invoice).</param>
 internal sealed record BreakdownTransaction(
     string Type,
     int RecordId,
@@ -119,6 +134,12 @@ internal sealed record BreakdownWorker(int WorkerId, string? NameAr, string? Nam
 internal sealed record BreakdownSubcontractor(
     int SubcontractorId, string? NameAr, string? NameEn, int RecordCount, decimal Recognized, decimal Paid, decimal Outstanding, decimal Committed);
 
+/// <summary>
+/// One machine's approved costs on the item. An equipment cost on credit is owed to its supplier through Fleet's own
+/// payment, so it is never in <see cref="BreakdownSupplier"/>.
+/// </summary>
+internal sealed record BreakdownMachine(int EquipmentId, string? NameAr, string? NameEn, int RecordCount, decimal Cost, decimal Paid, decimal Outstanding);
+
 /// <summary>The sums of the transactions that passed the filters, per type and overall.</summary>
 internal sealed record BreakdownTotals(int RecordCount, decimal Amount, decimal Paid, decimal Outstanding, IReadOnlyList<BreakdownTypeTotal> ByType);
 
@@ -140,7 +161,7 @@ internal sealed record BreakdownCommitments(decimal SubcontractRemaining, IReadO
 
 /// <summary>
 /// The arithmetic of a work-item breakdown, with no database access. The handler loads the approved records of the
-/// item and its sub-items from the three sources and calls this; the unit tests call it with real numbers.
+/// item and its sub-items from every source and calls this; the unit tests call it with real numbers.
 /// </summary>
 /// <remarks>
 /// <para>Every figure is a sum of persisted, approved source records. Four different facts are kept apart and never
@@ -160,7 +181,8 @@ internal static class ItemCostBreakdown
                 var settlement = row.Settlement;
                 var paid = ExpenseSettlement.Paid(settlement);
                 return new BreakdownTransaction(
-                    row.Kind == ExpenseKind.Supply ? BreakdownTypes.Supply : BreakdownTypes.SiteExpense,
+                    row.Kind != ExpenseKind.Supply ? BreakdownTypes.SiteExpense
+                        : row.SupplierId is null ? BreakdownTypes.DirectPurchase : BreakdownTypes.Supply,
                     row.Id,
                     null,
                     null,
@@ -168,8 +190,8 @@ internal static class ItemCostBreakdown
                     row.ProjectItemId!.Value,
                     row.SupplierId is null ? BreakdownParties.None : BreakdownParties.Supplier,
                     row.SupplierId,
-                    row.SupplierNameAr,
-                    row.SupplierNameEn,
+                    row.SupplierNameAr ?? row.PayeeName,
+                    row.SupplierNameEn ?? row.PayeeName,
                     row.Kind == ExpenseKind.Supply ? row.ItemName : row.Description,
                     row.Quantity,
                     row.Unit,
@@ -231,6 +253,34 @@ internal static class ItemCostBreakdown
             line.ContractNo,
             null)));
 
+    /// <summary>
+    /// The approved equipment costs (Fleet) as transactions: the machine is the party, the cost type the record kind.
+    /// Paid follows Fleet's rule (custody at approval, credit once its payment is recorded).
+    /// </summary>
+    public static IEnumerable<BreakdownTransaction> FromEquipment(IReadOnlyDictionary<int, IReadOnlyList<EquipmentItemLine>> linesByItem) =>
+        linesByItem.SelectMany(pair => pair.Value.Select(line => new BreakdownTransaction(
+            BreakdownTypes.Equipment,
+            line.CostId,
+            line.CostType,
+            null,
+            line.CostDate,
+            pair.Key,
+            BreakdownParties.Equipment,
+            line.EquipmentId,
+            line.EquipmentNameAr,
+            line.EquipmentNameEn,
+            line.Description,
+            line.Quantity,
+            line.Unit,
+            line.UnitPrice,
+            line.Amount,
+            line.Paid,
+            line.Outstanding,
+            line.PaymentState,
+            line.Channel,
+            line.InvoiceNo,
+            null)));
+
     /// <summary>The transactions that pass <paramref name="filter"/>, newest first.</summary>
     public static IReadOnlyList<BreakdownTransaction> Filter(IEnumerable<BreakdownTransaction> all, BreakdownFilter filter) =>
         all.Where(filter.Keeps)
@@ -286,6 +336,21 @@ internal static class ItemCostBreakdown
                 group.First().PartyNameEn,
                 group.Count(),
                 group.Sum(row => row.Quantity ?? 0),
+                group.Sum(row => row.Amount),
+                group.Sum(row => row.Paid),
+                group.Sum(row => row.Outstanding)))
+            .ToList();
+
+    /// <summary>Per machine: its approved costs on the item, what is paid and what is still owed.</summary>
+    public static IReadOnlyList<BreakdownMachine> Machines(IReadOnlyList<BreakdownTransaction> rows) =>
+        rows.Where(row => row.Type == BreakdownTypes.Equipment && row.PartyId is not null)
+            .GroupBy(row => row.PartyId!.Value)
+            .OrderBy(group => group.Key)
+            .Select(group => new BreakdownMachine(
+                group.Key,
+                group.First().PartyNameAr,
+                group.First().PartyNameEn,
+                group.Count(),
                 group.Sum(row => row.Amount),
                 group.Sum(row => row.Paid),
                 group.Sum(row => row.Outstanding)))

@@ -22,6 +22,9 @@ internal static class NotificationTypes
     public const string CostRecorded = "CostRecorded";
     public const string PaymentPaid = "PaymentPaid";
     public const string PaymentFailed = "PaymentFailed";
+    public const string RecordReversed = "RecordReversed";
+    public const string PayrollSettled = "PayrollSettled";
+    public const string CustodyChanged = "CustodyChanged";
 }
 
 /// <summary>A notification to store: who gets it, its type and its title in both languages.</summary>
@@ -64,8 +67,16 @@ internal static class NotificationRules
         ["OutsideSiteAlert"] = ("location alert", "تنبيه الموقع"),
         ["PriceRange"] = ("price range request", "طلب النطاق السعري"),
         ["PriceAboveRangeAlert"] = ("purchase above its reference price", "شراء بسعر أعلى من السعر المرجعي"),
+        ["PriceExceptionAlert"] = ("price above its reference range", "سعر أعلى من النطاق المرجعي"),
+        ["PriceException"] = ("price exception", "استثناء السعر"),
+        ["PriceCategory"] = ("price category", "تصنيف الأسعار"),
+        ["PriceUnit"] = ("price unit", "وحدة السعر"),
         ["CostRecordedAlert"] = ("new site cost", "تكلفة موقع جديدة"),
         ["PaymentRequest"] = ("payment request", "طلب الصرف"),
+        ["PayrollSettlement"] = ("weekly labor settlement", "تسوية العمالة الأسبوعية"),
+        ["SettlementAlert"] = ("weekly labor settlement", "تسوية العمالة الأسبوعية"),
+        ["ContractVariation"] = ("subcontract value change", "تعديل قيمة عقد الباطن"),
+        ["CustodyEntry"] = ("custody", "العهدة"),
     };
 
     /// <summary>StatusAfter <c>null</c> = the record was just added.</summary>
@@ -114,6 +125,13 @@ internal static class NotificationRules
         // Cost alerts (Projects module): one row per recipient, written in the record's own transaction, so a
         // notification exists only for a committed record and a retried delivery stores it once.
         new("PriceAboveRangeAlert", null, "RecipientUserId", NotificationTypes.PriceAboveRange),
+
+        // Price Control: the people who decide and reconcile hear of a new case (one alert row each); the submitter
+        // hears the Executive's decision. A withdrawn case (the transaction changed) tells nobody.
+        new("PriceExceptionAlert", null, "RecipientUserId", NotificationTypes.PriceAboveRange),
+        new("PriceException", "ApprovedOnce", "SubmittedBy", NotificationTypes.RecordApproved),
+        new("PriceException", "ApprovedWithPriceChange", "SubmittedBy", NotificationTypes.RecordApproved),
+        new("PriceException", "Rejected", "SubmittedBy", NotificationTypes.RecordRejected),
         new("CostRecordedAlert", null, "RecipientUserId", NotificationTypes.CostRecorded),
 
         // Payment requests (Finance): whoever asked hears the Executive's decision and the payment's outcome. The
@@ -122,6 +140,23 @@ internal static class NotificationRules
         new("PaymentRequest", "Rejected", "CreatedBy", NotificationTypes.RecordRejected),
         new("PaymentRequest", "Paid", "CreatedBy", NotificationTypes.PaymentPaid),
         new("PaymentRequest", "Failed", "CreatedBy", NotificationTypes.PaymentFailed),
+
+        // Weekly labor settlements (Workforce): the managers, Executives and accountants hear of a new one (alert
+        // rows, saved with it); its recorder and the custody holder hear the reviewer's decision.
+        new("SettlementAlert", null, "RecipientUserId", NotificationTypes.PayrollSettled),
+        new("PayrollSettlement", "Confirmed", "RecordedBy", NotificationTypes.RecordApproved),
+        new("PayrollSettlement", "Rejected", "RecordedBy", NotificationTypes.RecordRejected),
+        new("PayrollSettlement", "Reversed", "RecordedBy", NotificationTypes.RecordReversed),
+        new("PayrollSettlement", "Confirmed", "PaidByUserId", NotificationTypes.RecordApproved),
+        new("PayrollSettlement", "Rejected", "PaidByUserId", NotificationTypes.RecordRejected),
+        new("PayrollSettlement", "Reversed", "PaidByUserId", NotificationTypes.RecordReversed),
+
+        // Subcontract value changes (Subcontractors): whoever asked hears the decision.
+        new("ContractVariation", "Approved", "RequestedBy", NotificationTypes.RecordApproved),
+        new("ContractVariation", "Rejected", "RequestedBy", NotificationTypes.RecordRejected),
+
+        // Cash custody (Projects): the holder hears of every funding, return or wage payment someone else records.
+        new("CustodyEntry", null, "HolderUserId", NotificationTypes.CustodyChanged),
     ];
 
     /// <summary>The notifications one changed record causes. <paramref name="actorUserId"/> made the change.</summary>
@@ -137,6 +172,12 @@ internal static class NotificationRules
             }
 
             if (!change.People.TryGetValue(rule.RecipientField, out var recipient) || recipient == actorUserId)
+            {
+                continue;
+            }
+
+            // Two rules can name the same person (a settlement's recorder who also paid it): they are told once.
+            if (drafts.Any(draft => draft.RecipientUserId == recipient && draft.Type == rule.Type))
             {
                 continue;
             }
@@ -184,6 +225,9 @@ internal static class NotificationRules
         NotificationTypes.CostRecorded => ("A new site cost is waiting for review", "تكلفة موقع جديدة بانتظار المراجعة"),
         NotificationTypes.PaymentPaid => ("Your payment request was paid", "تم صرف طلب الصرف الخاص بك"),
         NotificationTypes.PaymentFailed => ("Your payment request failed at the bank", "تعذّر تنفيذ طلب الصرف لدى البنك"),
+        NotificationTypes.RecordReversed => ($"Your {noun.En} was reversed", $"تم عكس {noun.Ar}"),
+        NotificationTypes.PayrollSettled => ("A weekly labor settlement is waiting for review", "تسوية عمالة أسبوعية بانتظار المراجعة"),
+        NotificationTypes.CustodyChanged => ("Your custody was updated", "تم تحديث عهدتك"),
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown notification type."),
     };
 }

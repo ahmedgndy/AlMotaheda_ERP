@@ -118,7 +118,8 @@ internal static class RecordSubPayment
 
         var contract = await db.SubContracts.AsNoTracking()
             .Where(candidate => candidate.Id == contractId && candidate.ProjectId == projectId)
-            .Select(candidate => new { candidate.Value, candidate.SubcontractorId })
+            // The value that counts: signed value + approved variations.
+            .Select(candidate => new { Value = candidate.Value + (db.ContractVariations.Where(variation => variation.ContractId == candidate.Id && variation.Status == VariationStatus.Approved).Sum(variation => (decimal?)variation.Amount) ?? 0), candidate.SubcontractorId })
             .SingleOrDefaultAsync(cancellationToken);
         if (contract is null)
         {

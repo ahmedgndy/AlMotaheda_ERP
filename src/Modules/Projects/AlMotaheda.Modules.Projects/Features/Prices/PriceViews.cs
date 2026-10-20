@@ -30,9 +30,29 @@ internal sealed record PriceRangeView(
     int? DecidedBy,
     string? DecidedByNameAr,
     string? DecidedByNameEn,
-    string? DecisionNote);
+    string? DecisionNote,
+    string Kind = "Range",
+    decimal? ReferencePrice = null,
+    decimal? TolerancePercent = null,
+    string? SourceNote = null);
+
+/// <summary>A category of the price list.</summary>
+internal sealed record PriceCategoryView(int Id, string Code, string NameAr, string NameEn, bool IsActive, int SortOrder, string RowVersion)
+{
+    public static PriceCategoryView From(PriceCategory category) =>
+        new(category.Id, category.Code, category.NameAr, category.NameEn, category.IsActive, category.SortOrder, RowVersions.Format(category.RowVersion));
+}
+
+/// <summary>A unit prices are quoted per.</summary>
+internal sealed record PriceUnitView(int Id, string Code, string NameAr, string NameEn, bool IsActive, int SortOrder, string RowVersion)
+{
+    public static PriceUnitView From(PriceUnit unit) =>
+        new(unit.Id, unit.Code, unit.NameAr, unit.NameEn, unit.IsActive, unit.SortOrder, RowVersions.Format(unit.RowVersion));
+}
 
 /// <summary>One item of the price list, with the general range that applies today and its open request.</summary>
+/// <param name="Classification">The category code (the field keeps its old name).</param>
+/// <param name="OpenExceptions">Cases about this item waiting for a decision.</param>
 /// <param name="CurrentRange">The general range on today's date; <c>null</c> when none applies.</param>
 /// <param name="SupplierRangeCount">Approved supplier-specific ranges (any date).</param>
 internal sealed record PriceItemRow(
@@ -50,7 +70,10 @@ internal sealed record PriceItemRow(
     int CreatedBy,
     DateTime? UpdatedAt,
     int? UpdatedBy,
-    string RowVersion);
+    string RowVersion,
+    string? CategoryNameAr = null,
+    string? CategoryNameEn = null,
+    int OpenExceptions = 0);
 
 /// <summary>A price item with its full history, newest first.</summary>
 internal sealed record PriceItemDetail(PriceItemRow Item, IReadOnlyList<PriceRangeView> Ranges);
@@ -81,6 +104,10 @@ internal static class PriceQueries
         public DateTime? DecidedAt { get; init; }
         public int? DecidedBy { get; init; }
         public string? DecisionNote { get; init; }
+        public PriceRuleKind Kind { get; init; }
+        public decimal? ReferencePrice { get; init; }
+        public decimal? TolerancePercent { get; init; }
+        public string? SourceNote { get; init; }
 
         public PriceRangeView View(IReadOnlyDictionary<int, UserSummary> people)
         {
@@ -89,7 +116,7 @@ internal static class PriceQueries
             return new PriceRangeView(
                 Id, PriceItemId, PriceItemNameAr, PriceItemNameEn, Unit, SupplierId, SupplierNameAr, SupplierNameEn, MinPrice, MaxPrice, Currency,
                 EffectiveFrom, EffectiveTo, Conditions, Status.ToString(), Reason, RequestedAt, RequestedBy, requester?.NameAr, requester?.NameEn,
-                DecidedAt, DecidedBy, decider?.NameAr, decider?.NameEn, DecisionNote);
+                DecidedAt, DecidedBy, decider?.NameAr, decider?.NameEn, DecisionNote, Kind.ToString(), ReferencePrice, TolerancePercent, SourceNote);
         }
     }
 
@@ -98,13 +125,20 @@ internal static class PriceQueries
         public int Id { get; init; }
         public string NameAr { get; init; } = "";
         public string NameEn { get; init; } = "";
-        public CatalogCategory Classification { get; init; }
+        public string CategoryCode { get; init; } = "";
+        public string CategoryNameAr { get; init; } = "";
+        public string CategoryNameEn { get; init; } = "";
         public string Unit { get; init; } = "";
         public string? Notes { get; init; }
         public PriceItemStatus Status { get; init; }
-        public RangeRow? Current { get; init; }
+
+        /// <summary>The newest general range started by the date, as found in SQL; its row is loaded by <see cref="WithCurrentAsync"/>.</summary>
+        public int? CurrentRangeId { get; init; }
+
+        public RangeRow? Current { get; set; }
         public bool HasPending { get; init; }
         public int SupplierRanges { get; init; }
+        public int OpenExceptions { get; init; }
         public DateTime CreatedAt { get; init; }
         public int CreatedBy { get; init; }
         public DateTime? UpdatedAt { get; init; }
@@ -113,9 +147,9 @@ internal static class PriceQueries
 
         /// <param name="today">The newest general range is current only while it has not expired.</param>
         public PriceItemRow View(IReadOnlyDictionary<int, UserSummary> people, DateOnly today) => new(
-            Id, NameAr, NameEn, Classification.ToString(), Unit, Notes, Status.ToString(),
+            Id, NameAr, NameEn, CategoryCode, Unit, Notes, Status.ToString(),
             Current is { } current && (current.EffectiveTo is null || current.EffectiveTo >= today) ? current.View(people) : null,
-            HasPending, SupplierRanges, CreatedAt, CreatedBy, UpdatedAt, UpdatedBy, RowVersions.Format(RowVersion));
+            HasPending, SupplierRanges, CreatedAt, CreatedBy, UpdatedAt, UpdatedBy, RowVersions.Format(RowVersion), CategoryNameAr, CategoryNameEn, OpenExceptions);
     }
 
     public static IQueryable<RangeRow> Ranges(IQueryable<PriceRange> ranges) =>
@@ -142,6 +176,10 @@ internal static class PriceQueries
             DecidedAt = range.DecidedAt,
             DecidedBy = range.DecidedBy,
             DecisionNote = range.DecisionNote,
+            Kind = range.Kind,
+            ReferencePrice = range.ReferencePrice,
+            TolerancePercent = range.TolerancePercent,
+            SourceNote = range.SourceNote,
         });
 
     /// <summary>
@@ -155,23 +193,45 @@ internal static class PriceQueries
             Id = item.Id,
             NameAr = item.NameAr,
             NameEn = item.NameEn,
-            Classification = item.Classification,
+            CategoryCode = item.Category.Code,
+            CategoryNameAr = item.Category.NameAr,
+            CategoryNameEn = item.Category.NameEn,
             Unit = item.Unit,
             Notes = item.Notes,
             Status = item.Status,
-            Current = Ranges(db.PriceRanges
-                    .Where(range => range.PriceItemId == item.Id && range.Status == PriceRangeStatus.Approved && range.SupplierId == null && range.EffectiveFrom <= today)
-                    .OrderByDescending(range => range.EffectiveFrom)
-                    .ThenByDescending(range => range.Id))
+            CurrentRangeId = db.PriceRanges
+                .Where(range => range.PriceItemId == item.Id && range.Status == PriceRangeStatus.Approved && range.SupplierId == null && range.EffectiveFrom <= today)
+                .OrderByDescending(range => range.EffectiveFrom)
+                .ThenByDescending(range => range.Id)
+                .Select(range => (int?)range.Id)
                 .FirstOrDefault(),
             HasPending = db.PriceRanges.Any(range => range.PriceItemId == item.Id && range.Status == PriceRangeStatus.Pending),
             SupplierRanges = db.PriceRanges.Count(range => range.PriceItemId == item.Id && range.Status == PriceRangeStatus.Approved && range.SupplierId != null),
+            OpenExceptions = db.PriceExceptions.Count(exception => exception.PriceItemId == item.Id && exception.Status == PriceExceptionStatus.Pending),
             CreatedAt = item.CreatedAt,
             CreatedBy = item.CreatedBy,
             UpdatedAt = item.UpdatedAt,
             UpdatedBy = item.UpdatedBy,
             RowVersion = item.RowVersion,
         });
+
+    /// <summary>Loads the current range rows of a page of items with one query (never one per item).</summary>
+    public static async Task<IReadOnlyList<ItemRow>> WithCurrentAsync(ProjectsDbContext db, IReadOnlyList<ItemRow> items, CancellationToken cancellationToken)
+    {
+        var ids = items.Where(item => item.CurrentRangeId is not null).Select(item => item.CurrentRangeId!.Value).ToArray();
+        if (ids.Length == 0)
+        {
+            return items;
+        }
+
+        var ranges = await Ranges(db.PriceRanges.AsNoTracking().Where(range => ids.Contains(range.Id))).ToDictionaryAsync(range => range.Id, cancellationToken);
+        foreach (var item in items.Where(item => item.CurrentRangeId is not null))
+        {
+            item.Current = ranges.GetValueOrDefault(item.CurrentRangeId!.Value);
+        }
+
+        return items;
+    }
 
     /// <summary>One item with its history, or <c>null</c>.</summary>
     public static async Task<PriceItemDetail?> DetailAsync(ProjectsDbContext db, IUserDirectory users, int priceItemId, DateOnly today, CancellationToken cancellationToken)
@@ -181,6 +241,8 @@ internal static class PriceQueries
         {
             return null;
         }
+
+        await WithCurrentAsync(db, [item], cancellationToken);
 
         var ranges = await Ranges(db.PriceRanges.AsNoTracking().Where(range => range.PriceItemId == priceItemId))
             .OrderByDescending(range => range.EffectiveFrom)

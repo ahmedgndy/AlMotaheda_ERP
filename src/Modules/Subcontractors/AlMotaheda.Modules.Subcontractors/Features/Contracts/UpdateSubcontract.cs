@@ -34,7 +34,8 @@ internal static class UpdateSubcontract
         string? Status,
         string? ContractNo,
         string? Scope,
-        string? RowVersion) : IContractFieldsRequest;
+        string? RowVersion,
+        int? ProjectItemId = null) : IContractFieldsRequest;
 
     public static void Map(IEndpointRouteBuilder api) =>
         api.MapPut("/projects/{projectId:int}/subcontracts/{contractId:int}", HandleAsync)
@@ -49,6 +50,7 @@ internal static class UpdateSubcontract
         HttpContext httpContext,
         SubcontractorsDbContext db,
         IProjectAccess access,
+        IProjectItems projectItems,
         ContractDetails details,
         CompanyClock clock,
         SubcontractorsLog log,
@@ -102,14 +104,29 @@ internal static class UpdateSubcontract
             .Where(payment => payment.ContractId == contractId && payment.VoidedAt == null)
             .SumAsync(payment => payment.Amount, cancellationToken);
 
-        if (fields!.Value < executed)
+        // The value that counts is the signed value plus the approved variations.
+        var variations = await ContractValues.ApprovedVariations(db, contractId).SumAsync(cancellationToken);
+        if (fields!.Value + variations < executed)
         {
             errors.Add("value", $"The contract value can't be less than the work already executed ({executed:0.00}).");
         }
 
-        if (fields.Value < paid)
+        if (fields.Value + variations < paid)
         {
             errors.Add("value", $"The contract value can't be less than what was already paid ({paid:0.00}).");
+        }
+
+        // An edit that doesn't send the work item keeps it (older clients don't know the field).
+        fields = fields with { ProjectItemId = fields.ProjectItemId ?? contract.ProjectItemId };
+        if (await fields.CheckWorkItemAsync(projectItems, projectId, contract.ProjectItemId, errors, cancellationToken) is { } itemProblem)
+        {
+            return itemProblem;
+        }
+
+        if (fields.ProjectItemId is { } scope && scope != contract.ProjectItemId
+            && await OutsideScopeAsync(db, projectItems, projectId, contractId, scope, cancellationToken))
+        {
+            return SubcontractorsProblems.OutsideContractScope();
         }
 
         if (fields.Model != contract.Model
@@ -154,5 +171,22 @@ internal static class UpdateSubcontract
 
         var view = await details.LoadAsync(projectId, contract.Id, caller.SeesMoney, cancellationToken);
         return view is null ? SubcontractorsProblems.ContractNotFound() : TypedResults.Ok(view);
+    }
+
+    /// <summary>True when work of the contract is already linked to an item outside the new main item and its sub-items.</summary>
+    private static async Task<bool> OutsideScopeAsync(
+        SubcontractorsDbContext db, IProjectItems projectItems, int projectId, int contractId, int scope, CancellationToken cancellationToken)
+    {
+        var linked = await db.ContractItems.Where(item => item.ContractId == contractId && item.ProjectItemId != null).Select(item => item.ProjectItemId!.Value)
+            .Concat(db.ManpowerSheets.Where(sheet => sheet.ContractId == contractId && sheet.ProjectItemId != null).Select(sheet => sheet.ProjectItemId!.Value))
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        if (linked.Count == 0)
+        {
+            return false;
+        }
+
+        var items = await projectItems.FindAsync(projectId, linked, cancellationToken);
+        return items.Values.Any(item => item.Id != scope && item.ParentItemId != scope);
     }
 }

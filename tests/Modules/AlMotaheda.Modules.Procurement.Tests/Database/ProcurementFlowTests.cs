@@ -217,6 +217,130 @@ public sealed class ProcurementFlowTests(SqlServerFixture database)
         return await api.SendAsync(HttpMethod.Post, $"{path}/{step}", session, new { rowVersion = current.GetProperty("rowVersion").GetString() });
     }
 
+    [DatabaseFact]
+    public async Task An_invoice_line_above_its_price_control_range_is_held_for_the_executive_and_posted_once_approved()
+    {
+        await using var api = await ProjectsApi.StartAsync(database, new Dictionary<string, string?> { ["Projects:PriceCheckPolicy"] = "ExecutiveApproval" });
+        var cast = await api.CastAsync("PRC-PRICE-01");
+        var (_, purchasing) = await api.CreateSignedInUserAsync(cast.Executive, "purchasing");
+        var cemex = await api.CreateSupplierAsync(cast.Executive, "Cemex");
+        var costItem = (await api.CreateItemAsync(cast.Manager, cast.ProjectId, "Foundations")).Id();
+        var cement = (await Ok(api, cast.Manager, HttpMethod.Post, $"/api/projects/{cast.ProjectId}/catalog-items", new
+        {
+            nameAr = "أسمنت", nameEn = "Portland cement", category = "CementAggregates", unit = "Bag", price = 150m,
+            effectiveFrom = DateTime.UtcNow.AddDays(-5).ToString("yyyy-MM-dd"),
+        }, HttpStatusCode.Created)).GetProperty("item").Id();
+
+        // The company's reference for a bag of cement: 100 to 150. The requisition line names it; a mismatched unit is refused.
+        var priceItem = (await Ok(api, cast.Executive, HttpMethod.Post, "/api/price-items",
+            new { nameAr = "أسمنت 42.5", nameEn = "Cement 42.5", classification = "CementAggregates", unit = "Bag", minPrice = 100m, maxPrice = 150m }, HttpStatusCode.Created)).GetProperty("item").Id();
+        var perTon = (await Ok(api, cast.Executive, HttpMethod.Post, "/api/price-items",
+            new { nameAr = "أسمنت طن", nameEn = "Cement by the ton", classification = "CementAggregates", unit = "Ton", minPrice = 2_000m, maxPrice = 3_000m }, HttpStatusCode.Created)).GetProperty("item").Id();
+        var wrongUnit = await api.SendAsync(HttpMethod.Post, "/api/procurement/requisitions", cast.Engineer,
+            new { projectId = cast.ProjectId, lines = new[] { new { catalogItemId = cement, projectItemId = costItem, quantity = 100m, priceItemId = perTon } } });
+        Assert.Equal(HttpStatusCode.BadRequest, wrongUnit.StatusCode);
+        var requisition = await Ok(api, cast.Engineer, HttpMethod.Post, "/api/procurement/requisitions",
+            new { projectId = cast.ProjectId, lines = new[] { new { catalogItemId = cement, projectItemId = costItem, quantity = 100m, priceItemId = priceItem } } }, HttpStatusCode.Created);
+        var prId = requisition.Id();
+        var prLine = requisition.GetProperty("lines")[0].Id();
+        Assert.Equal(priceItem, requisition.GetProperty("lines")[0].GetProperty("priceItemId").GetInt32());
+
+        // One quotation at 160 a bag, selected; the order carries the price item on to the invoice.
+        var set = await Ok(api, cast.Executive, HttpMethod.Post, $"/api/procurement/requisitions/{prId}/quotation-request", new { quotationsWanted = 1 }, HttpStatusCode.Created);
+        var setPath = $"/api/procurement/quotation-requests/{set.Id()}";
+        set = await Ok(api, purchasing, HttpMethod.Post, $"{setPath}/quotations",
+            new { supplierId = cemex, deliveryDays = 2, lines = new[] { new { requisitionLineId = prLine, unitPrice = 160m } } }, HttpStatusCode.Created);
+        var quote = set.GetProperty("quotations")[0].Id();
+        set = await Ok(api, purchasing, HttpMethod.Post, $"{setPath}/submit", new { rowVersion = set.GetProperty("rowVersion").GetString() });
+        await Ok(api, cast.Executive, HttpMethod.Post, $"{setPath}/select", new { quotationId = quote, reason = "Only bidder", rowVersion = set.GetProperty("rowVersion").GetString() });
+        var order = await Ok(api, purchasing, HttpMethod.Post, "/api/procurement/purchase-orders",
+            new { requisitionId = prId, lines = new[] { new { requisitionLineId = prLine, quantity = 100m } } }, HttpStatusCode.Created);
+        var orderLine = order.GetProperty("lines")[0].Id();
+        Assert.Equal(priceItem, order.GetProperty("lines")[0].GetProperty("priceItemId").GetInt32());
+        await Ok(api, cast.Engineer, HttpMethod.Post, $"/api/procurement/purchase-orders/{order.Id()}/receipts",
+            new { receivedOn = Today, deliveryNoteNo = "DN-9", lines = new[] { new { orderLineId = orderLine, quantity = 100m } } }, HttpStatusCode.Created);
+
+        // The invoice matches the order (160) but not the company's reference (150): held, unposted, and a case for the Executive.
+        var invoices = $"/api/procurement/purchase-orders/{order.Id()}/invoices";
+        var held = await Ok(api, cast.Accountant, HttpMethod.Post, invoices,
+            new { invoiceNo = "C-2001", invoiceDate = Today, priceReason = "Bidder's price", lines = new[] { new { orderLineId = orderLine, quantity = 100m, unitPrice = 160m } } }, HttpStatusCode.Created);
+        var heldLine = held.GetProperty("lines")[0];
+        Assert.Equal(("PriceHold", "AboveRange", true), (held.GetProperty("status").GetString(), heldLine.GetProperty("priceCheck").GetString(), heldLine.GetProperty("priceMatches").GetBoolean()));
+        Assert.Equal(JsonValueKind.Null, heldLine.GetProperty("postedRecordId").ValueKind);
+        var exceptionId = heldLine.GetProperty("priceExceptionId").GetInt32();
+        Assert.Equal(0, await api.QueryAsync(db => db.ProjectExpenses.CountAsync()));
+
+        var exception = await Ok(api, cast.Executive, HttpMethod.Get, $"/api/price-exceptions/{exceptionId}");
+        Assert.Equal(("SupplierInvoiceLine", heldLine.Id(), 160m, 150m, 1_000m, "Bidder's price"),
+            (exception.GetProperty("sourceType").GetString(), exception.GetProperty("sourceId").GetInt32(), exception.Money("unitPrice"), exception.Money("referenceMaxPrice"),
+                exception.Money("varianceTotal"), exception.GetProperty("reason").GetString()));
+
+        // The Accountant has no way around it: a held invoice is not resolved, and nothing is owed to pay.
+        var resolve = await api.SendAsync(HttpMethod.Post, $"/api/procurement/supplier-invoices/{held.Id()}/resolve", cast.Accountant,
+            new { resolution = "Accept", reason = "Fine", rowVersion = held.GetProperty("rowVersion").GetString() });
+        Assert.Equal(HttpStatusCode.Conflict, resolve.StatusCode);
+
+        // The Executive approves the price once: the invoice posts as the project's approved supplier cost, with the comparison on the record.
+        await Ok(api, cast.Executive, HttpMethod.Post, $"/api/price-exceptions/{exceptionId}/approve", new { note = "Accepted for this order", rowVersion = exception.GetProperty("rowVersion").GetString() });
+        var posted = await Ok(api, cast.Accountant, HttpMethod.Get, $"/api/procurement/supplier-invoices/{held.Id()}");
+        Assert.Equal("Posted", posted.GetProperty("status").GetString());
+        var recordId = posted.GetProperty("lines")[0].GetProperty("postedRecordId").GetInt32();
+        var record = await api.QueryAsync(db => db.ProjectExpenses.AsNoTracking().SingleAsync(expense => expense.Id == recordId));
+        Assert.Equal((ExpenseStatus.Approved, 16_000m, priceItem, PriceCheckResult.AboveRange, 150m),
+            (record.Status, record.Amount, record.PriceItemId!.Value, record.PriceCheck!.Value, record.ReferenceMaxPrice!.Value));
+    }
+
+    [DatabaseFact]
+    public async Task A_rejected_invoice_price_sends_the_invoice_to_the_accountant_s_mismatch_queue_unposted()
+    {
+        await using var api = await ProjectsApi.StartAsync(database, new Dictionary<string, string?> { ["Projects:PriceCheckPolicy"] = "ExecutiveApproval" });
+        var cast = await api.CastAsync("PRC-PRICE-02");
+        var (_, purchasing) = await api.CreateSignedInUserAsync(cast.Executive, "purchasing");
+        var cemex = await api.CreateSupplierAsync(cast.Executive, "Cemex");
+        var cement = (await Ok(api, cast.Manager, HttpMethod.Post, $"/api/projects/{cast.ProjectId}/catalog-items", new
+        {
+            nameAr = "أسمنت", nameEn = "Portland cement", category = "CementAggregates", unit = "Bag", price = 150m,
+            effectiveFrom = DateTime.UtcNow.AddDays(-5).ToString("yyyy-MM-dd"),
+        }, HttpStatusCode.Created)).GetProperty("item").Id();
+        var priceItem = (await Ok(api, cast.Executive, HttpMethod.Post, "/api/price-items",
+            new { nameAr = "أسمنت 42.5", nameEn = "Cement 42.5", classification = "CementAggregates", unit = "Bag", minPrice = 100m, maxPrice = 150m }, HttpStatusCode.Created)).GetProperty("item").Id();
+        var requisition = await Ok(api, cast.Engineer, HttpMethod.Post, "/api/procurement/requisitions",
+            new { projectId = cast.ProjectId, lines = new[] { new { catalogItemId = cement, quantity = 10m, priceItemId = priceItem } } }, HttpStatusCode.Created);
+        var prLine = requisition.GetProperty("lines")[0].Id();
+        var set = await Ok(api, cast.Executive, HttpMethod.Post, $"/api/procurement/requisitions/{requisition.Id()}/quotation-request", new { quotationsWanted = 1 }, HttpStatusCode.Created);
+        var setPath = $"/api/procurement/quotation-requests/{set.Id()}";
+        set = await Ok(api, purchasing, HttpMethod.Post, $"{setPath}/quotations",
+            new { supplierId = cemex, deliveryDays = 2, lines = new[] { new { requisitionLineId = prLine, unitPrice = 140m } } }, HttpStatusCode.Created);
+        var quote = set.GetProperty("quotations")[0].Id();
+        set = await Ok(api, purchasing, HttpMethod.Post, $"{setPath}/submit", new { rowVersion = set.GetProperty("rowVersion").GetString() });
+        await Ok(api, cast.Executive, HttpMethod.Post, $"{setPath}/select", new { quotationId = quote, reason = "Only bidder", rowVersion = set.GetProperty("rowVersion").GetString() });
+        var order = await Ok(api, purchasing, HttpMethod.Post, "/api/procurement/purchase-orders",
+            new { requisitionId = requisition.Id(), lines = new[] { new { requisitionLineId = prLine, quantity = 10m } } }, HttpStatusCode.Created);
+        var orderLine = order.GetProperty("lines")[0].Id();
+        await Ok(api, cast.Engineer, HttpMethod.Post, $"/api/procurement/purchase-orders/{order.Id()}/receipts",
+            new { receivedOn = Today, lines = new[] { new { orderLineId = orderLine, quantity = 10m } } }, HttpStatusCode.Created);
+
+        // Invoiced at 170 a bag: above the order (140) and above the reference (150). Held first; the Executive refuses the price.
+        var held = await Ok(api, cast.Accountant, HttpMethod.Post, $"/api/procurement/purchase-orders/{order.Id()}/invoices",
+            new { invoiceNo = "C-3001", invoiceDate = Today, lines = new[] { new { orderLineId = orderLine, quantity = 10m, unitPrice = 170m } } }, HttpStatusCode.Created);
+        Assert.Equal("PriceHold", held.GetProperty("status").GetString());
+        var exceptionId = held.GetProperty("lines")[0].GetProperty("priceExceptionId").GetInt32();
+        var exception = await Ok(api, cast.Executive, HttpMethod.Get, $"/api/price-exceptions/{exceptionId}");
+        await Ok(api, cast.Executive, HttpMethod.Post, $"/api/price-exceptions/{exceptionId}/reject", new { note = "Not at this price", rowVersion = exception.GetProperty("rowVersion").GetString() });
+
+        // Back in the Accountant's queue: the supplier's price cannot be accepted; a credit note to the order price posts at 140.
+        var mismatch = await Ok(api, cast.Accountant, HttpMethod.Get, $"/api/procurement/supplier-invoices/{held.Id()}");
+        Assert.Equal("Mismatch", mismatch.GetProperty("status").GetString());
+        var accept = await api.SendAsync(HttpMethod.Post, $"/api/procurement/supplier-invoices/{held.Id()}/resolve", cast.Accountant,
+            new { resolution = "Accept", reason = "Pay it anyway", rowVersion = mismatch.GetProperty("rowVersion").GetString() });
+        Assert.Equal((HttpStatusCode.Conflict, "price_exception_rejected"), (accept.StatusCode, await CodeOf(accept)));
+        var credited = await Ok(api, cast.Accountant, HttpMethod.Post, $"/api/procurement/supplier-invoices/{held.Id()}/resolve",
+            new { resolution = "CreditNote", reason = "Supplier credits the difference", creditNoteNo = "CN-9", rowVersion = mismatch.GetProperty("rowVersion").GetString() });
+        Assert.Equal("Posted", credited.GetProperty("status").GetString());
+        var recordId = credited.GetProperty("lines")[0].GetProperty("postedRecordId").GetInt32();
+        Assert.Equal(1_400m, await api.QueryAsync(db => db.ProjectExpenses.Where(expense => expense.Id == recordId).Select(expense => expense.Amount).SingleAsync()));
+    }
+
     private static async Task<decimal> MaterialsCommittedAsync(ProjectsApi api, CoreApi.Cast cast)
     {
         var overview = await Ok(api, cast.Executive, HttpMethod.Get, $"/api/projects/{cast.ProjectId}/overview");

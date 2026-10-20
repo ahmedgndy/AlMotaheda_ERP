@@ -16,7 +16,8 @@ public sealed class LinkKindTests
         [
             ProjectRecordKinds.Expense, ProjectRecordKinds.SupplierPayment, ProjectRecordKinds.DailyReport, ProjectRecordKinds.ReportRequest,
             ProjectRecordKinds.Budget, ProjectRecordKinds.LaborSheet, ProjectRecordKinds.SubContract, ProjectRecordKinds.SubPayment,
-            ProjectRecordKinds.Equipment, ProjectRecordKinds.EquipmentCost,
+            ProjectRecordKinds.Equipment, ProjectRecordKinds.EquipmentCost, ProjectRecordKinds.CustodyEntry, ProjectRecordKinds.SupplyAgreement,
+            ProjectRecordKinds.PayrollSettlement, ProjectRecordKinds.ContractVariation,
         ];
 
         Assert.Equal(kinds.Order(StringComparer.Ordinal), Enum.GetNames<LinkedEntityType>().Order(StringComparer.Ordinal));

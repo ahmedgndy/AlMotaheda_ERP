@@ -24,13 +24,19 @@ internal sealed class ContractListRow
     public ContractStatus Status { get; init; }
     public string? Scope { get; init; }
     public int ItemCount { get; init; }
+    public int? ProjectItemId { get; init; }
+
+    /// <summary>The approved variations: the contract is worth <see cref="Value"/> + this.</summary>
+    public decimal ApprovedVariations { get; init; }
+
     public DateTime CreatedAt { get; init; }
     public int CreatedBy { get; init; }
     public DateTime? UpdatedAt { get; init; }
     public int? UpdatedBy { get; init; }
     public byte[] RowVersion { get; init; } = [];
 
-    public ContractRow Terms => new(Id, SubcontractorId, Value, RetentionPercent, Status);
+    /// <summary>The terms every calculation uses: the effective value (signed + approved variations).</summary>
+    public ContractRow Terms => new(Id, SubcontractorId, Value + ApprovedVariations, RetentionPercent, Status);
 }
 
 /// <summary>One measurement with its contract item, for the detail screen.</summary>
@@ -204,6 +210,9 @@ internal static class ContractQueries
             Status = contract.Status,
             Scope = contract.Scope,
             ItemCount = contract.Items.Count,
+            ProjectItemId = contract.ProjectItemId,
+            ApprovedVariations = contract.Variations.Where(variation => variation.Status == VariationStatus.Approved)
+                .Sum(variation => (decimal?)variation.Amount) ?? 0,
             CreatedAt = contract.CreatedAt,
             CreatedBy = contract.CreatedBy,
             UpdatedAt = contract.UpdatedAt,

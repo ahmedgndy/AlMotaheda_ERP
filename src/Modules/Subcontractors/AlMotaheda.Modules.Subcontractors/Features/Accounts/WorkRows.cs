@@ -93,7 +93,14 @@ internal static class WorkQueries
     public static IQueryable<ContractRow> Contracts(SubcontractorsDbContext db, int projectId) =>
         db.SubContracts.AsNoTracking()
             .Where(contract => contract.ProjectId == projectId)
-            .Select(contract => new ContractRow(contract.Id, contract.SubcontractorId, contract.Value, contract.RetentionPercent, contract.Status));
+            .Select(contract => new ContractRow(
+                contract.Id,
+                contract.SubcontractorId,
+                // The effective value: signed value + approved variations.
+                contract.Value + (contract.Variations.Where(variation => variation.Status == VariationStatus.Approved)
+                    .Sum(variation => (decimal?)variation.Amount) ?? 0),
+                contract.RetentionPercent,
+                contract.Status));
 
     /// <summary>The payments of a project (or of one contract of it), voided ones included.</summary>
     public static IQueryable<PaymentRow> Payments(SubcontractorsDbContext db, int projectId, int? contractId = null)

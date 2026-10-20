@@ -108,6 +108,41 @@ public sealed class FleetQueryTests
     }
 
     [Fact]
+    public void Settlement_rows_carry_the_work_item_of_each_cost()
+    {
+        using var db = CreateContext();
+
+        Assert.Contains("[ProjectItemId]", EquipmentCostQueries.SettlementRows(db, 1).ToQueryString());
+    }
+
+    [Fact]
+    public void The_approved_costs_of_some_work_items_translate_and_stay_in_one_project()
+    {
+        using var db = CreateContext();
+
+        var sql = EquipmentCostQueries.ApprovedOnItems(db, 1, [5, 6]).ToQueryString();
+
+        Assert.Contains("[fleet].[EquipmentCost]", sql);
+        Assert.Contains("[ProjectId] = @", sql);
+        Assert.Contains("[Status] = 'Approved'", sql);
+        Assert.Contains("[ProjectItemId] IN (", sql);
+        Assert.Contains("[fleet].[Equipment]", sql);
+        Assert.Contains("[fleet].[EquipmentCostAdjustment]", sql);
+        Assert.Contains("ORDER BY [e].[CostDate] DESC", sql);
+    }
+
+    [Fact]
+    public void Links_to_a_work_item_are_looked_up_in_one_project()
+    {
+        using var db = CreateContext();
+
+        var sql = EquipmentCostQueries.LinkedTo(db, 1, 5).ToQueryString();
+
+        Assert.Contains("[ProjectId] = @", sql);
+        Assert.Contains("[ProjectItemId] = @", sql);
+    }
+
+    [Fact]
     public void One_cost_names_and_stays_translate()
     {
         using var db = CreateContext();

@@ -21,11 +21,12 @@ internal sealed class PriceItem
     /// <summary>Unique in the company.</summary>
     public required string NameEn { get; set; }
 
-    /// <summary>The classification, the same list as the project catalog.</summary>
-    public CatalogCategory Classification { get; set; } = CatalogCategory.Other;
+    /// <summary>The configurable category (<see cref="PriceCategory"/>).</summary>
+    public int CategoryId { get; set; }
+    public PriceCategory Category { get; set; } = null!;
 
     /// <summary>
-    /// One of <c>MeasurementUnits</c>. Fixed once the item exists: its ranges and every comparison made with them are
+    /// A <see cref="PriceUnit"/> code. Fixed once the item exists: its ranges and every comparison made with them are
     /// per this unit, so changing it would change the meaning of the history.
     /// </summary>
     public required string Unit { get; set; }
@@ -80,6 +81,18 @@ internal sealed class PriceRange
 
     /// <summary>Always <c>EGP</c> today (overview 3.7). Stored so a comparison can say which currency it used.</summary>
     public string Currency { get; set; } = PriceCurrencies.Egp;
+
+    /// <summary>How the range was expressed; <see cref="MinPrice"/> and <see cref="MaxPrice"/> are what is compared whatever the kind.</summary>
+    public PriceRuleKind Kind { get; set; } = PriceRuleKind.Range;
+
+    /// <summary>The company's reference price per unit, between the bounds; the single price of a <see cref="PriceRuleKind.Fixed"/> rule.</summary>
+    public decimal? ReferencePrice { get; set; }
+
+    /// <summary>For a fixed rule: how far (percent) above and below the reference price is still accepted.</summary>
+    public decimal? TolerancePercent { get; set; }
+
+    /// <summary>Where the price comes from: a quotation, a market survey, a contract (text or link).</summary>
+    public string? SourceNote { get; set; }
 
     public DateOnly EffectiveFrom { get; set; }
 

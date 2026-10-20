@@ -3,6 +3,7 @@ using System.Text.Json;
 using AlMotaheda.Modules.Access.Tests.Database;
 using AlMotaheda.Modules.Projects.Data;
 using AlMotaheda.Modules.Projects.Tests.Database.Core;
+using AlMotaheda.Modules.Projects.Tests.Database.PriceControl;
 using Microsoft.EntityFrameworkCore;
 using static AlMotaheda.Modules.Access.Tests.Database.AccessApi;
 using static AlMotaheda.Modules.Projects.Tests.Database.Core.CoreApi;
@@ -82,7 +83,8 @@ public sealed class CostManagementTests(SqlServerFixture database)
     [DatabaseFact]
     public async Task Cement_bought_above_its_reference_range_is_warned_justified_alerted_and_lands_once_in_the_work_item_breakdown()
     {
-        await using var api = await ProjectsApi.StartAsync(database);
+        // The warning policy: the case is opened for the inbox and the reports, and gates nothing (the shipped default gates).
+        await using var api = await ProjectsApi.StartAsync(database, new Dictionary<string, string?> { ["Projects:PriceCheckPolicy"] = "Warn" });
         var cast = await api.CastAsync();
         var supplier = await api.CreateSupplierAsync(cast.Executive, "Cemex");
         var concrete = await api.CreateItemAsync(cast.Manager, cast.ProjectId, "Concrete works");
@@ -103,11 +105,15 @@ public sealed class CostManagementTests(SqlServerFixture database)
         Assert.Equal((200m, 400m), (check.Money("differencePerUnit"), check.Money("totalDifference")));
         Assert.Equal(2_800m, recorded.Money("amount"));
 
-        // The manager and the Executive are alerted about the price (in the record's own save); the manager about the new cost.
+        // A price exception case is opened in the record's own save (the Warn policy: for the inbox and the reports, no gate);
+        // the manager, the Executive and the accountant are alerted about it, the manager about the new cost.
+        Assert.Equal("Pending", check.GetProperty("exception").GetProperty("status").GetString());
         var alerts = await api.QueryAsync(db => db.CostAlerts.Where(alert => alert.ExpenseId == recorded.Id())
             .Select(alert => new { Kind = EF.Property<string>(alert, "Kind"), alert.RecipientUserId }).ToListAsync());
-        Assert.Equal(2, alerts.Count(alert => alert.Kind == "PriceAboveRange"));
         Assert.Single(alerts, alert => alert.Kind == "CostRecorded");
+        var told = await api.QueryAsync(db => db.PriceExceptionAlerts.Where(alert => alert.Exception.SourceId == recorded.Id()).Select(alert => alert.RecipientUserId).ToListAsync());
+        Assert.Equal(3, told.Count);
+        Assert.DoesNotContain(cast.Engineer.UserId, told);
 
         // A unit the price list item isn't priced in can't be compared, so it is refused.
         var perBag = CementPurchase(supplier, priceItem, cement.Id(), unitPrice: 70m, unit: "Bag");
@@ -187,12 +193,19 @@ public sealed class CostManagementTests(SqlServerFixture database)
         purchase["priceJustification"] = "Urgent";
         var recorded = await api.RecordAsync(cast.Engineer, cast.ProjectId, purchase);
 
-        var byAccountant = await api.ReviewAsync(cast.Accountant, cast.ProjectId, recorded, "approve");
-        Assert.Equal(HttpStatusCode.Forbidden, byAccountant.StatusCode);
-        Assert.Equal("price_needs_executive", await CodeOf(byAccountant));
+        // Nobody approves the record, not even an Executive, while its price exception waits for the Executive's decision.
+        var exceptionId = recorded.GetProperty("priceCheck").GetProperty("exception").Id();
+        foreach (var reviewer in new[] { cast.Accountant, cast.Executive })
+        {
+            var early = await api.ReviewAsync(reviewer, cast.ProjectId, recorded, "approve");
+            Assert.Equal(HttpStatusCode.Conflict, early.StatusCode);
+            Assert.Equal("price_exception_pending", await CodeOf(early));
+        }
 
-        // Returning it stays open to any reviewer; the Executive approves it.
-        var approved = await api.ApproveAsync(cast.Executive, cast.ProjectId, recorded);
+        // The Executive approves the price once; then the accountant approves the record as usual.
+        await EnsureStatus(await api.SendAsync(HttpMethod.Post, $"/api/price-exceptions/{exceptionId}/approve", cast.Executive,
+            new { note = "Urgent pour, accepted this once", rowVersion = (await api.ExceptionAsync(cast.Executive, exceptionId)).GetProperty("rowVersion").GetString() }), HttpStatusCode.OK);
+        var approved = await api.ApproveAsync(cast.Accountant, cast.ProjectId, await api.GetExpenseAsync(cast.Accountant, cast.ProjectId, recorded.Id()));
         Assert.Equal("Approved", approved.GetProperty("status").GetString());
 
         // Within the range, the accountant approves as before.
@@ -227,7 +240,7 @@ public sealed class CostManagementTests(SqlServerFixture database)
         var priceItem = await api.CreatePriceItemAsync(cast.Executive, "Cement 42.5", "Ton", 1_000m, 1_200m);
 
         // The engineer sees prices but can't set them; the manager asks, the manager can't decide.
-        var byEngineer = await api.SendAsync(HttpMethod.Post, "/api/price-items", cast.Engineer, PriceItemBody("Sand", "M3", 100m, 150m));
+        var byEngineer = await api.SendAsync(HttpMethod.Post, "/api/price-items", cast.Engineer, CostManagementApi.PriceItemBody("Sand", "M3", 100m, 150m));
         Assert.Equal(HttpStatusCode.Forbidden, byEngineer.StatusCode);
         await EnsureStatus(await api.SendAsync(HttpMethod.Get, "/api/price-items", cast.Engineer), HttpStatusCode.OK);
 
@@ -293,64 +306,4 @@ public sealed class CostManagementTests(SqlServerFixture database)
             ["priceItemId"] = priceItemId,
             ["projectItemId"] = projectItemId,
         });
-
-    internal static object PriceItemBody(string nameEn, string unit, decimal min, decimal max) => new
-    {
-        nameAr = $"صنف {nameEn}",
-        nameEn,
-        classification = "CementAggregates",
-        unit,
-        minPrice = min,
-        maxPrice = max,
-        effectiveFrom = "2025-12-01",
-    };
-}
-
-/// <summary>The cost management calls, the way the frontend makes them.</summary>
-internal static class CostManagementApi
-{
-    public static Task<HttpResponseMessage> PostSubItemAsync(this ProjectsApi api, Session session, int projectId, int parentItemId, string nameEn) =>
-        api.SendAsync(HttpMethod.Post, $"/api/projects/{projectId}/items", session, new
-        {
-            nameAr = $"بند فرعي {nameEn}",
-            nameEn,
-            category = "Concrete",
-            unit = "Ton",
-            parentItemId,
-        });
-
-    public static async Task<JsonElement> CreateSubItemAsync(this ProjectsApi api, Session session, int projectId, int parentItemId, string nameEn)
-    {
-        var response = await api.PostSubItemAsync(session, projectId, parentItemId, nameEn);
-        await EnsureStatus(response, HttpStatusCode.Created);
-        return await Json(response);
-    }
-
-    public static Task<HttpResponseMessage> MoveAsync(this ProjectsApi api, Session session, int projectId, JsonElement item, int? parentItemId) =>
-        api.SendAsync(HttpMethod.Put, $"/api/projects/{projectId}/items/{item.Id()}/parent", session,
-            new { parentItemId, rowVersion = item.GetProperty("rowVersion").GetString() });
-
-    public static async Task<int> CreatePriceItemAsync(this ProjectsApi api, Session session, string nameEn, string unit, decimal min, decimal max)
-    {
-        var response = await api.SendAsync(HttpMethod.Post, "/api/price-items", session, CostManagementTests.PriceItemBody(nameEn, unit, min, max));
-        await EnsureStatus(response, HttpStatusCode.Created);
-        return (await Json(response)).GetProperty("item").Id();
-    }
-
-    /// <summary>A new general range, requested by <paramref name="requester"/> and approved by <paramref name="executive"/>, from today.</summary>
-    public static async Task ChangeRangeAsync(this ProjectsApi api, Session requester, Session executive, int priceItemId, decimal min, decimal max)
-    {
-        var requested = await api.SendAsync(HttpMethod.Post, $"/api/price-items/{priceItemId}/ranges", requester,
-            new { minPrice = min, maxPrice = max, reason = "New supplier price list" });
-        await EnsureStatus(requested, HttpStatusCode.Created);
-        var approved = await api.SendAsync(HttpMethod.Post, $"/api/price-ranges/{(await Json(requested)).Id()}/approve", executive, new { });
-        await EnsureStatus(approved, HttpStatusCode.OK);
-    }
-
-    public static async Task<JsonElement> BreakdownAsync(this ProjectsApi api, Session session, int projectId, int itemId, string query = "")
-    {
-        var response = await api.SendAsync(HttpMethod.Get, $"/api/projects/{projectId}/items/{itemId}/cost-breakdown{query}", session);
-        await EnsureStatus(response, HttpStatusCode.OK);
-        return await Json(response);
-    }
 }

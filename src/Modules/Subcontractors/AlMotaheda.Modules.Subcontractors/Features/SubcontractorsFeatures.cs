@@ -51,5 +51,10 @@ internal static class SubcontractorsFeatures
 
         RecordSubPayment.Map(api);
         VoidSubPayment.Map(api);
+
+        Variations.RequestVariation.Map(api);
+        Variations.ApproveVariation.Map(api);
+        Variations.RejectVariation.Map(api);
+        Accounts.GetSubcontractorAccount.Map(api);
     }
 }

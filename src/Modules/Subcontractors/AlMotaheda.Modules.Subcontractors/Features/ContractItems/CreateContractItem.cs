@@ -78,29 +78,31 @@ internal static class CreateContractItem
             return SubcontractorsProblems.CompletedProject();
         }
 
-        var contractStatus = await db.SubContracts.AsNoTracking()
+        var contractRow = await db.SubContracts.AsNoTracking()
             .Where(contract => contract.Id == contractId && contract.ProjectId == projectId)
-            .Select(contract => (ContractStatus?)contract.Status)
+            .Select(contract => new { contract.Status, contract.ProjectItemId })
             .SingleOrDefaultAsync(cancellationToken);
-        if (contractStatus is null)
+        if (contractRow is null)
         {
             return SubcontractorsProblems.ContractNotFound();
         }
 
-        if (contractStatus == ContractStatus.Completed)
+        if (contractRow.Status == ContractStatus.Completed)
         {
             return SubcontractorsProblems.CompletedContract();
         }
 
         if (request.ProjectItemId is { } projectItemId)
         {
-            switch (await ProjectItemLinks.CheckAsync(projectItems, projectId, projectItemId, cancellationToken))
+            switch (await ProjectItemLinks.CheckAsync(projectItems, projectId, projectItemId, cancellationToken, contractRow.ProjectItemId))
             {
                 case ProjectItemCheck.NotFound:
                     errors.Add("projectItemId", "The project item was not found on this project.");
                     return SubcontractorsProblems.Validation(errors);
                 case ProjectItemCheck.Inactive:
                     return SubcontractorsProblems.InactiveItem();
+                case ProjectItemCheck.OutsideScope:
+                    return SubcontractorsProblems.OutsideContractScope();
             }
         }
 

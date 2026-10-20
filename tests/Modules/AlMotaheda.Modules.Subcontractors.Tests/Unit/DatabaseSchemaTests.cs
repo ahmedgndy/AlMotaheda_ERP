@@ -19,7 +19,7 @@ public sealed class DatabaseSchemaTests
         using var db = CreateContext();
 
         Assert.False(db.Database.HasPendingModelChanges(), "The model changed without a migration. Create the migration again.");
-        Assert.Equal(["InitialSubcontractors", "SubcontractorUniqueness"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
+        Assert.Equal(["InitialSubcontractors", "SubcontractorUniqueness", "EngagementsAndVariations"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
     }
 
     [Theory]
@@ -39,7 +39,8 @@ public sealed class DatabaseSchemaTests
 
     [Theory]
     [InlineData("CREATE UNIQUE INDEX [UX_Subcontractor_NameEn] ON [sub].[Subcontractor] ([NameEn])")]
-    [InlineData("CREATE UNIQUE INDEX [UX_SubContract_Project_Subcontractor] ON [sub].[SubContract] ([ProjectId], [SubcontractorId])")]
+    [InlineData("CREATE UNIQUE INDEX [UX_SubContract_Project_Subcontractor_Item] ON [sub].[SubContract] ([ProjectId], [SubcontractorId], [ProjectItemId])")]
+    [InlineData("CREATE UNIQUE INDEX [UX_ContractVariation_Pending] ON [sub].[ContractVariation] ([ContractId]) WHERE [Status] = 'Pending'")]
     [InlineData("CREATE UNIQUE INDEX [UX_SubContract_ContractNo] ON [sub].[SubContract] ([ContractNo]) WHERE [ContractNo] IS NOT NULL")]
     [InlineData("CREATE INDEX [IX_ContractItem_ProjectItemId] ON [sub].[ContractItem] ([ProjectItemId])")]
     [InlineData("CREATE INDEX [IX_ManpowerSheet_ProjectItemId] ON [sub].[ManpowerSheet] ([ProjectItemId])")]

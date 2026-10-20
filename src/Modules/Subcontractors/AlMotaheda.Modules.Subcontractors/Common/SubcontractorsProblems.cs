@@ -26,6 +26,10 @@ internal static class SubcontractorsProblems
     public const string IdempotencyKeyReused = "idempotency_key_reused";
     public const string PaymentAlreadyVoided = "payment_already_voided";
     public const string ItemGone = "item_removed";
+    public const string ItemOutsideContractScope = "item_outside_contract_scope";
+    public const string ContractItemNotMain = "contract_item_not_main";
+    public const string VariationPending = "variation_pending";
+    public const string VariationBelowExecuted = "variation_below_executed";
 
     public static ValidationProblem Validation(ValidationErrors errors) => ApiProblem.Validation(errors.ToDictionary());
 
@@ -33,6 +37,23 @@ internal static class SubcontractorsProblems
     /// The project doesn't exist, or the caller may not see it. Both get the same answer, so a guessed id
     /// reveals nothing.
     /// </summary>
+    /// <summary>The contract is for one main work item; this item is outside it.</summary>
+    public static ProblemHttpResult OutsideContractScope() =>
+        Conflict(ItemOutsideContractScope, "This contract is for another main work item. Link its work to that item or one of its sub-items.");
+
+    /// <summary>A contract is made for a main work item, not a sub-item.</summary>
+    public static ProblemHttpResult NotAMainItem() =>
+        Conflict(ContractItemNotMain, "Choose a main work item for the contract. Its lines can then go to the item's sub-items.");
+
+    public static ProblemHttpResult VariationAlreadyPending() =>
+        Conflict(VariationPending, "A change of this contract is already waiting for a decision.");
+
+    /// <summary>The contract value would fall below the work already approved or the money already paid.</summary>
+    public static ProblemHttpResult BelowExecuted(decimal floor) =>
+        Conflict(VariationBelowExecuted, $"The contract value can't go below {floor:0.00}: that much work is approved or paid already.");
+
+    public static ProblemHttpResult VariationNotFound() => NotFound("contract variation");
+
     public static ProblemHttpResult ProjectNotFound() => ApiProblem.NotFoundResult("The project was not found.");
 
     public static ProblemHttpResult NotFound(string what) => ApiProblem.NotFoundResult($"The {what} was not found.");
@@ -78,7 +99,7 @@ internal static class SubcontractorsProblems
         Conflict(SubcontractorInactive, "This subcontractor is inactive. Reactivate it before giving it a new contract.");
 
     public static ProblemHttpResult CompanyAlreadyOnProject() =>
-        Conflict(AlreadyContracted, "This subcontractor already has a contract on this project.");
+        Conflict(AlreadyContracted, "This subcontractor already has a contract on this project for this work item.");
 
     public static ProblemHttpResult ContractNoAlreadyUsed() =>
         Conflict(ContractNoTaken, "This contract number is already used by another contract.");

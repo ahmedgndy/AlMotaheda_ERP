@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AlMotaheda.Modules.Archive.Data.Migrations
 {
     [DbContext(typeof(ArchiveDbContext))]
-    internal partial class ArchiveDbContextModelSnapshot : ModelSnapshot
+    partial class ArchiveDbContextModelSnapshot : ModelSnapshot
     {
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
@@ -163,7 +163,7 @@ namespace AlMotaheda.Modules.Archive.Data.Migrations
                         {
                             t.HasCheckConstraint("CK_DocumentLink_EntityId", "[EntityId] > 0");
 
-                            t.HasCheckConstraint("CK_DocumentLink_EntityType", "[EntityType] IN ('Expense', 'SupplierPayment', 'DailyReport', 'ReportRequest', 'LaborSheet', 'SubContract', 'SubPayment', 'Equipment', 'EquipmentCost', 'Budget')");
+                            t.HasCheckConstraint("CK_DocumentLink_EntityType", "[EntityType] IN ('Expense', 'SupplierPayment', 'DailyReport', 'ReportRequest', 'LaborSheet', 'SubContract', 'SubPayment', 'Equipment', 'EquipmentCost', 'Budget', 'CustodyEntry', 'SupplyAgreement', 'PayrollSettlement', 'ContractVariation')");
                         });
                 });
 

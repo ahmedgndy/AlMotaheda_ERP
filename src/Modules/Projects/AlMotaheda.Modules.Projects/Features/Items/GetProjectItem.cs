@@ -14,8 +14,8 @@ using Microsoft.EntityFrameworkCore;
 namespace AlMotaheda.Modules.Projects.Features.Items;
 
 /// <summary>
-/// <c>GET /api/projects/{pid}/items/{itemId}</c>: one item with its approved supplier, subcontract and labor
-/// lines, the supplier records still waiting for review, and the same totals as its row in the table.
+/// <c>GET /api/projects/{pid}/items/{itemId}</c>: one item with its approved supplier, subcontract, labor and
+/// equipment lines, the supplier records still waiting for review, and the same totals as its row in the table.
 /// </summary>
 internal static class GetProjectItem
 {
@@ -23,7 +23,7 @@ internal static class GetProjectItem
         projects.MapGet("/{projectId:int}/items/{itemId:int}", HandleAsync)
             .RequirePermission(ProjectPermissions.Module, PermissionAction.SeeMoney)
             .WithName("GetProjectItem")
-            .WithSummary("One project item with its supplier, subcontract and labor lines and its totals");
+            .WithSummary("One project item with its supplier, subcontract, labor and equipment lines and its totals");
 
     internal static async Task<Results<Ok<ItemDetail>, ProblemHttpResult>> HandleAsync(
         int projectId,
@@ -50,7 +50,8 @@ internal static class GetProjectItem
 
 /// <summary>
 /// <c>GET /api/projects/{pid}/items/unallocated</c>: the "غير مربوط ببند بعد" group, in the same shape as an item:
-/// the approved records of the three sources that have no item yet, and their totals.
+/// the approved supplier, subcontract and labor records that have no item yet, and their totals. Equipment costs on
+/// no item are not here: they are costs of the whole site (other costs of the items table).
 /// </summary>
 internal static class GetUnallocatedItems
 {
@@ -85,7 +86,8 @@ internal static class GetUnallocatedItems
 /// Builds an item detail, or the not-linked detail, from the same ledger run as the table, so the totals at the
 /// bottom of a detail always equal the row in the table.
 /// </summary>
-internal sealed class ItemDetails(ProjectsDbContext db, ItemsLedgerSource source, ILaborItemCosts labor, ISubcontractItemCosts subcontracts)
+internal sealed class ItemDetails(
+    ProjectsDbContext db, ItemsLedgerSource source, ILaborItemCosts labor, ISubcontractItemCosts subcontracts, IEquipmentItemCosts equipment)
 {
     /// <returns><c>null</c> when <paramref name="itemId"/> is set and the item is not on this project.</returns>
     public async Task<ItemDetail?> LoadAsync(int projectId, int? itemId, CancellationToken cancellationToken)
@@ -108,6 +110,9 @@ internal sealed class ItemDetails(ProjectsDbContext db, ItemsLedgerSource source
         var pending = await ExpenseQueries.ItemLines(db, projectId, itemId, approved: false).ToListAsync(cancellationToken);
         var subcontractLines = await subcontracts.LinesAsync(projectId, itemId, cancellationToken);
         var laborLines = await labor.LinesAsync(projectId, itemId, cancellationToken);
+        IReadOnlyList<EquipmentItemLine> equipmentLines = item is null
+            ? []
+            : (await equipment.LinesByItemAsync(projectId, [item.Id], cancellationToken)).GetValueOrDefault(item.Id) ?? [];
 
         var subItems = item is null
             ? []
@@ -122,6 +127,7 @@ internal sealed class ItemDetails(ProjectsDbContext db, ItemsLedgerSource source
             pending.Select(SupplierLine.From).ToList(),
             ItemFiguresView.From(figures),
             subItems,
-            withSubItems is null ? null : ItemFiguresView.From(withSubItems));
+            withSubItems is null ? null : ItemFiguresView.From(withSubItems),
+            equipmentLines);
     }
 }

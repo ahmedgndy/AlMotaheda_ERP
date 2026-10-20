@@ -51,6 +51,8 @@
     <Compile Include="..\AlMotaheda.Modules.Access.Tests\TestTokens.cs" Link="Shared\TestTokens.cs" />
     <!-- The Projects test helper: creates projects the way the frontend will. -->
     <Compile Include="..\AlMotaheda.Modules.Projects.Tests\Database\ProjectsApi.cs" Link="Shared\ProjectsApi.cs" />
+    <!-- Custody fundings and balances, for the weekly settlements paid in cash from a custody. -->
+    <Compile Include="..\AlMotaheda.Modules.Projects.Tests\Database\Workspace\FinancialWorkspaceApi.cs" Link="Shared\FinancialWorkspaceApi.cs" />
   </ItemGroup>
 
 </Project>

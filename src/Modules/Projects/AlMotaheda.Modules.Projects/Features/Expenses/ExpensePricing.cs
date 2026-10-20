@@ -52,6 +52,8 @@ internal static class ExpensePricing
 /// </summary>
 internal sealed class CostAlerts(ProjectsDbContext db, IUserDirectory users)
 {
+    public IUserDirectory Users => users;
+
     /// <summary>The project's active managers, never the actor.</summary>
     public async Task<IReadOnlyList<int>> ManagersAsync(int projectId, int actorUserId, CancellationToken cancellationToken) =>
         await db.ProjectMembers.AsNoTracking()
@@ -67,6 +69,17 @@ internal sealed class CostAlerts(ProjectsDbContext db, IUserDirectory users)
         var managers = await ManagersAsync(projectId, actorUserId, cancellationToken);
         var executives = await users.ListActiveAsync([AccessRoles.Executive], cancellationToken);
         return managers.Concat(executives.Select(executive => executive.Id)).Where(id => id != actorUserId).Distinct().Order().ToList();
+    }
+
+    /// <summary>
+    /// For cash paid from a custody: the project's active managers, every active Executive and every active
+    /// accountant, never the actor.
+    /// </summary>
+    public async Task<IReadOnlyList<int>> CustodyWatchersAsync(int projectId, int actorUserId, CancellationToken cancellationToken)
+    {
+        var managers = await ManagersAsync(projectId, actorUserId, cancellationToken);
+        var company = await users.ListActiveAsync([AccessRoles.Executive, AccessRoles.Accountant], cancellationToken);
+        return managers.Concat(company.Select(user => user.Id)).Where(id => id != actorUserId).Distinct().Order().ToList();
     }
 
     /// <summary>

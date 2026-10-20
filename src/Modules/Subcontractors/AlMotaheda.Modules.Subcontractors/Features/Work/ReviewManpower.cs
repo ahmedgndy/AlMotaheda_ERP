@@ -120,9 +120,10 @@ internal static class ManpowerReview
                 .Where(other => other.ContractId == sheet.ContractId && other.Id != sheet.Id && other.Status != WorkStatus.Rejected)
                 .SumAsync(other => other.Amount, cancellationToken);
 
-            if (!WorkRules.FitsCeiling(sheet.Contract.Value, others, sheet.Amount))
+            var ceiling = await ContractValues.EffectiveAsync(db, sheet.ContractId, cancellationToken);
+            if (!WorkRules.FitsCeiling(ceiling, others, sheet.Amount))
             {
-                return SubcontractorsProblems.OverCeiling(Math.Max(0, sheet.Contract.Value - others));
+                return SubcontractorsProblems.OverCeiling(Math.Max(0, ceiling - others));
             }
         }
 
@@ -210,6 +211,7 @@ internal static class LinkManpowerItem
         }
 
         var sheet = await db.ManpowerSheets
+            .Include(candidate => candidate.Contract)
             .SingleOrDefaultAsync(candidate => candidate.Id == sheetId && candidate.Contract.ProjectId == projectId, cancellationToken);
         if (sheet is null)
         {
@@ -223,13 +225,15 @@ internal static class LinkManpowerItem
 
         if (request.ProjectItemId is { } projectItemId && projectItemId != sheet.ProjectItemId)
         {
-            switch (await ProjectItemLinks.CheckAsync(projectItems, projectId, projectItemId, cancellationToken))
+            switch (await ProjectItemLinks.CheckAsync(projectItems, projectId, projectItemId, cancellationToken, sheet.Contract.ProjectItemId))
             {
                 case ProjectItemCheck.NotFound:
                     errors.Add("projectItemId", "The project item was not found on this project.");
                     return SubcontractorsProblems.Validation(errors);
                 case ProjectItemCheck.Inactive:
                     return SubcontractorsProblems.InactiveItem();
+                case ProjectItemCheck.OutsideScope:
+                    return SubcontractorsProblems.OutsideContractScope();
             }
         }
 

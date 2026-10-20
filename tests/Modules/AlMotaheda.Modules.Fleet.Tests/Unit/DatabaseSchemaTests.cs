@@ -19,7 +19,7 @@ public sealed class DatabaseSchemaTests
         using var db = CreateContext();
 
         Assert.False(db.Database.HasPendingModelChanges(), "The model changed without a migration. Run dotnet ef migrations add.");
-        Assert.Equal(["InitialFleet", "EquipmentCostAdjustments"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
+        Assert.Equal(["InitialFleet", "EquipmentCostAdjustments", "EquipmentCostWorkItem"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
     }
 
     [Fact]
@@ -42,6 +42,8 @@ public sealed class DatabaseSchemaTests
     [InlineData("CREATE INDEX [IX_EquipmentAssignment_Project_End] ON [fleet].[EquipmentAssignment] ([ProjectId], [EndDate])")]
     [InlineData("CREATE INDEX [IX_EquipmentCost_Project_Date] ON [fleet].[EquipmentCost] ([ProjectId], [CostDate])")]
     [InlineData("CREATE INDEX [IX_EquipmentCost_Project_Status] ON [fleet].[EquipmentCost] ([ProjectId], [Status])")]
+    [InlineData("CREATE INDEX [IX_EquipmentCost_Project_Item] ON [fleet].[EquipmentCost] ([ProjectId], [ProjectItemId])")]
+    [InlineData("[ProjectItemId] int NULL")]
     [InlineData("CONSTRAINT [CK_Equipment_Category] CHECK ([Category] IN ('Tools', 'Medium', 'Heavy', 'Survey', 'Safety'))")]
     [InlineData("CONSTRAINT [CK_Equipment_Ownership] CHECK ([Ownership] IN ('Owned', 'Rented'))")]
     [InlineData("CONSTRAINT [CK_Equipment_Status] CHECK ([Status] IN ('InService', 'UnderMaintenance', 'Lost', 'Retired'))")]
@@ -97,6 +99,7 @@ public sealed class DatabaseSchemaTests
     [InlineData("ALTER TABLE [fleet].[EquipmentAssignment] ADD CONSTRAINT [FK_EquipmentAssignment_User_ResponsibleUserId] FOREIGN KEY ([ResponsibleUserId]) REFERENCES [access].[User] ([Id])")]
     [InlineData("ALTER TABLE [fleet].[EquipmentCost] ADD CONSTRAINT [FK_EquipmentCost_Project_ProjectId] FOREIGN KEY ([ProjectId]) REFERENCES [projects].[Project] ([Id])")]
     [InlineData("ALTER TABLE [fleet].[EquipmentCost] ADD CONSTRAINT [FK_EquipmentCost_Supplier_SupplierId] FOREIGN KEY ([SupplierId]) REFERENCES [projects].[Supplier] ([Id])")]
+    [InlineData("ALTER TABLE [fleet].[EquipmentCost] ADD CONSTRAINT [FK_EquipmentCost_ProjectItem_Project_Item] FOREIGN KEY ([ProjectId], [ProjectItemId]) REFERENCES [projects].[ProjectItem] ([ProjectId], [Id])")]
     [InlineData("ALTER TABLE [fleet].[EquipmentRental] ADD CONSTRAINT [FK_EquipmentRental_Supplier_SupplierId] FOREIGN KEY ([SupplierId]) REFERENCES [projects].[Supplier] ([Id])")]
     [InlineData("[fleet].[__EFMigrationsHistory]")]
     public void Migration_adds_the_foreign_keys_to_other_modules(string expected)

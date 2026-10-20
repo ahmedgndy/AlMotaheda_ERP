@@ -46,6 +46,15 @@ public static class WorkInboxRecordTypes
     public const string EquipmentCost = "EquipmentCost";
     public const string Measurement = "Measurement";
     public const string Manpower = "Manpower";
+
+    /// <summary>A weekly labor settlement waiting for a custody reviewer's confirmation.</summary>
+    public const string PayrollSettlement = "PayrollSettlement";
+
+    /// <summary>A change of a subcontract's value waiting for a decision; its parent is the subcontract.</summary>
+    public const string ContractVariation = "ContractVariation";
+
+    /// <summary>A transaction priced above its reference range, waiting for the Executive in Price Control.</summary>
+    public const string PriceException = "PriceException";
 }
 
 /// <param name="Reason">One of <see cref="WorkInboxReasons"/>.</param>

@@ -39,7 +39,7 @@ internal static class ListProjectItems
         HttpContext httpContext,
         IProjectAccess access,
         ItemsLedgerSource source,
-        IEnumerable<IProjectCostSource> costSources,
+        ItemPlans plans,
         CancellationToken cancellationToken,
         string? search = null,
         bool includeInactive = false)
@@ -66,31 +66,33 @@ internal static class ListProjectItems
             .Select(data.RowOf)
             .ToList();
 
-        var reconciliation = await ReconcileAsync(projectId, data, costSources, cancellationToken);
+        // The plan next to each row (with its sub-items for a main item): budget, what is left of it, commitments.
+        var plan = await plans.LoadAsync(projectId, data.Items.Select(item => item.Id).ToList(), cancellationToken);
+        rows = rows
+            .Select(row => row with
+            {
+                Plan = plan.For(data.Tree.SelfAndSubItems(row.Id), row.WithSubItems?.TotalCost ?? row.TotalCost),
+            })
+            .ToList();
 
         return TypedResults.Ok(new Response(
             rows,
             ItemFiguresView.From(data.Ledger.Totals),
             ItemFiguresView.From(data.Ledger.Unallocated),
-            reconciliation));
+            Reconcile(data)));
     }
 
     /// <summary>
     /// projectRecognizedCost = items + not linked + other costs, where other costs are the site expenses outside
-    /// the items screens and the equipment costs that Fleet reports. Equipment is never split over items (F1).
+    /// the items screens and the equipment costs on no work item. An equipment cost on a work item is in the items
+    /// total instead: the same Fleet rows feed both, each cost in exactly one of the two (formula A), so the sum is
+    /// the project's recognized cost whether or not a cost is linked.
     /// </summary>
-    internal static async Task<ItemsReconciliation> ReconcileAsync(
-        int projectId, ItemsLedgerData data, IEnumerable<IProjectCostSource> costSources, CancellationToken cancellationToken)
+    internal static ItemsReconciliation Reconcile(ItemsLedgerData data)
     {
-        decimal equipment = 0;
-        foreach (var costSource in costSources.Where(candidate => candidate.Group == CostGroups.Equipment))
-        {
-            equipment += (await costSource.SummarizeAsync(projectId, null, null, cancellationToken)).Recognized;
-        }
-
         var items = data.Ledger.Totals.TotalCost;
         var unallocated = data.Ledger.Unallocated.TotalCost;
-        var other = data.OtherSiteExpenses + equipment;
+        var other = data.OtherSiteExpenses + data.Ledger.SiteEquipmentCost;
 
         return new ItemsReconciliation(items, unallocated, other, items + unallocated + other);
     }

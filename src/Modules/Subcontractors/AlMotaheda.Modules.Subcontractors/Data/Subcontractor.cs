@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using AlMotaheda.BuildingBlocks.Domain;
 namespace AlMotaheda.Modules.Subcontractors.Data;
 
@@ -57,10 +58,16 @@ internal enum SubcontractorStatus
 }
 
 /// <summary>
-/// One company's contract on one project. The contract value is a commitment, never a cost: cost is only the
-/// approved measured work and manpower recorded under it. One contract per company per project; the same company
-/// can have contracts on other projects, each with its own value, scope and records.
+/// One company's engagement on one project: a contract for one main work item (or, for older contracts, for the
+/// project as a whole). The contract value is a commitment, never a cost: cost is only the approved measured work
+/// and manpower recorded under it. One contract per company, project and main work item, so the same company can
+/// work on several main items and several projects, each engagement with its own value, scope and records, and one
+/// company identity.
 /// </summary>
+/// <remarks>
+/// The value that counts (<c>ContractValues.Effective</c>) is <see cref="Value"/> plus the approved
+/// <see cref="ContractVariation"/>s: a variation changes the contract with an approval and an audit trail.
+/// </remarks>
 internal sealed class SubContract
 {
     public int Id { get; set; }
@@ -70,6 +77,13 @@ internal sealed class SubContract
 
     /// <summary><c>projects.Project</c>. A plain column here: the foreign key is written by hand in the migration.</summary>
     public int ProjectId { get; set; }
+
+    /// <summary>
+    /// The main work item ("بند رئيسي") this engagement is for, on the same project (checked through
+    /// <c>IProjectItems</c>). Its contract items are linked to it or to one of its sub-items. Empty for contracts made
+    /// before work items had a hierarchy: those cover the project as a whole.
+    /// </summary>
+    public int? ProjectItemId { get; set; }
 
     /// <summary>The company's contract number, when there is one. Unique when set.</summary>
     public string? ContractNo { get; set; }
@@ -101,7 +115,82 @@ internal sealed class SubContract
 
     public List<ContractItem> Items { get; } = [];
 
+    public List<ContractVariation> Variations { get; } = [];
+
     public bool IsCompleted => Status == ContractStatus.Completed;
+}
+
+/// <summary>
+/// A change of an agreed contract value ("أمر تغيير"): more work (positive) or less (negative), with its reason. It
+/// counts only once someone other than its requester approves it (subcontractors Approve); a decided row never
+/// changes, so the contract's history stays readable.
+/// </summary>
+internal sealed class ContractVariation
+{
+    public int Id { get; set; }
+
+    public int ContractId { get; set; }
+    public SubContract Contract { get; set; } = null!;
+
+    /// <summary>The contract's project, copied so the audit trail and the live updates know the project.</summary>
+    public int ProjectId { get; set; }
+
+    /// <summary>Signed: added (positive) or removed (negative) contract value. Never zero.</summary>
+    public decimal Amount { get; set; }
+
+    public required string Reason { get; set; }
+
+    /// <summary>The variation's own reference (the signed change order), when there is one.</summary>
+    public string? Reference { get; set; }
+
+    private VariationStatus _status = VariationStatus.Pending;
+
+    public VariationStatus Status { get => _status; init => _status = value; }
+
+    public DateTime RequestedAt { get; set; }
+    public int RequestedBy { get; set; }
+
+    public DateTime? DecidedAt { get; set; }
+    public int? DecidedBy { get; set; }
+    public string? DecisionNote { get; set; }
+
+    private static readonly AlMotaheda.BuildingBlocks.Domain.StatusFlow<VariationStatus> Flow = new(
+        (VariationStatus.Pending, VariationStatus.Approved),
+        (VariationStatus.Pending, VariationStatus.Rejected));
+
+    public void Decide(VariationStatus outcome, int deciderId, DateTime now, string? note)
+    {
+        _status = Flow.Move(_status, outcome);
+        DecidedAt = now;
+        DecidedBy = deciderId;
+        DecisionNote = note;
+    }
+}
+
+internal enum VariationStatus
+{
+    /// <summary>Waiting for a decision. Not in the contract value.</summary>
+    Pending,
+    Approved,
+    Rejected,
+}
+
+/// <summary>The one rule for "what is this contract worth now": the signed value plus its approved variations.</summary>
+internal static class ContractValues
+{
+    /// <summary>The approved variations of a contract, as a subquery any projection can use.</summary>
+    public static IQueryable<decimal> ApprovedVariations(SubcontractorsDbContext db, int contractId) =>
+        db.ContractVariations.Where(variation => variation.ContractId == contractId && variation.Status == VariationStatus.Approved)
+            .Select(variation => variation.Amount);
+
+    /// <summary>Signed value + approved variations, read in one query.</summary>
+    public static Task<decimal> EffectiveAsync(SubcontractorsDbContext db, int contractId, CancellationToken cancellationToken) =>
+        db.SubContracts.AsNoTracking()
+            .Where(contract => contract.Id == contractId)
+            .Select(contract => contract.Value + (db.ContractVariations
+                .Where(variation => variation.ContractId == contract.Id && variation.Status == VariationStatus.Approved)
+                .Sum(variation => (decimal?)variation.Amount) ?? 0))
+            .SingleAsync(cancellationToken);
 }
 
 /// <summary>How the work of a contract is priced. Stored by name.</summary>

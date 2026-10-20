@@ -112,7 +112,7 @@ internal static class RecordManpower
 
         var contract = await db.SubContracts.AsNoTracking()
             .Where(candidate => candidate.Id == contractId && candidate.ProjectId == projectId)
-            .Select(candidate => new { candidate.Model, candidate.Status, candidate.Value, candidate.DailyRate })
+            .Select(candidate => new { candidate.Model, candidate.Status, Value = candidate.Value + (db.ContractVariations.Where(variation => variation.ContractId == candidate.Id && variation.Status == VariationStatus.Approved).Sum(variation => (decimal?)variation.Amount) ?? 0), candidate.DailyRate, candidate.ProjectItemId })
             .SingleOrDefaultAsync(cancellationToken);
         if (contract is null)
         {
@@ -131,13 +131,15 @@ internal static class RecordManpower
 
         if (request.ProjectItemId is { } projectItemId)
         {
-            switch (await ProjectItemLinks.CheckAsync(projectItems, projectId, projectItemId, cancellationToken))
+            switch (await ProjectItemLinks.CheckAsync(projectItems, projectId, projectItemId, cancellationToken, contract.ProjectItemId))
             {
                 case ProjectItemCheck.NotFound:
                     errors.Add("projectItemId", "The project item was not found on this project.");
                     return SubcontractorsProblems.Validation(errors);
                 case ProjectItemCheck.Inactive:
                     return SubcontractorsProblems.InactiveItem();
+                case ProjectItemCheck.OutsideScope:
+                    return SubcontractorsProblems.OutsideContractScope();
             }
         }
 

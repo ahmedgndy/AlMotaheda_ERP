@@ -4,10 +4,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AlMotaheda.Modules.Workforce.Integration;
 
-/// <summary>The Workforce module's answer to <see cref="IProjectRecordOwnership"/>: daily labor sheets.</summary>
+/// <summary>The Workforce module's answer to <see cref="IProjectRecordOwnership"/>: daily labor sheets and weekly settlements.</summary>
 internal sealed class WorkforceRecordOwnership(WorkforceDbContext db) : IProjectRecordOwnership
 {
-    public IReadOnlyCollection<string> Kinds { get; } = [ProjectRecordKinds.LaborSheet];
+    public IReadOnlyCollection<string> Kinds { get; } = [ProjectRecordKinds.LaborSheet, ProjectRecordKinds.PayrollSettlement];
 
     public async Task<IReadOnlySet<int>> FindOnProjectAsync(
         int projectId, string kind, IReadOnlyCollection<int> ids, CancellationToken cancellationToken)
@@ -25,6 +25,8 @@ internal sealed class WorkforceRecordOwnership(WorkforceDbContext db) : IProject
     {
         ProjectRecordKinds.LaborSheet => db.DailySheets.AsNoTracking()
             .Where(sheet => sheet.ProjectId == projectId && ids.Contains(sheet.Id)).Select(sheet => sheet.Id),
+        ProjectRecordKinds.PayrollSettlement => db.PayrollSettlements.AsNoTracking()
+            .Where(settlement => settlement.ProjectId == projectId && ids.Contains(settlement.Id)).Select(settlement => settlement.Id),
         _ => null,
     };
 }

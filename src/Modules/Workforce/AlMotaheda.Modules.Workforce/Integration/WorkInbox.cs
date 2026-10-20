@@ -7,8 +7,8 @@ using Microsoft.EntityFrameworkCore;
 namespace AlMotaheda.Modules.Workforce.Integration;
 
 /// <summary>
-/// Workforce's part of the work inbox: labor sheets submitted for review (workers Approve, never the recorder) and
-/// sheets returned to their recorder.
+/// Workforce's part of the work inbox: labor sheets submitted for review (workers Approve, never the recorder),
+/// sheets returned to their recorder, and weekly settlements waiting for a custody reviewer.
 /// </summary>
 internal sealed class WorkforceInboxSource(WorkforceDbContext db) : IWorkInboxSource
 {
@@ -40,6 +40,28 @@ internal sealed class WorkforceInboxSource(WorkforceDbContext db) : IWorkInboxSo
         items.AddRange(returned.Select(sheet => new WorkInboxItem(
             WorkInboxReasons.Returned, WorkInboxRecordTypes.LaborSheet, sheet.ProjectId, sheet.Id, null, sheet.WorkDate,
             sheet.ReviewedAt ?? sheet.CreatedAt, $"{sheet.Shift} · {sheet.Workers}", null, sheet.ReviewedBy, sheet.ReviewNote)));
+
+        // Weekly settlements paid in cash wait for a custody reviewer, who is neither the recorder nor the holder.
+        if (query.Caller.HasPermission(Features.Settlements.SettlementEndpoints.CustodyModule, PermissionAction.Approve))
+        {
+            var seesMoney = query.Caller.HasPermission(WorkforcePermissions.Workers, PermissionAction.SeeMoney)
+                            || query.Caller.HasPermission(Features.Settlements.SettlementEndpoints.CustodyModule, PermissionAction.SeeMoney);
+            var settlements = await db.PayrollSettlements.AsNoTracking()
+                .Where(settlement => ids.Contains(settlement.ProjectId) && settlement.Status == SettlementStatus.Pending
+                                     && settlement.RecordedBy != me && settlement.PaidByUserId != me)
+                .OrderBy(settlement => settlement.RecordedAt)
+                .Take(query.Limit)
+                .Select(settlement => new
+                {
+                    settlement.Id, settlement.ProjectId, settlement.PaidOn, settlement.RecordedAt, settlement.RecordedBy, settlement.Amount,
+                    settlement.PeriodFrom, settlement.PeriodTo, Workers = settlement.Lines.Count,
+                })
+                .ToListAsync(cancellationToken);
+            items.AddRange(settlements.Select(settlement => new WorkInboxItem(
+                WorkInboxReasons.Review, WorkInboxRecordTypes.PayrollSettlement, settlement.ProjectId, settlement.Id, null, settlement.PaidOn,
+                settlement.RecordedAt, $"{settlement.PeriodFrom:yyyy-MM-dd} → {settlement.PeriodTo:yyyy-MM-dd} · {settlement.Workers}",
+                seesMoney ? settlement.Amount : null, settlement.RecordedBy, null)));
+        }
 
         return items;
     }

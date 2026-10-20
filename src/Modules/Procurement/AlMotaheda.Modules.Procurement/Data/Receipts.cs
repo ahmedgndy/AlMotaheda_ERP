@@ -47,7 +47,10 @@ internal sealed class SupplierInvoice
     private static readonly StatusFlow<SupplierInvoiceStatus> Flow = new(
         (SupplierInvoiceStatus.Matched, SupplierInvoiceStatus.Posted),
         (SupplierInvoiceStatus.Mismatch, SupplierInvoiceStatus.Posted),
-        (SupplierInvoiceStatus.Mismatch, SupplierInvoiceStatus.Returned));
+        (SupplierInvoiceStatus.Mismatch, SupplierInvoiceStatus.Returned),
+        (SupplierInvoiceStatus.Mismatch, SupplierInvoiceStatus.PriceHold),
+        (SupplierInvoiceStatus.PriceHold, SupplierInvoiceStatus.Posted),
+        (SupplierInvoiceStatus.PriceHold, SupplierInvoiceStatus.Mismatch));
 
     private SupplierInvoiceStatus _status;
 
@@ -117,6 +120,12 @@ internal sealed class SupplierInvoice
         PostedAt = now;
         PostedBy = userId;
     }
+
+    /// <summary>A line's price is above its Price Control range: the invoice waits for the Executive before it is posted.</summary>
+    public void HoldForPrice() => _status = Flow.Move(Status, SupplierInvoiceStatus.PriceHold);
+
+    /// <summary>The Executive rejected the price: back to the Accountant, who returns the invoice or takes a credit note.</summary>
+    public void ReleaseToMismatch() => _status = Flow.Move(Status, SupplierInvoiceStatus.Mismatch);
 }
 
 /// <summary>Stored by name.</summary>
@@ -126,6 +135,9 @@ internal enum SupplierInvoiceStatus
     Mismatch,
     Posted,
     Returned,
+
+    /// <summary>A line's price is above its Price Control range: waiting for the Executive's decision; nothing is posted.</summary>
+    PriceHold,
 }
 
 /// <summary>Stored by name. How the Accountant resolved a mismatch.</summary>
@@ -156,6 +168,12 @@ internal sealed class SupplierInvoiceLine
 
     /// <summary>The PO price at recording.</summary>
     public decimal OrderUnitPrice { get; set; }
+
+    /// <summary>Price Control's comparison of the invoice price with the reference range on the invoice date, when the order line names a price item.</summary>
+    public string? PriceCheck { get; set; }
+
+    /// <summary>The price exception opened for this line (Projects), when the price was above its range.</summary>
+    public int? PriceExceptionId { get; set; }
 
     /// <summary>The price is within the tolerance of the PO price.</summary>
     public bool PriceMatches { get; set; }

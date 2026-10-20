@@ -16,7 +16,8 @@ namespace AlMotaheda.Modules.Fleet.Features.Costs;
 /// <summary>
 /// <c>PUT /api/projects/{pid}/equipment-costs/{id}</c>: the recorder fixes a cost and resubmits it. Only while it is
 /// <c>Recorded</c> or <c>Returned</c>; it goes back to <c>Recorded</c> and the review note is cleared. An approved
-/// cost is frozen.
+/// cost is frozen. The work item may be changed or removed; a newly chosen one must be active (409
+/// <c>item_inactive</c>).
 /// </summary>
 internal static class UpdateEquipmentCost
 {
@@ -34,7 +35,8 @@ internal static class UpdateEquipmentCost
         int? SupplierId,
         string? Channel,
         string? InvoiceNo,
-        string? RowVersion) : IEquipmentCostFieldsRequest;
+        string? RowVersion,
+        int? ProjectItemId = null) : IEquipmentCostFieldsRequest;
 
     public static void Map(IEndpointRouteBuilder api) =>
         api.MapPut("/projects/{projectId:int}/equipment-costs/{costId:int}", HandleAsync)
@@ -50,6 +52,7 @@ internal static class UpdateEquipmentCost
         IProjectAccess access,
         IUserDirectory users,
         ISupplierDirectory suppliers,
+        IProjectItems projectItems,
         CompanyClock clock,
         FleetLog log,
         CancellationToken cancellationToken)
@@ -99,15 +102,16 @@ internal static class UpdateEquipmentCost
                 return FleetProblems.WrongStatus("Only a recorded or returned cost can be changed. An approved cost is frozen.");
         }
 
-        var wasOnProject = await EquipmentCostReferences.CheckAsync(db, suppliers, projectId, fields!, errors, cancellationToken);
+        var conflict = await EquipmentCostReferences.CheckAsync(
+            db, suppliers, projectItems, projectId, fields!, currentItemId: cost.ProjectItemId, errors, cancellationToken);
         if (errors.HasErrors)
         {
             return FleetProblems.Validation(errors);
         }
 
-        if (!wasOnProject)
+        if (EquipmentCostReferences.ProblemOf(conflict) is { } problem)
         {
-            return FleetProblems.NotOnProject();
+            return problem;
         }
 
         var oldStatus = cost.Status;
@@ -122,6 +126,11 @@ internal static class UpdateEquipmentCost
         catch (DbUpdateConcurrencyException)
         {
             return ApiProblem.ConcurrencyConflictResult();
+        }
+        catch (DbUpdateException exception) when (cost.ProjectItemId is not null && SqlViolations.IsReferenceOrCheck(exception))
+        {
+            // The work item was deleted by someone else after our check: a lost race is a 409, never a 500.
+            return FleetProblems.ItemRemoved();
         }
 
         log.CostResubmitted(caller.UserId, projectId, cost.Id, oldStatus.ToString());

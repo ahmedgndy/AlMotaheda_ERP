@@ -15,7 +15,9 @@ internal interface IProjectItemsSummary
 /// <param name="Items">One row per item of the project, including items with no records yet.</param>
 internal sealed record ProjectItemsSummary(ItemsGroupTotals Totals, ItemsGroupTotals Unallocated, IReadOnlyList<ItemTotalsRow> Items, int ActiveItemCount);
 
-internal sealed record ItemsGroupTotals(decimal SupplierCost, decimal SubcontractorCost, decimal LaborCost, decimal TotalCost, decimal Paid, decimal Outstanding, int RecordCount)
+internal sealed record ItemsGroupTotals(
+    decimal SupplierCost, decimal SubcontractorCost, decimal LaborCost, decimal TotalCost, decimal Paid, decimal Outstanding, int RecordCount,
+    decimal EquipmentCost = 0)
 {
     public static ItemsGroupTotals From(ItemFigures figures) => new(
         figures.SupplierCost,
@@ -24,7 +26,8 @@ internal sealed record ItemsGroupTotals(decimal SupplierCost, decimal Subcontrac
         figures.TotalCost,
         figures.Paid,
         figures.Outstanding,
-        figures.RecordCount);
+        figures.RecordCount,
+        figures.EquipmentCost);
 }
 
 internal sealed record ItemTotalsRow(int ItemId, string NameAr, string NameEn, decimal TotalCost, decimal Paid, decimal Outstanding);

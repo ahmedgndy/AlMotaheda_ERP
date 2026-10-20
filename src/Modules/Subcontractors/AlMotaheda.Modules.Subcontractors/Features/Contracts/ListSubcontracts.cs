@@ -36,6 +36,7 @@ internal static class ListSubcontracts
         HttpContext httpContext,
         SubcontractorsDbContext db,
         IProjectAccess access,
+        IProjectItems projectItems,
         CancellationToken cancellationToken,
         string? status = null)
     {
@@ -79,9 +80,11 @@ internal static class ListSubcontracts
             contract => ContractAccount.Compute(contract.Terms, workByContract[contract.Id], paymentsByContract[contract.Id]));
 
         var seesMoney = caller.SeesMoney;
+        var itemNames = await projectItems.FindAsync(
+            projectId, contracts.Select(contract => contract.ProjectItemId).OfType<int>().Distinct().ToList(), cancellationToken);
         var items = contracts
             .Where(contract => statusFilter is null || contract.Status == statusFilter)
-            .Select(contract => SubcontractView.From(contract, accounts[contract.Id], seesMoney))
+            .Select(contract => SubcontractView.From(contract, accounts[contract.Id], seesMoney, itemNames))
             .ToList();
 
         return TypedResults.Ok(new Response(items, seesMoney ? ContractTotals.Sum(accounts.Values) : null));

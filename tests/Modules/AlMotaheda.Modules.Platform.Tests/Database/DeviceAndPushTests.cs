@@ -90,7 +90,10 @@ public sealed class DeviceAndPushTests(SqlServerFixture database)
         var recorded = await api.RecordAsync(cast.Engineer, cast.ProjectId, SupplyBody(cemex, 1m, 100m, "Credit"));
         await EnsureStatus(await api.ReviewAsync(cast.Accountant, cast.ProjectId, recorded, "return", "Wrong supplier"), HttpStatusCode.OK);
         await Task.Delay(TimeSpan.FromSeconds(3));
-        Assert.Empty(sender.Sent);
+        // The manager, who now holds the phone, is told about the new cost on the project (CostRecorded); the
+        // engineer's own notification (RecordReturned) never reaches it.
+        Assert.DoesNotContain(sender.Sent, push => push.Message.Type == "RecordReturned");
+        Assert.All(sender.Sent, push => Assert.Equal("CostRecorded", push.Message.Type));
 
         // The manager unregisters it on sign-out; registering again works.
         await EnsureStatus(await api.SendAsync(HttpMethod.Post, "/api/devices/unregister", cast.Manager, new { token = "shared-phone" }), HttpStatusCode.NoContent);

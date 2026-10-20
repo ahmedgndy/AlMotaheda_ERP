@@ -10,7 +10,7 @@ namespace AlMotaheda.Modules.Subcontractors.Integration;
 /// </summary>
 internal sealed class SubcontractRecordOwnership(SubcontractorsDbContext db) : IProjectRecordOwnership
 {
-    public IReadOnlyCollection<string> Kinds { get; } = [ProjectRecordKinds.SubContract, ProjectRecordKinds.SubPayment];
+    public IReadOnlyCollection<string> Kinds { get; } = [ProjectRecordKinds.SubContract, ProjectRecordKinds.SubPayment, ProjectRecordKinds.ContractVariation];
 
     public async Task<IReadOnlySet<int>> FindOnProjectAsync(
         int projectId, string kind, IReadOnlyCollection<int> ids, CancellationToken cancellationToken)
@@ -30,6 +30,8 @@ internal sealed class SubcontractRecordOwnership(SubcontractorsDbContext db) : I
             .Where(contract => contract.ProjectId == projectId && ids.Contains(contract.Id)).Select(contract => contract.Id),
         ProjectRecordKinds.SubPayment => db.SubPayments.AsNoTracking()
             .Where(payment => payment.Contract.ProjectId == projectId && ids.Contains(payment.Id)).Select(payment => payment.Id),
+        ProjectRecordKinds.ContractVariation => db.ContractVariations.AsNoTracking()
+            .Where(variation => variation.ProjectId == projectId && ids.Contains(variation.Id)).Select(variation => variation.Id),
         _ => null,
     };
 }

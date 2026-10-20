@@ -16,6 +16,9 @@ internal interface IContractFieldsRequest
     string? Status { get; }
     string? ContractNo { get; }
     string? Scope { get; }
+
+    /// <summary>The main work item of the engagement; optional only for the older project-wide contracts.</summary>
+    int? ProjectItemId { get; }
 }
 
 /// <summary>The contract form after validation.</summary>
@@ -28,7 +31,8 @@ internal sealed record ContractFields(
     DateOnly? EndDate,
     ContractStatus Status,
     string? ContractNo,
-    string? Scope)
+    string? Scope,
+    int? ProjectItemId = null)
 {
     /// <summary>Checks every field and reports every problem at once.</summary>
     public static ContractFields? Validate(IContractFieldsRequest request, ValidationErrors errors)
@@ -76,9 +80,14 @@ internal sealed record ContractFields(
         var contractNo = Input.OptionalText(request.ContractNo, SubContractConfiguration.ContractNoMaxLength, errors, "contractNo", "The contract number");
         var scope = Input.OptionalText(request.Scope, SubContractConfiguration.ScopeMaxLength, errors, "scope", "The scope");
 
+        if (request.ProjectItemId is < 1)
+        {
+            errors.Add("projectItemId", "projectItemId is not valid.");
+        }
+
         return errors.HasErrors
             ? null
-            : new ContractFields(model, value!.Value, dailyRate, retention, startDate!.Value, endDate, status, contractNo, scope);
+            : new ContractFields(model, value!.Value, dailyRate, retention, startDate!.Value, endDate, status, contractNo, scope, request.ProjectItemId);
     }
 
     public void ApplyTo(SubContract contract)
@@ -92,5 +101,33 @@ internal sealed record ContractFields(
         contract.Status = Status;
         contract.ContractNo = ContractNo;
         contract.Scope = Scope;
+        contract.ProjectItemId = ProjectItemId;
+    }
+
+    /// <summary>
+    /// The engagement's work item must be a main item of this project, and active when it is newly chosen. Returns
+    /// the problem to answer, or <c>null</c>; an unknown item is added to <paramref name="errors"/>.
+    /// </summary>
+    public async Task<Microsoft.AspNetCore.Http.HttpResults.ProblemHttpResult?> CheckWorkItemAsync(
+        AlMotaheda.Modules.Projects.Contracts.IProjectItems projectItems, int projectId, int? currentItemId, ValidationErrors errors, CancellationToken cancellationToken)
+    {
+        if (ProjectItemId is not { } itemId || itemId == currentItemId)
+        {
+            return null;
+        }
+
+        var found = await projectItems.FindAsync(projectId, [itemId], cancellationToken);
+        if (!found.TryGetValue(itemId, out var item))
+        {
+            errors.Add("projectItemId", "The work item was not found on this project.");
+            return null;
+        }
+
+        if (item.ParentItemId is not null)
+        {
+            return SubcontractorsProblems.NotAMainItem();
+        }
+
+        return item.IsActive ? null : SubcontractorsProblems.InactiveItem();
     }
 }

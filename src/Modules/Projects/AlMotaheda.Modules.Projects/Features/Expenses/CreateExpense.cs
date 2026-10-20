@@ -13,6 +13,8 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using AlMotaheda.Modules.Projects.Data.Configurations;
+using AlMotaheda.Modules.Projects.Features.Custody;
+using AlMotaheda.Modules.Projects.Features.PriceControl;
 
 namespace AlMotaheda.Modules.Projects.Features.Expenses;
 
@@ -51,7 +53,9 @@ internal static class CreateExpense
         string? Notes,
         int? PriceItemId = null,
         string? PriceJustification = null,
-        string? IdempotencyKey = null) : IExpenseFieldsRequest;
+        string? IdempotencyKey = null,
+        int? SupplyAgreementId = null,
+        string? PayeeName = null) : IExpenseFieldsRequest;
 
     public static void Map(IEndpointRouteBuilder projects) =>
         projects.MapPost("/{projectId:int}/expenses", HandleAsync)
@@ -67,6 +71,7 @@ internal static class CreateExpense
         IProjectAccess access,
         IUserDirectory users,
         CostAlerts alerts,
+        PriceExceptionCases cases,
         IOptions<ProjectsOptions> options,
         CompanyClock clock,
         ProjectsLog log,
@@ -114,7 +119,15 @@ internal static class CreateExpense
             return repeated;
         }
 
-        var references = await ExpenseReferences.ResolveAsync(db, projectId, fields!, errors, cancellationToken);
+        // A supply under an agreement takes the agreement's work item (and must match its supplier and unit).
+        var (withAgreement, agreementProblem) = await ExpenseAgreements.ApplyAsync(db, projectId, fields!, errors, cancellationToken);
+        fields = withAgreement;
+        if (agreementProblem is not null && !errors.HasErrors)
+        {
+            return agreementProblem;
+        }
+
+        var references = await ExpenseReferences.ResolveAsync(db, projectId, fields, errors, cancellationToken);
         if (errors.HasErrors)
         {
             return ProjectProblems.Validation(errors);
@@ -143,6 +156,19 @@ internal static class CreateExpense
             return priceProblem;
         }
 
+        // Paid from the recorder's custody: checked against what the custody holds (policy Block refuses, Warn saves).
+        var custody = fields!.Channel == PaymentChannel.Custody
+            ? await CustodySpendCheck.CheckAsync(db, projectId, caller.UserId, fields.Amount, null, options.Value.BlocksCustodyOverdraft, cancellationToken)
+            : CustodySpend.None;
+        if (custody.Problem is not null)
+        {
+            log.ActionRefused(caller.UserId, nameof(CreateExpense), "more than the custody holds (policy Block)");
+            return custody.Problem;
+        }
+
+        // One transaction for the record, its alerts and its price case (the custody check may have opened it).
+        await using var transaction = custody.Transaction ?? await db.Database.BeginTransactionAsync(cancellationToken);
+
         var now = clock.UtcNow;
         var expense = new ProjectExpense
         {
@@ -167,11 +193,11 @@ internal static class CreateExpense
 
         // The alerts are saved with the record: the reviewer hears of a new cost, and a price above its range goes to
         // the manager and the Executives. Nobody is told about their own record.
-        await alerts.AddAsync<CostRecordedAlert>(expense, await alerts.ManagersAsync(projectId, caller.UserId, cancellationToken), now, cancellationToken);
-        var told = references.Price?.Comparison.IsAboveRange == true
-            ? await alerts.AddAsync<PriceAboveRangeAlert>(
-                expense, await alerts.ManagersAndExecutivesAsync(projectId, caller.UserId, cancellationToken), now, cancellationToken)
-            : -1;
+        // Cash paid from a custody also goes to the Executives and the accountants, who fund and reconcile custodies.
+        var reviewers = expense.Channel == PaymentChannel.Custody
+            ? await alerts.CustodyWatchersAsync(projectId, caller.UserId, cancellationToken)
+            : await alerts.ManagersAsync(projectId, caller.UserId, cancellationToken);
+        await alerts.AddAsync<CostRecordedAlert>(expense, reviewers, now, cancellationToken);
 
         try
         {
@@ -189,7 +215,27 @@ internal static class CreateExpense
             return CoreProblems.ItemRemoved();
         }
 
+        // Above its reference range: a price exception for the Executive, with its alerts, in the same transaction.
+        var told = -1;
+        if (references.Price is { Comparison.IsAboveRange: true } above)
+        {
+            var exception = await cases.OpenAsync(
+                PriceExceptionSources.ProjectExpense, expense.Id, projectId, expense.SupplierId, above, ExpenseLabel.Of(expense), expense.ExpenseDate,
+                caller.UserId, cancellationToken);
+            exception.Reason = fields.PriceJustification;
+            await db.SaveChangesAsync(cancellationToken);
+            told = await db.PriceExceptionAlerts.CountAsync(alert => alert.ExceptionId == exception.Id, cancellationToken);
+            log.PriceExceptionOpened(caller.UserId, exception.Id, PriceExceptionSources.ProjectExpense, expense.Id, projectId, above.PriceItemId, told);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+
         log.ExpenseRecorded(caller.UserId, projectId, expense.Id, expense.Kind.ToString(), expense.Channel.ToString());
+        if (custody.Overdrawn)
+        {
+            log.CustodyOverdrawn(caller.UserId, projectId, expense.Id);
+        }
+
         if (told >= 0)
         {
             log.PriceAboveRange(caller.UserId, projectId, expense.Id, policy.ToString(), told);

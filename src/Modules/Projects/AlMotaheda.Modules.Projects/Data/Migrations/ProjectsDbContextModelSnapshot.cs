@@ -300,6 +300,112 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                     b.UseTphMappingStrategy();
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.CustodyEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("EntryDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("HolderUserId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("IdempotencyKey")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int?>("SourceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceType")
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_CustodyEntry_IdempotencyKey")
+                        .HasFilter("[IdempotencyKey] IS NOT NULL");
+
+                    b.HasIndex("SourceType", "SourceId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_CustodyEntry_Source")
+                        .HasFilter("[SourceType] IS NOT NULL");
+
+                    b.HasIndex(new[] { "ProjectId", "HolderUserId" }, "IX_CustodyEntry_Project_Holder");
+
+                    b.ToTable("CustodyEntry", "projects", t =>
+                        {
+                            t.HasCheckConstraint("CK_CustodyEntry_Amount", "[Amount] > 0");
+
+                            t.HasCheckConstraint("CK_CustodyEntry_Kind", "[Kind] IN ('Funding', 'Return', 'Payroll')");
+
+                            t.HasCheckConstraint("CK_CustodyEntry_Pending", "[Status] = 'Posted' OR [Kind] = 'Payroll'");
+
+                            t.HasCheckConstraint("CK_CustodyEntry_Source", "([SourceType] IS NULL AND [SourceId] IS NULL) OR ([SourceType] IS NOT NULL AND [SourceId] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_CustodyEntry_Status", "[Status] IN ('Pending', 'Posted', 'Released')");
+                        });
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.DailyReport", b =>
                 {
                     b.Property<int>("Id")
@@ -861,6 +967,431 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.PriceCategory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(40)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UX_PriceCategory_Code");
+
+                    b.ToTable("PriceCategory", "projects");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Code = "CementAggregates",
+                            IsActive = true,
+                            NameAr = "أسمنت وركام",
+                            NameEn = "Cement and aggregates",
+                            RowVersion = new byte[0],
+                            SortOrder = 1,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Code = "ReadyMix",
+                            IsActive = true,
+                            NameAr = "خرسانة جاهزة",
+                            NameEn = "Ready-mix concrete",
+                            RowVersion = new byte[0],
+                            SortOrder = 2,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Code = "Steel",
+                            IsActive = true,
+                            NameAr = "حديد",
+                            NameEn = "Steel",
+                            RowVersion = new byte[0],
+                            SortOrder = 3,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 4,
+                            Code = "Masonry",
+                            IsActive = true,
+                            NameAr = "مباني",
+                            NameEn = "Masonry",
+                            RowVersion = new byte[0],
+                            SortOrder = 4,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 5,
+                            Code = "Finishing",
+                            IsActive = true,
+                            NameAr = "تشطيبات",
+                            NameEn = "Finishing",
+                            RowVersion = new byte[0],
+                            SortOrder = 5,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 6,
+                            Code = "Waterproofing",
+                            IsActive = true,
+                            NameAr = "عزل",
+                            NameEn = "Waterproofing",
+                            RowVersion = new byte[0],
+                            SortOrder = 6,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 7,
+                            Code = "Piling",
+                            IsActive = true,
+                            NameAr = "خوازيق",
+                            NameEn = "Piling",
+                            RowVersion = new byte[0],
+                            SortOrder = 7,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 8,
+                            Code = "Formwork",
+                            IsActive = true,
+                            NameAr = "شدات",
+                            NameEn = "Formwork",
+                            RowVersion = new byte[0],
+                            SortOrder = 8,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 9,
+                            Code = "Consumables",
+                            IsActive = true,
+                            NameAr = "مستهلكات",
+                            NameEn = "Consumables",
+                            RowVersion = new byte[0],
+                            SortOrder = 9,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 10,
+                            Code = "Services",
+                            IsActive = true,
+                            NameAr = "خدمات",
+                            NameEn = "Services",
+                            RowVersion = new byte[0],
+                            SortOrder = 10,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 11,
+                            Code = "Other",
+                            IsActive = true,
+                            NameAr = "أخرى",
+                            NameEn = "Other",
+                            RowVersion = new byte[0],
+                            SortOrder = 11,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 12,
+                            Code = "Meals",
+                            IsActive = true,
+                            NameAr = "وجبات العمال",
+                            NameEn = "Worker meals and food",
+                            RowVersion = new byte[0],
+                            SortOrder = 12,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 13,
+                            Code = "Fuel",
+                            IsActive = true,
+                            NameAr = "وقود",
+                            NameEn = "Fuel",
+                            RowVersion = new byte[0],
+                            SortOrder = 13,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 14,
+                            Code = "Internet",
+                            IsActive = true,
+                            NameAr = "اشتراكات الإنترنت",
+                            NameEn = "Internet subscriptions",
+                            RowVersion = new byte[0],
+                            SortOrder = 14,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 15,
+                            Code = "OfficeExpenses",
+                            IsActive = true,
+                            NameAr = "مصروفات مكتبية",
+                            NameEn = "Office expenses",
+                            RowVersion = new byte[0],
+                            SortOrder = 15,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 16,
+                            Code = "Maintenance",
+                            IsActive = true,
+                            NameAr = "صيانة",
+                            NameEn = "Maintenance",
+                            RowVersion = new byte[0],
+                            SortOrder = 16,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 17,
+                            Code = "Transport",
+                            IsActive = true,
+                            NameAr = "نقل",
+                            NameEn = "Transport",
+                            RowVersion = new byte[0],
+                            SortOrder = 17,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 18,
+                            Code = "EquipmentRental",
+                            IsActive = true,
+                            NameAr = "تأجير معدات",
+                            NameEn = "Equipment rental",
+                            RowVersion = new byte[0],
+                            SortOrder = 18,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.PriceException", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("DecidedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int?>("NewRangeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PriceItemId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PriceRangeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal?>("ReferenceMaxPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("ReferenceMinPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SourceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(40)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<DateTime>("SubmittedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("SubmittedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int?>("SupplierId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("TransactionDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("VariancePerUnit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("VariancePercent")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("decimal(9,2)");
+
+                    b.Property<decimal>("VarianceTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NewRangeId");
+
+                    b.HasIndex("PriceRangeId");
+
+                    b.HasIndex(new[] { "PriceItemId", "Status" }, "IX_PriceException_PriceItem_Status");
+
+                    b.HasIndex(new[] { "ProjectId", "Status" }, "IX_PriceException_Project_Status");
+
+                    b.HasIndex(new[] { "Status", "SubmittedAt" }, "IX_PriceException_Status_SubmittedAt");
+
+                    b.HasIndex(new[] { "SubmittedBy" }, "IX_PriceException_SubmittedBy");
+
+                    b.HasIndex(new[] { "SourceType", "SourceId" }, "UX_PriceException_Source_Pending")
+                        .IsUnique()
+                        .HasFilter("[Status] = 'Pending'");
+
+                    b.ToTable("PriceException", "projects", t =>
+                        {
+                            t.HasCheckConstraint("CK_PriceException_Amounts", "[Quantity] > 0 AND [UnitPrice] > 0 AND [VariancePerUnit] >= 0 AND [VarianceTotal] >= 0");
+
+                            t.HasCheckConstraint("CK_PriceException_Decision", "([Status] = 'Pending' AND [DecidedAt] IS NULL AND [DecidedBy] IS NULL) OR ([Status] <> 'Pending' AND [DecidedAt] IS NOT NULL AND [DecidedBy] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_PriceException_NewRange", "[NewRangeId] IS NULL OR [Status] = 'ApprovedWithPriceChange'");
+
+                            t.HasCheckConstraint("CK_PriceException_SourceType", "[SourceType] IN ('ProjectExpense', 'SupplierInvoiceLine')");
+
+                            t.HasCheckConstraint("CK_PriceException_Status", "[Status] IN ('Pending', 'ApprovedOnce', 'ApprovedWithPriceChange', 'Rejected', 'Withdrawn')");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.PriceExceptionAlert", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("ExceptionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecipientUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExceptionId", "RecipientUserId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_PriceExceptionAlert_Exception_Recipient");
+
+                    b.HasIndex(new[] { "ProjectId", "CreatedAt" }, "IX_PriceExceptionAlert_Project_CreatedAt");
+
+                    b.ToTable("PriceExceptionAlert", "projects");
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.PriceItem", b =>
                 {
                     b.Property<int>("Id")
@@ -869,11 +1400,8 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Classification")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(30)");
+                    b.Property<int>("CategoryId")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2(3)");
@@ -932,13 +1460,11 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                         .IsUnique()
                         .HasDatabaseName("UX_PriceItem_NameEn");
 
+                    b.HasIndex(new[] { "CategoryId" }, "IX_PriceItem_CategoryId");
+
                     b.ToTable("PriceItem", "projects", t =>
                         {
-                            t.HasCheckConstraint("CK_PriceItem_Classification", "[Classification] IN ('CementAggregates', 'ReadyMix', 'Steel', 'Masonry', 'Finishing', 'Waterproofing', 'Piling', 'Formwork', 'Consumables', 'Services', 'Other')");
-
                             t.HasCheckConstraint("CK_PriceItem_Status", "[Status] IN ('Active', 'Inactive')");
-
-                            t.HasCheckConstraint("CK_PriceItem_Unit", "[Unit] IN ('Bag', 'Ton', 'M3', 'M2', 'M', 'Piece', 'Trip', 'Roll', 'Lot', 'Job', 'Day', 'Visit', 'Brick', 'Liter', 'Kg', 'Other')");
                         });
                 });
 
@@ -978,6 +1504,12 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                     b.Property<DateOnly?>("EffectiveTo")
                         .HasColumnType("date");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
                     b.Property<decimal>("MaxPrice")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -994,11 +1526,20 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                         .IsUnicode(true)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<decimal?>("ReferencePrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<DateTime>("RequestedAt")
                         .HasColumnType("datetime2(3)");
 
                     b.Property<int>("RequestedBy")
                         .HasColumnType("int");
+
+                    b.Property<string>("SourceNote")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1008,6 +1549,10 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
 
                     b.Property<int?>("SupplierId")
                         .HasColumnType("int");
+
+                    b.Property<decimal?>("TolerancePercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.HasKey("Id");
 
@@ -1031,9 +1576,312 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
 
                             t.HasCheckConstraint("CK_PriceRange_Decision", "([Status] = 'Pending' AND [DecidedAt] IS NULL AND [DecidedBy] IS NULL) OR ([Status] <> 'Pending' AND [DecidedAt] IS NOT NULL AND [DecidedBy] IS NOT NULL)");
 
+                            t.HasCheckConstraint("CK_PriceRange_Kind", "[Kind] IN ('Range', 'Fixed', 'LumpSum')");
+
                             t.HasCheckConstraint("CK_PriceRange_Prices", "[MinPrice] > 0 AND [MaxPrice] >= [MinPrice]");
 
+                            t.HasCheckConstraint("CK_PriceRange_Reference", "[ReferencePrice] IS NULL OR ([ReferencePrice] >= [MinPrice] AND [ReferencePrice] <= [MaxPrice])");
+
                             t.HasCheckConstraint("CK_PriceRange_Status", "[Status] IN ('Pending', 'Approved', 'Rejected')");
+
+                            t.HasCheckConstraint("CK_PriceRange_Tolerance", "[TolerancePercent] IS NULL OR ([TolerancePercent] >= 0 AND [TolerancePercent] <= 100)");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.PriceUnit", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UX_PriceUnit_Code");
+
+                    b.ToTable("PriceUnit", "projects");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Code = "Bag",
+                            IsActive = true,
+                            NameAr = "شيكارة",
+                            NameEn = "Bag",
+                            RowVersion = new byte[0],
+                            SortOrder = 1,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Code = "Ton",
+                            IsActive = true,
+                            NameAr = "طن",
+                            NameEn = "Ton",
+                            RowVersion = new byte[0],
+                            SortOrder = 2,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Code = "M3",
+                            IsActive = true,
+                            NameAr = "م³",
+                            NameEn = "Cubic meter",
+                            RowVersion = new byte[0],
+                            SortOrder = 3,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 4,
+                            Code = "M2",
+                            IsActive = true,
+                            NameAr = "م²",
+                            NameEn = "Square meter",
+                            RowVersion = new byte[0],
+                            SortOrder = 4,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 5,
+                            Code = "M",
+                            IsActive = true,
+                            NameAr = "متر",
+                            NameEn = "Meter",
+                            RowVersion = new byte[0],
+                            SortOrder = 5,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 6,
+                            Code = "Piece",
+                            IsActive = true,
+                            NameAr = "قطعة",
+                            NameEn = "Piece",
+                            RowVersion = new byte[0],
+                            SortOrder = 6,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 7,
+                            Code = "Trip",
+                            IsActive = true,
+                            NameAr = "نقلة",
+                            NameEn = "Trip",
+                            RowVersion = new byte[0],
+                            SortOrder = 7,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 8,
+                            Code = "Roll",
+                            IsActive = true,
+                            NameAr = "لفة",
+                            NameEn = "Roll",
+                            RowVersion = new byte[0],
+                            SortOrder = 8,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 9,
+                            Code = "Lot",
+                            IsActive = true,
+                            NameAr = "مقطوعية",
+                            NameEn = "Lot",
+                            RowVersion = new byte[0],
+                            SortOrder = 9,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 10,
+                            Code = "Job",
+                            IsActive = true,
+                            NameAr = "عملية",
+                            NameEn = "Job",
+                            RowVersion = new byte[0],
+                            SortOrder = 10,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 11,
+                            Code = "Day",
+                            IsActive = true,
+                            NameAr = "يوم",
+                            NameEn = "Day",
+                            RowVersion = new byte[0],
+                            SortOrder = 11,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 12,
+                            Code = "Visit",
+                            IsActive = true,
+                            NameAr = "زيارة",
+                            NameEn = "Visit",
+                            RowVersion = new byte[0],
+                            SortOrder = 12,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 13,
+                            Code = "Brick",
+                            IsActive = true,
+                            NameAr = "طوبة",
+                            NameEn = "Brick",
+                            RowVersion = new byte[0],
+                            SortOrder = 13,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 14,
+                            Code = "Liter",
+                            IsActive = true,
+                            NameAr = "لتر",
+                            NameEn = "Liter",
+                            RowVersion = new byte[0],
+                            SortOrder = 14,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 15,
+                            Code = "Kg",
+                            IsActive = true,
+                            NameAr = "كجم",
+                            NameEn = "Kilogram",
+                            RowVersion = new byte[0],
+                            SortOrder = 15,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 16,
+                            Code = "Other",
+                            IsActive = true,
+                            NameAr = "أخرى",
+                            NameEn = "Other",
+                            RowVersion = new byte[0],
+                            SortOrder = 16,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 17,
+                            Code = "WorkerDay",
+                            IsActive = true,
+                            NameAr = "عامل/يوم",
+                            NameEn = "Worker per day",
+                            RowVersion = new byte[0],
+                            SortOrder = 17,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 18,
+                            Code = "Meal",
+                            IsActive = true,
+                            NameAr = "وجبة",
+                            NameEn = "Meal",
+                            RowVersion = new byte[0],
+                            SortOrder = 18,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 19,
+                            Code = "Month",
+                            IsActive = true,
+                            NameAr = "شهر",
+                            NameEn = "Month",
+                            RowVersion = new byte[0],
+                            SortOrder = 19,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 20,
+                            Code = "Subscription",
+                            IsActive = true,
+                            NameAr = "اشتراك شهري",
+                            NameEn = "Monthly subscription",
+                            RowVersion = new byte[0],
+                            SortOrder = 20,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 21,
+                            Code = "Hour",
+                            IsActive = true,
+                            NameAr = "ساعة",
+                            NameEn = "Hour",
+                            RowVersion = new byte[0],
+                            SortOrder = 21,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 22,
+                            Code = "Km",
+                            IsActive = true,
+                            NameAr = "كم",
+                            NameEn = "Kilometer",
+                            RowVersion = new byte[0],
+                            SortOrder = 22,
+                            UpdatedAt = new DateTime(2026, 10, 20, 0, 0, 0, 0, DateTimeKind.Utc)
                         });
                 });
 
@@ -1247,6 +2095,11 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                         .IsUnicode(true)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<string>("PayeeName")
+                        .HasMaxLength(200)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("PriceCheck")
                         .HasMaxLength(30)
                         .IsUnicode(false)
@@ -1315,6 +2168,9 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                     b.Property<int?>("SupplierId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("SupplyAgreementId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Unit")
                         .HasMaxLength(20)
                         .IsUnicode(false)
@@ -1352,9 +2208,13 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
 
                     b.HasIndex(new[] { "ProjectId", "ExpenseDate" }, "IX_ProjectExpense_Project_Date");
 
+                    b.HasIndex(new[] { "ProjectId", "CreatedBy", "Channel" }, "IX_ProjectExpense_Project_Recorder_Channel");
+
                     b.HasIndex(new[] { "ProjectId", "Status" }, "IX_ProjectExpense_Project_Status");
 
                     b.HasIndex(new[] { "SupplierId" }, "IX_ProjectExpense_SupplierId");
+
+                    b.HasIndex(new[] { "SupplyAgreementId" }, "IX_ProjectExpense_SupplyAgreementId");
 
                     b.ToTable("ProjectExpense", "projects", t =>
                         {
@@ -1370,7 +2230,7 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
 
                             t.HasCheckConstraint("CK_ProjectExpense_Kind", "[Kind] IN ('Supply', 'Expense')");
 
-                            t.HasCheckConstraint("CK_ProjectExpense_KindColumns", "([Kind] = 'Supply' AND [SupplierId] IS NOT NULL AND [ItemName] IS NOT NULL AND [Unit] IS NOT NULL AND [Quantity] IS NOT NULL AND [UnitPrice] IS NOT NULL AND [Quantity] > 0 AND [UnitPrice] > 0 AND [Category] IS NULL AND ABS([Amount] - ROUND([Quantity] * [UnitPrice], 2)) < 0.01) OR ([Kind] = 'Expense' AND [Category] IS NOT NULL AND [Description] IS NOT NULL AND [ItemName] IS NULL AND [Unit] IS NULL AND [Quantity] IS NULL AND [UnitPrice] IS NULL)");
+                            t.HasCheckConstraint("CK_ProjectExpense_KindColumns", "([Kind] = 'Supply' AND ([SupplierId] IS NOT NULL OR ([Channel] = 'Custody' AND [PayeeName] IS NOT NULL)) AND [ItemName] IS NOT NULL AND [Unit] IS NOT NULL AND [Quantity] IS NOT NULL AND [UnitPrice] IS NOT NULL AND [Quantity] > 0 AND [UnitPrice] > 0 AND [Category] IS NULL AND ABS([Amount] - ROUND([Quantity] * [UnitPrice], 2)) < 0.01) OR ([Kind] = 'Expense' AND [Category] IS NOT NULL AND [Description] IS NOT NULL AND [ItemName] IS NULL AND [Unit] IS NULL AND [Quantity] IS NULL AND [UnitPrice] IS NULL)");
 
                             t.HasCheckConstraint("CK_ProjectExpense_PriceCheck", "([PriceCheck] IS NULL AND [PriceItemId] IS NULL AND [PriceRangeId] IS NULL AND [ReferenceMinPrice] IS NULL AND [ReferenceMaxPrice] IS NULL) OR ([Kind] = 'Supply' AND [PriceItemId] IS NOT NULL AND [PriceCheck] IN ('NoReference', 'WithinRange', 'AboveRange', 'BelowRange') AND (([PriceCheck] = 'NoReference' AND [PriceRangeId] IS NULL AND [ReferenceMinPrice] IS NULL AND [ReferenceMaxPrice] IS NULL) OR ([PriceCheck] <> 'NoReference' AND [PriceRangeId] IS NOT NULL AND [ReferenceMinPrice] IS NOT NULL AND [ReferenceMaxPrice] IS NOT NULL)))");
 
@@ -1891,6 +2751,106 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.SupplyAgreement", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("AgreedQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal?>("AgreedUnitPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("AgreedValue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("MaterialName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProjectItemId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateOnly?>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<int>("SupplierId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "ProjectItemId");
+
+                    b.HasIndex("ProjectId", "SupplierId", "ProjectItemId", "MaterialName")
+                        .IsUnique()
+                        .HasDatabaseName("UX_SupplyAgreement_Project_Supplier_Item_Material");
+
+                    b.HasIndex(new[] { "ProjectItemId" }, "IX_SupplyAgreement_ProjectItemId");
+
+                    b.HasIndex(new[] { "SupplierId" }, "IX_SupplyAgreement_SupplierId");
+
+                    b.ToTable("SupplyAgreement", "projects", t =>
+                        {
+                            t.HasCheckConstraint("CK_SupplyAgreement_Agreed", "([AgreedQuantity] IS NULL OR [AgreedQuantity] > 0) AND ([AgreedUnitPrice] IS NULL OR [AgreedUnitPrice] > 0) AND ([AgreedValue] IS NULL OR [AgreedValue] > 0)");
+
+                            t.HasCheckConstraint("CK_SupplyAgreement_Dates", "[EndDate] IS NULL OR [StartDate] IS NULL OR [EndDate] >= [StartDate]");
+
+                            t.HasCheckConstraint("CK_SupplyAgreement_Status", "[Status] IN ('Active', 'Closed')");
+
+                            t.HasCheckConstraint("CK_SupplyAgreement_Unit", "[Unit] IN ('Bag', 'Ton', 'M3', 'M2', 'M', 'Piece', 'Trip', 'Roll', 'Lot', 'Job', 'Day', 'Visit', 'Brick', 'Liter', 'Kg', 'Other')");
+                        });
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.CostRecordedAlert", b =>
                 {
                     b.HasBaseType("AlMotaheda.Modules.Projects.Data.CostAlert");
@@ -2017,6 +2977,17 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.CustodyEntry", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.DailyReport", b =>
                 {
                     b.HasOne("AlMotaheda.Modules.Projects.Data.Project", "Project")
@@ -2126,6 +3097,58 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.PriceException", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.PriceRange", null)
+                        .WithMany()
+                        .HasForeignKey("NewRangeId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .HasConstraintName("FK_PriceException_PriceRange_NewRangeId");
+
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.PriceItem", "PriceItem")
+                        .WithMany()
+                        .HasForeignKey("PriceItemId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.PriceRange", null)
+                        .WithMany()
+                        .HasForeignKey("PriceRangeId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("PriceItem");
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.PriceExceptionAlert", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.PriceException", "Exception")
+                        .WithMany()
+                        .HasForeignKey("ExceptionId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Exception");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.PriceItem", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.PriceCategory", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Category");
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.PriceRange", b =>
                 {
                     b.HasOne("AlMotaheda.Modules.Projects.Data.PriceItem", "PriceItem")
@@ -2177,6 +3200,11 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                         .HasForeignKey("SupplierId")
                         .OnDelete(DeleteBehavior.NoAction);
 
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.SupplyAgreement", "SupplyAgreement")
+                        .WithMany()
+                        .HasForeignKey("SupplyAgreementId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.Navigation("CatalogItem");
 
                     b.Navigation("PriceItem");
@@ -2188,6 +3216,8 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                     b.Navigation("ProjectItem");
 
                     b.Navigation("Supplier");
+
+                    b.Navigation("SupplyAgreement");
                 });
 
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.ProjectItem", b =>
@@ -2268,6 +3298,35 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                     b.Navigation("Expense");
 
                     b.Navigation("Payment");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.SupplyAgreement", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.Supplier", "Supplier")
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("AlMotaheda.Modules.Projects.Data.ProjectItem", "ProjectItem")
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "ProjectItemId")
+                        .HasPrincipalKey("ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired()
+                        .HasConstraintName("FK_SupplyAgreement_ProjectItem_Project_Item");
+
+                    b.Navigation("Project");
+
+                    b.Navigation("ProjectItem");
+
+                    b.Navigation("Supplier");
                 });
 
             modelBuilder.Entity("AlMotaheda.Modules.Projects.Data.Budget", b =>

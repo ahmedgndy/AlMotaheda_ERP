@@ -20,6 +20,7 @@ internal sealed class SubcontractorsDbContext(DbContextOptions<SubcontractorsDbC
     public DbSet<ManpowerSheet> ManpowerSheets => Set<ManpowerSheet>();
     public DbSet<SubPayment> SubPayments => Set<SubPayment>();
     public DbSet<SubPaymentAllocation> SubPaymentAllocations => Set<SubPaymentAllocation>();
+    public DbSet<ContractVariation> ContractVariations => Set<ContractVariation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

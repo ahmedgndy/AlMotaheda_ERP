@@ -204,6 +204,12 @@ internal sealed class WorkerPaymentConfiguration : IEntityTypeConfiguration<Work
 
         // A worker's payments, newest first.
         builder.HasIndex(payment => new { payment.WorkerId, payment.PaymentDate }, "IX_WorkerPayment_Worker_Date");
+        builder.HasIndex(payment => payment.SettlementId, "IX_WorkerPayment_SettlementId");
+
+        builder.HasOne(payment => payment.Settlement)
+            .WithMany()
+            .HasForeignKey(payment => payment.SettlementId)
+            .OnDelete(DeleteBehavior.NoAction);
 
         builder.HasOne(payment => payment.Worker)
             .WithMany()

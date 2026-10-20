@@ -42,8 +42,12 @@ The same machine moves between projects over time without a second `Equipment` r
   (`payments` Create; one payment for the full amount). Removing a wrongly recorded payment needs `payments` Approve.
 - **No double counting:** fuel, rental, maintenance and repair of equipment are recorded only here. Project
   expenses have no equipment category, and the cost reports keep `Equipment` as its own cost group.
-- Equipment costs are not split over project items (decision F1). In the items screen they are part of
-  "other project costs".
+- A cost may name **one** work item (`projectItemId`, optional): a main item or a sub-item of the same project,
+  active when newly chosen (400 when not on the project, 409 `item_inactive`; a cost being fixed may keep an item
+  deactivated since). The composite key `(ProjectId, ProjectItemId)` → `projects.ProjectItem (ProjectId, Id)`
+  refuses another project's item in the database. A cost is never split over items (decision F1). With no item it
+  serves the whole site and the items screen shows it in "other project costs"; on an item it is that item's cost
+  (column "Machinery"), and the project total is the same either way.
 - Usage: the daily site report lists the equipment used that day (Projects module). Hours and meter readings are
   not in the prototype; the report line has an optional `Hours`.
 
@@ -51,6 +55,10 @@ The same machine moves between projects over time without a second `Equipment` r
 
 `IProjectCostSource` with `Group = Equipment`: recognized = approved costs in the period; paid as above;
 pending review = `Recorded` costs; committed = 0.
+
+`IEquipmentItemCosts` (`EquipmentItemCosts`): the same rows and arithmetic grouped by work item. One total per item
+plus one for the costs on no item (their sum is the Equipment group), the approved lines of some items (the items
+detail and the cost breakdown), and "has links" (an item with an equipment cost can't be deleted).
 
 ## 4. Endpoints
 

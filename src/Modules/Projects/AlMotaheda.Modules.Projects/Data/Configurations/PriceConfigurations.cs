@@ -17,14 +17,12 @@ internal sealed class PriceItemConfiguration : IEntityTypeConfiguration<PriceIte
     {
         builder.ToTable(nameof(PriceItem), table =>
         {
-            table.HasCheckConstraint("CK_PriceItem_Classification", $"[Classification] IN ({SqlList.Of(Enum.GetNames<CatalogCategory>())})");
+            // The unit is one of the configurable price units (checked in code against the table); the category is a key.
             table.HasCheckConstraint("CK_PriceItem_Status", $"[Status] IN ({SqlList.Of(Enum.GetNames<PriceItemStatus>())})");
-            table.HasCheckConstraint("CK_PriceItem_Unit", $"[Unit] IN ({SqlList.Of(MeasurementUnits.All)})");
         });
 
         builder.Property(item => item.NameAr).HasMaxLength(NameMaxLength).IsUnicode();
         builder.Property(item => item.NameEn).HasMaxLength(NameMaxLength).IsUnicode();
-        builder.Property(item => item.Classification).HasConversion<string>().HasMaxLength(30).IsUnicode(false);
         builder.Property(item => item.Status).HasConversion<string>().HasMaxLength(30).IsUnicode(false);
         builder.Property(item => item.Unit).HasMaxLength(20);
         builder.Property(item => item.Notes).HasMaxLength(NotesMaxLength).IsUnicode();
@@ -32,6 +30,12 @@ internal sealed class PriceItemConfiguration : IEntityTypeConfiguration<PriceIte
 
         builder.HasIndex(item => item.NameEn).IsUnique().HasDatabaseName(NameEnIndex);
         builder.HasIndex(item => item.NameAr).IsUnique().HasDatabaseName(NameArIndex);
+        builder.HasIndex(item => item.CategoryId, "IX_PriceItem_CategoryId");
+
+        builder.HasOne(item => item.Category)
+            .WithMany()
+            .HasForeignKey(item => item.CategoryId)
+            .OnDelete(DeleteBehavior.NoAction);
 
         builder.HasMany(item => item.Ranges)
             .WithOne(range => range.PriceItem)
@@ -58,6 +62,9 @@ internal sealed class PriceRangeConfiguration : IEntityTypeConfiguration<PriceRa
             table.HasCheckConstraint("CK_PriceRange_Prices", "[MinPrice] > 0 AND [MaxPrice] >= [MinPrice]");
             table.HasCheckConstraint("CK_PriceRange_Currency", $"[Currency] = '{PriceCurrencies.Egp}'");
             table.HasCheckConstraint("CK_PriceRange_Dates", "[EffectiveTo] IS NULL OR [EffectiveTo] >= [EffectiveFrom]");
+            table.HasCheckConstraint("CK_PriceRange_Kind", $"[Kind] IN ({SqlList.Of(Enum.GetNames<PriceRuleKind>())})");
+            table.HasCheckConstraint("CK_PriceRange_Reference", "[ReferencePrice] IS NULL OR ([ReferencePrice] >= [MinPrice] AND [ReferencePrice] <= [MaxPrice])");
+            table.HasCheckConstraint("CK_PriceRange_Tolerance", "[TolerancePercent] IS NULL OR ([TolerancePercent] >= 0 AND [TolerancePercent] <= 100)");
             table.HasCheckConstraint(
                 "CK_PriceRange_Decision",
                 "([Status] = 'Pending' AND [DecidedAt] IS NULL AND [DecidedBy] IS NULL) "
@@ -67,6 +74,10 @@ internal sealed class PriceRangeConfiguration : IEntityTypeConfiguration<PriceRa
         builder.Property(range => range.MinPrice).HasPrecision(18, 2);
         builder.Property(range => range.MaxPrice).HasPrecision(18, 2);
         builder.Property(range => range.Currency).HasMaxLength(3).IsUnicode(false);
+        builder.Property(range => range.Kind).HasConversion<string>().HasMaxLength(20).IsUnicode(false);
+        builder.Property(range => range.ReferencePrice).HasPrecision(18, 2);
+        builder.Property(range => range.TolerancePercent).HasPrecision(5, 2);
+        builder.Property(range => range.SourceNote).HasMaxLength(TextMaxLength).IsUnicode();
         builder.Property(range => range.Status).HasConversion<string>().HasMaxLength(30).IsUnicode(false);
         builder.Property(range => range.Conditions).HasMaxLength(TextMaxLength).IsUnicode();
         builder.Property(range => range.Reason).HasMaxLength(TextMaxLength).IsUnicode();

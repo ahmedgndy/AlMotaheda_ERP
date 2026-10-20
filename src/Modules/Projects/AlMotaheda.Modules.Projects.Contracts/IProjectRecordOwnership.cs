@@ -16,6 +16,18 @@ public static class ProjectRecordKinds
     public const string SubPayment = "SubPayment";
     public const string Equipment = "Equipment";
     public const string EquipmentCost = "EquipmentCost";
+
+    /// <summary>A custody funding, return or payroll outflow (its receipt or hand-over note).</summary>
+    public const string CustodyEntry = "CustodyEntry";
+
+    /// <summary>A supply agreement (the signed agreement or the supplier's quotation).</summary>
+    public const string SupplyAgreement = "SupplyAgreement";
+
+    /// <summary>A weekly labor settlement (the signed payroll sheet).</summary>
+    public const string PayrollSettlement = "PayrollSettlement";
+
+    /// <summary>A change of a subcontract's value (the signed variation order).</summary>
+    public const string ContractVariation = "ContractVariation";
 }
 
 /// <summary>

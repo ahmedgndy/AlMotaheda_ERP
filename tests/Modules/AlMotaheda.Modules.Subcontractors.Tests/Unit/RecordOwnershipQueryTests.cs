@@ -36,4 +36,15 @@ public sealed class RecordOwnershipQueryTests
         Assert.Contains("[ProjectId] = @", sql);
         Assert.Null(SubcontractRecordOwnership.Query(db, 3, ProjectRecordKinds.Equipment, [5]));
     }
+
+    [Fact]
+    public void A_contract_variation_is_on_its_own_project_only()
+    {
+        using var db = CreateContext();
+
+        var sql = SubcontractRecordOwnership.Query(db, 3, ProjectRecordKinds.ContractVariation, [5])!.ToQueryString();
+
+        Assert.Contains("[sub].[ContractVariation]", sql);
+        Assert.Contains("[ProjectId] = @", sql);
+    }
 }

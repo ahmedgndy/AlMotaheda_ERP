@@ -32,8 +32,9 @@ public sealed record PostedInvoice(
     IReadOnlyList<PostedInvoiceLine> Lines);
 
 /// <param name="Unit">One of the shared measurement units.</param>
+/// <param name="PriceItemId">The Price Control item the line was compared with; the record copies the comparison.</param>
 public sealed record PostedInvoiceLine(
-    int InvoiceLineId, int? CatalogItemId, int? ProjectItemId, string ItemName, string Unit, decimal Quantity, decimal UnitPrice);
+    int InvoiceLineId, int? CatalogItemId, int? ProjectItemId, string ItemName, string Unit, decimal Quantity, decimal UnitPrice, int? PriceItemId = null);
 
 /// <param name="RecordId">The project's supply record.</param>
 public sealed record PostedLineState(int InvoiceLineId, int RecordId, int ProjectId, decimal Amount, decimal Paid);

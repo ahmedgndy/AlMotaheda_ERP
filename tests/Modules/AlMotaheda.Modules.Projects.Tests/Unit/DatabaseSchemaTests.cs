@@ -19,7 +19,7 @@ public sealed class DatabaseSchemaTests
         using var db = CreateContext();
 
         Assert.False(db.Database.HasPendingModelChanges(), "The model changed without a migration. Run dotnet ef migrations add.");
-        Assert.Equal(["InitialProjects", "ProjectWorkspace", "ExpenseAdjustments", "SupplierUniqueness", "ExpenseSource", "SiteLocation", "CostManagement"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
+        Assert.Equal(["InitialProjects", "ProjectWorkspace", "ExpenseAdjustments", "SupplierUniqueness", "ExpenseSource", "SiteLocation", "CostManagement", "CustodyAndSupply", "PriceControl"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
     }
 
     [Fact]
@@ -53,6 +53,15 @@ public sealed class DatabaseSchemaTests
     [InlineData("[StartDate] date NOT NULL")]
     [InlineData("[EndDate] date NULL")]
     [InlineData("[RowVersion] rowversion NOT NULL")]
+    [InlineData("CREATE UNIQUE INDEX [UX_PriceCategory_Code] ON [projects].[PriceCategory] ([Code])")]
+    [InlineData("CREATE UNIQUE INDEX [UX_PriceUnit_Code] ON [projects].[PriceUnit] ([Code])")]
+    [InlineData("CREATE UNIQUE INDEX [UX_PriceException_Source_Pending] ON [projects].[PriceException] ([SourceType], [SourceId]) WHERE [Status] = 'Pending'")]
+    [InlineData("CREATE UNIQUE INDEX [UX_PriceExceptionAlert_Exception_Recipient] ON [projects].[PriceExceptionAlert] ([ExceptionId], [RecipientUserId])")]
+    [InlineData("CONSTRAINT [CK_PriceException_Status] CHECK ([Status] IN ('Pending', 'ApprovedOnce', 'ApprovedWithPriceChange', 'Rejected', 'Withdrawn'))")]
+    [InlineData("CONSTRAINT [CK_PriceException_NewRange] CHECK ([NewRangeId] IS NULL OR [Status] = 'ApprovedWithPriceChange')")]
+    [InlineData("CONSTRAINT [CK_PriceRange_Kind] CHECK ([Kind] IN ('Range', 'Fixed', 'LumpSum'))")]
+    [InlineData("CONSTRAINT [CK_PriceRange_Reference] CHECK ([ReferencePrice] IS NULL OR ([ReferencePrice] >= [MinPrice] AND [ReferencePrice] <= [MaxPrice]))")]
+    [InlineData("CONSTRAINT [FK_PriceItem_PriceCategory_CategoryId] FOREIGN KEY ([CategoryId]) REFERENCES [projects].[PriceCategory] ([Id])")]
     public void Script_contains_the_approved_constraints_and_indexes(string expected)
     {
         using var db = CreateContext();
@@ -90,6 +99,11 @@ public sealed class DatabaseSchemaTests
         Assert.Contains(
             "ALTER TABLE [projects].[ReportRequest] ADD CONSTRAINT [FK_ReportRequest_User_RecipientUserId] FOREIGN KEY ([RecipientUserId]) REFERENCES [access].[User] ([Id])",
             script);
+        Assert.Contains(
+            "ALTER TABLE [projects].[PriceExceptionAlert] ADD CONSTRAINT [FK_PriceExceptionAlert_User_RecipientUserId] FOREIGN KEY ([RecipientUserId]) REFERENCES [access].[User] ([Id])",
+            script);
+        // The classification is carried into the category before its column goes.
+        Assert.Contains("JOIN [projects].[PriceCategory] category ON category.Code = item.Classification", script);
         // The workspace tables come after the first migration, so the order of the two is part of the contract.
         Assert.True(
             script.IndexOf("[projects].[ProjectMember]", StringComparison.Ordinal)

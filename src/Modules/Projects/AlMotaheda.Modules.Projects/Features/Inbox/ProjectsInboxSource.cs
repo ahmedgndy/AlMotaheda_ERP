@@ -109,6 +109,48 @@ internal sealed class ProjectsInboxSource(ProjectsDbContext db) : IWorkInboxSour
                 price.Price, price.RequestedBy, null)));
         }
 
+        // Price Control: transactions priced above their range wait for an Executive's decision (catalog Approve,
+        // never the submitter). The variance is shown with catalog See money.
+        if (query.Caller.HasPermission(Prices.PricePermissions.Module, PermissionAction.Approve))
+        {
+            var seesVariance = query.Caller.HasPermission(Prices.PricePermissions.Module, PermissionAction.SeeMoney);
+            var exceptions = await db.PriceExceptions.AsNoTracking()
+                .Where(exception => ids.Contains(exception.ProjectId) && exception.Status == PriceExceptionStatus.Pending && exception.SubmittedBy != me)
+                .OrderBy(exception => exception.SubmittedAt)
+                .Take(query.Limit)
+                .Select(exception => new
+                {
+                    exception.Id, exception.ProjectId, exception.TransactionDate, exception.SubmittedAt, exception.SubmittedBy, exception.VarianceTotal,
+                    exception.Summary, exception.UnitPrice, exception.Unit, ItemNameAr = exception.PriceItem.NameAr, ItemNameEn = exception.PriceItem.NameEn,
+                })
+                .ToListAsync(cancellationToken);
+            items.AddRange(exceptions.Select(exception => new WorkInboxItem(
+                WorkInboxReasons.Review, WorkInboxRecordTypes.PriceException, exception.ProjectId, exception.Id, null, exception.TransactionDate,
+                exception.SubmittedAt, $"{exception.ItemNameAr} / {exception.ItemNameEn} · {exception.Summary}", seesVariance ? exception.VarianceTotal : null,
+                exception.SubmittedBy, null)));
+        }
+
+        // Price Control: transactions priced above their range wait for an Executive's decision (catalog Approve,
+        // never the submitter). The variance is shown with catalog See money.
+        if (query.Caller.HasPermission(Prices.PricePermissions.Module, PermissionAction.Approve))
+        {
+            var seesVariance = query.Caller.HasPermission(Prices.PricePermissions.Module, PermissionAction.SeeMoney);
+            var exceptions = await db.PriceExceptions.AsNoTracking()
+                .Where(exception => ids.Contains(exception.ProjectId) && exception.Status == PriceExceptionStatus.Pending && exception.SubmittedBy != me)
+                .OrderBy(exception => exception.SubmittedAt)
+                .Take(query.Limit)
+                .Select(exception => new
+                {
+                    exception.Id, exception.ProjectId, exception.TransactionDate, exception.SubmittedAt, exception.SubmittedBy, exception.VarianceTotal,
+                    exception.Summary, ItemNameAr = exception.PriceItem.NameAr, ItemNameEn = exception.PriceItem.NameEn,
+                })
+                .ToListAsync(cancellationToken);
+            items.AddRange(exceptions.Select(exception => new WorkInboxItem(
+                WorkInboxReasons.Review, WorkInboxRecordTypes.PriceException, exception.ProjectId, exception.Id, null, exception.TransactionDate,
+                exception.SubmittedAt, $"{exception.ItemNameAr} / {exception.ItemNameEn} · {exception.Summary}", seesVariance ? exception.VarianceTotal : null,
+                exception.SubmittedBy, null)));
+        }
+
         return items;
     }
 

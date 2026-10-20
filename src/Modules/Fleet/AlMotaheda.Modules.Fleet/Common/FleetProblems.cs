@@ -22,6 +22,8 @@ internal static class FleetProblems
     public const string CostBeingPaid = "cost_being_paid";
     public const string IdempotencyKeyReused = "idempotency_key_reused";
     public const string NotPaid = "not_paid";
+    public const string ItemInactive = "item_inactive";
+    public const string ItemGone = "item_removed";
 
     public static ValidationProblem Validation(ValidationErrors errors) => ApiProblem.Validation(errors.ToDictionary());
 
@@ -83,6 +85,13 @@ internal static class FleetProblems
 
     public static ProblemHttpResult NotOnProject() =>
         Conflict(NeverOnProject, "This machine has never been on this project, so it can't have costs here.");
+
+    public static ProblemHttpResult InactiveItem() =>
+        Conflict(ItemInactive, "This work item is inactive. Equipment costs can't be newly linked to it.");
+
+    /// <summary>The work item was deleted by someone else between our check and our save.</summary>
+    public static ProblemHttpResult ItemRemoved() =>
+        Conflict(ItemGone, "The work item was removed while you were saving. Reload the items and try again.");
 
     /// <summary>An open payment request already covers this cost; it is paid, rejected or cancelled first.</summary>
     public static ProblemHttpResult PaymentAlreadyRequested() =>

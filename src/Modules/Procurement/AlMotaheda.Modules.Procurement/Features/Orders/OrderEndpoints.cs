@@ -261,6 +261,7 @@ internal static class CreateOrder
             {
                 RequisitionLineId = prLine.Id,
                 CatalogItemId = prLine.CatalogItemId,
+                PriceItemId = prLine.PriceItemId,
                 ProjectItemId = prLine.ProjectItemId,
                 Description = prLine.Description,
                 Unit = prLine.Unit,

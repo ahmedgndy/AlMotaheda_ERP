@@ -11,4 +11,9 @@
       owns the records implements them, so Projects never reads another module's tables.
   -->
 
+  <ItemGroup>
+    <!-- SharedTransaction: an outflow paid from a custody (ICustodyLedger) is written in the paying module's transaction. -->
+    <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks.Data\AlMotaheda.BuildingBlocks.Data.csproj" />
+  </ItemGroup>
+
 </Project>

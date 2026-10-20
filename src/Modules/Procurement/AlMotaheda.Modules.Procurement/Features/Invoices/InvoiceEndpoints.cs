@@ -4,6 +4,7 @@ using AlMotaheda.BuildingBlocks.Time;
 using AlMotaheda.Modules.Procurement.Common;
 using AlMotaheda.Modules.Procurement.Contracts;
 using AlMotaheda.Modules.Procurement.Data;
+using AlMotaheda.Modules.Procurement.Integration;
 using AlMotaheda.Modules.Procurement.Data.Configurations;
 using AlMotaheda.Modules.Projects.Contracts;
 using Microsoft.AspNetCore.Builder;
@@ -115,7 +116,8 @@ internal static class InvoiceEndpoints
 {
     internal sealed record LineRequest(int? OrderLineId, decimal? Quantity, decimal? UnitPrice);
 
-    internal sealed record Request(string? InvoiceNo, string? InvoiceDate, string? DeliveryNoteNo, IReadOnlyList<LineRequest>? Lines);
+    /// <param name="PriceReason">Why a price above its Price Control range was accepted from the supplier (kept on the case).</param>
+    internal sealed record Request(string? InvoiceNo, string? InvoiceDate, string? DeliveryNoteNo, IReadOnlyList<LineRequest>? Lines, string? PriceReason = null);
 
     internal sealed record ResolveRequest(string? Resolution, string? Reason, string? CreditNoteNo, string? RowVersion);
 
@@ -133,7 +135,7 @@ internal static class InvoiceEndpoints
     }
 
     internal static async Task<Results<Created<InvoiceView>, ValidationProblem, ProblemHttpResult>> RecordAsync(
-        int orderId, Request request, HttpContext httpContext, ProcurementDbContext db, IProjectAccess access, IInvoicePosting posting,
+        int orderId, Request request, HttpContext httpContext, ProcurementDbContext db, IProjectAccess access, IInvoicePosting posting, InvoicePriceChecks priceChecks,
         ProcurementViews views, CompanyClock clock, ProcurementLog log, CancellationToken cancellationToken)
     {
         if (ProcurementCaller.From(httpContext.User) is not { } caller)
@@ -150,6 +152,7 @@ internal static class InvoiceEndpoints
         }
 
         var deliveryNote = Input.OptionalText(request.DeliveryNoteNo, ProcurementColumns.ReferenceMaxLength, errors, "deliveryNoteNo", "The delivery note number");
+        var priceReason = Input.OptionalText(request.PriceReason, ProcurementColumns.NoteMaxLength, errors, "priceReason", "The price reason");
         var lines = request.Lines ?? [];
         if (lines.Count == 0)
         {
@@ -256,10 +259,39 @@ internal static class InvoiceEndpoints
             return ProcurementProblems.DuplicateInvoice();
         }
 
-        if (matched && await PostAsync(db, posting, created, order, priceFromOrder: false, caller.UserId, clock.UtcNow, cancellationToken) is { } refused)
+        // Price Control: each line that names a price item is compared with the reference range on the invoice date.
+        var orderLines = order.Lines.ToDictionary(line => line.Id);
+        var (verdicts, blocked) = await priceChecks.CheckAsync(created, orderLines, priceFromOrder: false, cancellationToken);
+        if (blocked is not null)
         {
             await transaction.RollbackAsync(cancellationToken);
-            return refused;
+            return blocked;
+        }
+
+        var held = InvoicePriceChecks.Held(verdicts);
+        if (held.Count > 0)
+        {
+            // The invoice is a true record of what the supplier charged; it waits for the Executive, unposted.
+            if (created.Status == SupplierInvoiceStatus.Mismatch)
+            {
+                created.HoldForPrice();
+            }
+            else
+            {
+                db.Entry(created).Property(invoice => invoice.Status).CurrentValue = SupplierInvoiceStatus.PriceHold;
+            }
+
+            await priceChecks.OpenCasesAsync(created, held, priceFromOrder: false, priceReason, caller.UserId, SharedTransaction.Of(db), cancellationToken);
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        else
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            if (matched && await PostAsync(db, posting, created, order, priceFromOrder: false, caller.UserId, clock.UtcNow, cancellationToken) is { } refused)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return refused;
+            }
         }
 
         await transaction.CommitAsync(cancellationToken);
@@ -268,7 +300,7 @@ internal static class InvoiceEndpoints
     }
 
     internal static async Task<Results<Ok<InvoiceView>, ValidationProblem, ProblemHttpResult>> ResolveAsync(
-        int invoiceId, ResolveRequest request, HttpContext httpContext, ProcurementDbContext db, IProjectAccess access, IInvoicePosting posting,
+        int invoiceId, ResolveRequest request, HttpContext httpContext, ProcurementDbContext db, IProjectAccess access, IInvoicePosting posting, InvoicePriceChecks priceChecks,
         ProcurementViews views, CompanyClock clock, ProcurementLog log, CancellationToken cancellationToken)
     {
         if (ProcurementCaller.From(httpContext.User) is not { } caller)
@@ -311,6 +343,12 @@ internal static class InvoiceEndpoints
             return ProcurementProblems.WrongStatus($"Only a mismatched invoice is resolved. This one is {invoice.Status}.");
         }
 
+        // Accepting the supplier's price posts at that price: not while the Executive has refused it, or has not decided.
+        if (resolution == InvoiceResolution.Accept && await priceChecks.OpenCaseRefusalAsync(invoice, cancellationToken) is { } gated)
+        {
+            return gated;
+        }
+
         var now = clock.UtcNow;
         invoice.Resolve(resolution!.Value, reason!, creditNote, caller.UserId, now);
         db.Entry(invoice).Property(candidate => candidate.RowVersion).OriginalValue = rowVersion!;
@@ -326,7 +364,25 @@ internal static class InvoiceEndpoints
         if (resolution != InvoiceResolution.ReturnToSupplier)
         {
             var order = await db.PurchaseOrders.AsNoTracking().Include(candidate => candidate.Lines).SingleAsync(candidate => candidate.Id == invoice.OrderId, cancellationToken);
-            if (await PostAsync(db, posting, invoice, order, priceFromOrder: resolution == InvoiceResolution.CreditNote, caller.UserId, now, cancellationToken) is { } refused)
+
+            // Price Control, at the price the invoice will be posted at (the order's with a credit note). A line not
+            // compared yet (no case) that is above its range holds the invoice for the Executive instead of posting.
+            var priceFromOrder = resolution == InvoiceResolution.CreditNote;
+            var (verdicts, blocked) = await priceChecks.CheckAsync(invoice, order.Lines.ToDictionary(line => line.Id), priceFromOrder, cancellationToken);
+            if (blocked is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return blocked;
+            }
+
+            var held = InvoicePriceChecks.Held(verdicts).Where(verdict => verdict.Line.PriceExceptionId is null).ToList();
+            if (held.Count > 0)
+            {
+                invoice.HoldForPrice();
+                await priceChecks.OpenCasesAsync(invoice, held, priceFromOrder, reason, caller.UserId, SharedTransaction.Of(db), cancellationToken);
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            else if (await PostAsync(db, posting, invoice, order, priceFromOrder, caller.UserId, now, cancellationToken) is { } refused)
             {
                 await transaction.RollbackAsync(cancellationToken);
                 return refused;
@@ -338,44 +394,19 @@ internal static class InvoiceEndpoints
         return TypedResults.Ok((await views.InvoiceAsync(invoice.Id, caller.SeesMoney, cancellationToken))!);
     }
 
-    /// <summary>
-    /// Posts the invoice into the project's supplier cost (Projects, same transaction) and marks it Posted. With a
-    /// credit note the lines are posted at the PO price: the supplier credits the rest.
-    /// </summary>
+    /// <summary>Posts the invoice (see <see cref="InvoicePosting"/>); a refusal from Projects is a 409.</summary>
     private static async Task<ProblemHttpResult?> PostAsync(
         ProcurementDbContext db, IInvoicePosting posting, SupplierInvoice invoice, PurchaseOrder order, bool priceFromOrder, int userId, DateTime now,
         CancellationToken cancellationToken)
     {
-        var orderLines = order.Lines.ToDictionary(line => line.Id);
         try
         {
-            await posting.PostAsync(
-                new PostedInvoice(
-                    invoice.ProjectId,
-                    invoice.SupplierId,
-                    invoice.InvoiceNo,
-                    invoice.InvoiceDate,
-                    invoice.DeliveryNoteNo,
-                    $"{invoice.Number} / {order.Number}",
-                    userId,
-                    invoice.Lines.OrderBy(line => line.Id).Select(line => new PostedInvoiceLine(
-                        line.Id,
-                        orderLines[line.OrderLineId].CatalogItemId,
-                        orderLines[line.OrderLineId].ProjectItemId,
-                        orderLines[line.OrderLineId].Description,
-                        orderLines[line.OrderLineId].Unit,
-                        line.Quantity,
-                        priceFromOrder ? line.OrderUnitPrice : line.UnitPrice)).ToList()),
-                SharedTransaction.Of(db),
-                cancellationToken);
+            await InvoicePosting.PostAsync(db, posting, invoice, order, priceFromOrder, userId, now, SharedTransaction.Of(db), cancellationToken);
+            return null;
         }
         catch (InvoiceNotPostableException exception)
         {
             return ProcurementProblems.CannotPost(exception.Message);
         }
-
-        invoice.MarkPosted(userId, now);
-        await db.SaveChangesAsync(cancellationToken);
-        return null;
     }
 }

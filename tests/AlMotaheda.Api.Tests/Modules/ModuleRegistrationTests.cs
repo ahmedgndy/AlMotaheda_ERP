@@ -41,7 +41,7 @@ public sealed class ModuleRegistrationTests
             .Select(field => (string)field.GetRawConstantValue()!)
             .ToList();
 
-        Assert.Equal(10, kinds.Count);
+        Assert.Equal(14, kinds.Count);
         Assert.Equal(kinds.Order(StringComparer.Ordinal), owned.Order(StringComparer.Ordinal));
     }
 

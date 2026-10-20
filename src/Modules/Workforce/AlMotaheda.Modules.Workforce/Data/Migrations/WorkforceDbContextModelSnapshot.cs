@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AlMotaheda.Modules.Workforce.Data.Migrations
 {
     [DbContext(typeof(WorkforceDbContext))]
-    internal partial class WorkforceDbContextModelSnapshot : ModelSnapshot
+    partial class WorkforceDbContextModelSnapshot : ModelSnapshot
     {
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
@@ -298,6 +298,216 @@ namespace AlMotaheda.Modules.Workforce.Data.Migrations
 
                             t.HasCheckConstraint("CK_LineAdjustment_Type", "[Type] IN ('Food', 'Transport', 'Night', 'Accommodation', 'Tip', 'Other')");
                         });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Workforce.Data.PayrollSettlement", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("PaidByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("PaidOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("PeriodFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("PeriodTo")
+                        .HasColumnType("date");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("RecordedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ReverseReason")
+                        .HasMaxLength(300)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime?>("ReversedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("ReversedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(300)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("ReviewedBy")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_PayrollSettlement_IdempotencyKey");
+
+                    b.HasIndex(new[] { "PaidByUserId" }, "IX_PayrollSettlement_PaidByUserId");
+
+                    b.HasIndex(new[] { "ProjectId", "Status", "PaidOn" }, "IX_PayrollSettlement_Project_Status_PaidOn");
+
+                    b.ToTable("PayrollSettlement", "workforce", t =>
+                        {
+                            t.HasCheckConstraint("CK_PayrollSettlement_Amount", "[Amount] > 0");
+
+                            t.HasCheckConstraint("CK_PayrollSettlement_Method", "[Method] IN ('Cash', 'BankTransfer')");
+
+                            t.HasCheckConstraint("CK_PayrollSettlement_Period", "[PeriodTo] >= [PeriodFrom]");
+
+                            t.HasCheckConstraint("CK_PayrollSettlement_Reversed", "([ReversedAt] IS NULL AND [ReversedBy] IS NULL AND [ReverseReason] IS NULL) OR ([ReversedAt] IS NOT NULL AND [ReversedBy] IS NOT NULL AND [ReverseReason] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_PayrollSettlement_Status", "[Status] IN ('Pending', 'Confirmed', 'Rejected', 'Reversed')");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Workforce.Data.PayrollSettlementAllocation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("LineId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SettlementLineId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SettlementLineId", "LineId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_PayrollSettlementAllocation_SettlementLine_Line");
+
+                    b.HasIndex(new[] { "LineId" }, "IX_PayrollSettlementAllocation_LineId");
+
+                    b.ToTable("PayrollSettlementAllocation", "workforce", t =>
+                        {
+                            t.HasCheckConstraint("CK_PayrollSettlementAllocation_Amount", "[Amount] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Workforce.Data.PayrollSettlementLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("PaymentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SettlementId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("WorkerId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SettlementId", "WorkerId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_PayrollSettlementLine_Settlement_Worker");
+
+                    b.HasIndex(new[] { "PaymentId" }, "IX_PayrollSettlementLine_PaymentId");
+
+                    b.HasIndex(new[] { "WorkerId" }, "IX_PayrollSettlementLine_WorkerId");
+
+                    b.ToTable("PayrollSettlementLine", "workforce", t =>
+                        {
+                            t.HasCheckConstraint("CK_PayrollSettlementLine_Amount", "[Amount] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Workforce.Data.SettlementAlert", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecipientUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SettlementId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SettlementId", "RecipientUserId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_SettlementAlert_Settlement_Recipient");
+
+                    b.HasIndex(new[] { "ProjectId", "CreatedAt" }, "IX_SettlementAlert_Project_CreatedAt");
+
+                    b.ToTable("SettlementAlert", "workforce");
                 });
 
             modelBuilder.Entity("AlMotaheda.Modules.Workforce.Data.Trade", b =>
@@ -733,6 +943,9 @@ namespace AlMotaheda.Modules.Workforce.Data.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
+                    b.Property<int?>("SettlementId")
+                        .HasColumnType("int");
+
                     b.Property<string>("VoidReason")
                         .HasMaxLength(300)
                         .IsUnicode(true)
@@ -752,6 +965,8 @@ namespace AlMotaheda.Modules.Workforce.Data.Migrations
                     b.HasIndex("IdempotencyKey")
                         .IsUnique()
                         .HasDatabaseName("UX_WorkerPayment_IdempotencyKey");
+
+                    b.HasIndex(new[] { "SettlementId" }, "IX_WorkerPayment_SettlementId");
 
                     b.HasIndex(new[] { "WorkerId", "PaymentDate" }, "IX_WorkerPayment_Worker_Date");
 
@@ -846,6 +1061,62 @@ namespace AlMotaheda.Modules.Workforce.Data.Migrations
                     b.Navigation("Line");
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.Workforce.Data.PayrollSettlementAllocation", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Workforce.Data.AttendanceLine", "Line")
+                        .WithMany()
+                        .HasForeignKey("LineId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("AlMotaheda.Modules.Workforce.Data.PayrollSettlementLine", "SettlementLine")
+                        .WithMany("Allocations")
+                        .HasForeignKey("SettlementLineId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Line");
+
+                    b.Navigation("SettlementLine");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Workforce.Data.PayrollSettlementLine", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Workforce.Data.WorkerPayment", "Payment")
+                        .WithMany()
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("AlMotaheda.Modules.Workforce.Data.PayrollSettlement", "Settlement")
+                        .WithMany("Lines")
+                        .HasForeignKey("SettlementId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("AlMotaheda.Modules.Workforce.Data.Worker", "Worker")
+                        .WithMany()
+                        .HasForeignKey("WorkerId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Payment");
+
+                    b.Navigation("Settlement");
+
+                    b.Navigation("Worker");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Workforce.Data.SettlementAlert", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Workforce.Data.PayrollSettlement", "Settlement")
+                        .WithMany()
+                        .HasForeignKey("SettlementId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Settlement");
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.Workforce.Data.Worker", b =>
                 {
                     b.HasOne("AlMotaheda.Modules.Workforce.Data.Trade", "Trade")
@@ -870,11 +1141,18 @@ namespace AlMotaheda.Modules.Workforce.Data.Migrations
 
             modelBuilder.Entity("AlMotaheda.Modules.Workforce.Data.WorkerPayment", b =>
                 {
+                    b.HasOne("AlMotaheda.Modules.Workforce.Data.PayrollSettlement", "Settlement")
+                        .WithMany()
+                        .HasForeignKey("SettlementId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("AlMotaheda.Modules.Workforce.Data.Worker", "Worker")
                         .WithMany()
                         .HasForeignKey("WorkerId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
+
+                    b.Navigation("Settlement");
 
                     b.Navigation("Worker");
                 });
@@ -908,6 +1186,16 @@ namespace AlMotaheda.Modules.Workforce.Data.Migrations
             modelBuilder.Entity("AlMotaheda.Modules.Workforce.Data.DailySheet", b =>
                 {
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Workforce.Data.PayrollSettlement", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Workforce.Data.PayrollSettlementLine", b =>
+                {
+                    b.Navigation("Allocations");
                 });
 
             modelBuilder.Entity("AlMotaheda.Modules.Workforce.Data.WorkerPayment", b =>

@@ -15,10 +15,10 @@ namespace AlMotaheda.Modules.Projects.Features.Items;
 /// <summary>
 /// <c>DELETE /api/projects/{pid}/items/{itemId}</c>: remove an item that was created by mistake. Only while no
 /// record anywhere is linked to it: not a supplier record here, not labor (Workforce), not subcontract work
-/// (Subcontractors), not a budget line. An item with history is deactivated instead.
+/// (Subcontractors), not an equipment cost (Fleet), not a budget line. An item with history is deactivated instead.
 /// </summary>
 /// <remarks>
-/// The three "has links" checks and the delete are not one atomic step. The foreign keys are the last guard: a
+/// The "has links" checks and the delete are not one atomic step. The foreign keys are the last guard: a
 /// record linked in between makes the delete fail, and that failure is answered with the same 409.
 /// </remarks>
 internal static class DeleteProjectItem
@@ -37,6 +37,7 @@ internal static class DeleteProjectItem
         IProjectAccess access,
         ILaborItemCosts labor,
         ISubcontractItemCosts subcontracts,
+        IEquipmentItemCosts equipment,
         ProjectsLog log,
         CancellationToken cancellationToken)
     {
@@ -71,7 +72,8 @@ internal static class DeleteProjectItem
 
         if (await ItemQueries.LinkedExpenses(db, itemId).AnyAsync(cancellationToken)
             || await labor.HasLinksAsync(projectId, itemId, cancellationToken)
-            || await subcontracts.HasLinksAsync(projectId, itemId, cancellationToken))
+            || await subcontracts.HasLinksAsync(projectId, itemId, cancellationToken)
+            || await equipment.HasLinksAsync(projectId, itemId, cancellationToken))
         {
             return CoreProblems.ItemStillHasRecords();
         }

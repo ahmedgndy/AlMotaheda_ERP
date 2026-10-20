@@ -15,8 +15,8 @@ using Microsoft.EntityFrameworkCore;
 namespace AlMotaheda.Modules.Projects.Features.Prices;
 
 /// <summary>
-/// <c>GET /api/price-items</c>: the company price list ("إدارة الأسعار"), with today's general range of each item.
-/// catalog View. Filters: <c>search</c> (names), <c>classification</c>, <c>status</c>; paging.
+/// <c>GET /api/price-items</c>: the company price list (Price Control, "ضبط الأسعار"), with today's general range of
+/// each item. catalog View. Filters: <c>search</c> (names), <c>classification</c> (a category code), <c>status</c>; paging.
 /// </summary>
 internal static class ListPriceItems
 {
@@ -40,7 +40,7 @@ internal static class ListPriceItems
         int pageSize = Paging.DefaultPageSize)
     {
         var errors = new ValidationErrors();
-        var parsedClassification = Input.OptionalName<CatalogCategory>(classification, errors, "classification");
+        var wantedCategory = Input.Clean(classification);
         var parsedStatus = Input.OptionalName<PriceItemStatus>(status, errors, "status");
         Paging.Validate(page, pageSize, errors);
         if (errors.HasErrors)
@@ -54,9 +54,9 @@ internal static class ListPriceItems
             query = query.Where(item => item.NameAr.Contains(text) || item.NameEn.Contains(text));
         }
 
-        if (parsedClassification is { } wantedClass)
+        if (wantedCategory is not null)
         {
-            query = query.Where(item => item.Classification == wantedClass);
+            query = query.Where(item => item.Category.Code == wantedCategory);
         }
 
         if (parsedStatus is { } wantedStatus)
@@ -65,8 +65,11 @@ internal static class ListPriceItems
         }
 
         var total = await query.CountAsync(cancellationToken);
-        var rows = await PriceQueries.Items(db, query.OrderBy(item => item.NameEn).ThenBy(item => item.Id).Skip((page - 1) * pageSize).Take(pageSize), clock.Today)
-            .ToListAsync(cancellationToken);
+        var rows = await PriceQueries.WithCurrentAsync(
+            db,
+            await PriceQueries.Items(db, query.OrderBy(item => item.NameEn).ThenBy(item => item.Id).Skip((page - 1) * pageSize).Take(pageSize), clock.Today)
+                .ToListAsync(cancellationToken),
+            cancellationToken);
 
         var people = await PlanningPeople.FindAsync(
             users, rows.Where(row => row.Current is not null).SelectMany(row => new[] { row.Current!.RequestedBy, row.Current.DecidedBy ?? row.Current.RequestedBy }), cancellationToken);
@@ -108,7 +111,12 @@ internal static class CreatePriceItem
         string? Currency,
         string? EffectiveFrom,
         string? EffectiveTo,
-        string? Conditions);
+        string? Conditions,
+        string? Kind = null,
+        decimal? ReferencePrice = null,
+        decimal? TolerancePercent = null,
+        string? SourceNote = null,
+        string? CategoryCode = null);
 
     public static void Map(IEndpointRouteBuilder api) =>
         api.MapPost("/price-items", HandleAsync)
@@ -131,11 +139,20 @@ internal static class CreatePriceItem
         }
 
         var errors = new ValidationErrors();
-        var fields = PriceItemFields.Validate(request.NameAr, request.NameEn, request.Classification, request.Notes, errors);
-        PriceItemFields.TryUnit(request.Unit, errors, out var unit);
+        var fields = PriceItemFields.Validate(request.NameAr, request.NameEn, request.CategoryCode ?? request.Classification, request.Notes, errors);
         // The first range is always the general one: supplier-specific ranges are added as changes.
-        var range = RangeFields.Validate(null, request.MinPrice, request.MaxPrice, request.EffectiveFrom, request.EffectiveTo, request.Conditions,
-            request.Currency, clock.Today, errors);
+        var range = RangeFields.Validate(
+            new RangeInput(null, request.MinPrice, request.MaxPrice, request.EffectiveFrom, request.EffectiveTo, request.Conditions, request.Currency,
+                request.Kind, request.ReferencePrice, request.TolerancePercent, request.SourceNote),
+            clock.Today, errors);
+        if (errors.HasErrors)
+        {
+            return ProjectProblems.Validation(errors);
+        }
+
+        // The category and the unit are the configured ones (looked up once the form itself is right).
+        var unit = await PriceItemFields.UnitAsync(db, request.Unit, errors, cancellationToken);
+        fields = await fields!.ResolveCategoryAsync(db, errors, cancellationToken);
         if (errors.HasErrors)
         {
             return ProjectProblems.Validation(errors);
@@ -151,7 +168,7 @@ internal static class CreatePriceItem
         {
             NameAr = fields.NameAr,
             NameEn = fields.NameEn,
-            Unit = unit,
+            Unit = unit!,
             Status = PriceItemStatus.Active,
             CreatedAt = now,
             CreatedBy = userId,
@@ -182,7 +199,7 @@ internal static class CreatePriceItem
 /// </summary>
 internal static class UpdatePriceItem
 {
-    internal sealed record Request(string? NameAr, string? NameEn, string? Classification, string? Notes, string? Status, string? RowVersion);
+    internal sealed record Request(string? NameAr, string? NameEn, string? Classification, string? Notes, string? Status, string? RowVersion, string? CategoryCode = null);
 
     public static void Map(IEndpointRouteBuilder api) =>
         api.MapPut("/price-items/{priceItemId:int}", HandleAsync)
@@ -206,9 +223,15 @@ internal static class UpdatePriceItem
         }
 
         var errors = new ValidationErrors();
-        var fields = PriceItemFields.Validate(request.NameAr, request.NameEn, request.Classification, request.Notes, errors);
+        var fields = PriceItemFields.Validate(request.NameAr, request.NameEn, request.CategoryCode ?? request.Classification, request.Notes, errors);
         var status = Input.RequiredName<PriceItemStatus>(request.Status, errors, "status");
         var rowVersion = RowVersions.Parse(request.RowVersion, errors);
+        if (errors.HasErrors)
+        {
+            return ProjectProblems.Validation(errors);
+        }
+
+        fields = await fields!.ResolveCategoryAsync(db, errors, cancellationToken);
         if (errors.HasErrors)
         {
             return ProjectProblems.Validation(errors);
@@ -257,7 +280,8 @@ internal static class UpdatePriceItem
 internal static class RequestPriceRange
 {
     internal sealed record Request(
-        int? SupplierId, decimal? MinPrice, decimal? MaxPrice, string? Currency, string? EffectiveFrom, string? EffectiveTo, string? Conditions, string? Reason);
+        int? SupplierId, decimal? MinPrice, decimal? MaxPrice, string? Currency, string? EffectiveFrom, string? EffectiveTo, string? Conditions, string? Reason,
+        string? Kind = null, decimal? ReferencePrice = null, decimal? TolerancePercent = null, string? SourceNote = null);
 
     public static void Map(IEndpointRouteBuilder api) =>
         api.MapPost("/price-items/{priceItemId:int}/ranges", HandleAsync)
@@ -281,8 +305,10 @@ internal static class RequestPriceRange
         }
 
         var errors = new ValidationErrors();
-        var range = RangeFields.Validate(request.SupplierId, request.MinPrice, request.MaxPrice, request.EffectiveFrom, request.EffectiveTo,
-            request.Conditions, request.Currency, clock.Today, errors);
+        var range = RangeFields.Validate(
+            new RangeInput(request.SupplierId, request.MinPrice, request.MaxPrice, request.EffectiveFrom, request.EffectiveTo, request.Conditions, request.Currency,
+                request.Kind, request.ReferencePrice, request.TolerancePercent, request.SourceNote),
+            clock.Today, errors);
         var reason = Input.RequiredText(request.Reason, PriceRangeConfiguration.TextMaxLength, errors, "reason", "The reason");
         if (errors.HasErrors)
         {
@@ -572,5 +598,7 @@ internal static class PriceFeatures
         ApprovePriceRange.Map(api);
         RejectPriceRange.Map(api);
         CheckPrice.Map(api);
+        PriceControl.PriceCatalogEndpoints.Map(api);
+        PriceControl.PriceExceptionEndpoints.Map(api);
     }
 }

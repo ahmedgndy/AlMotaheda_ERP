@@ -125,6 +125,9 @@ internal sealed class RequisitionLine
 
     public int? CatalogItemId { get; set; }
 
+    /// <summary>The Price Control item this line is bought as, when the requester names one: its orders and invoices are compared with it.</summary>
+    public int? PriceItemId { get; set; }
+
     /// <summary>The project's cost item (بند) the purchase is for.</summary>
     public int? ProjectItemId { get; set; }
 

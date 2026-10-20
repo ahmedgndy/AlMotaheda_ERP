@@ -17,6 +17,8 @@ public sealed class RecordOwnershipQueryTests
     [InlineData(ProjectRecordKinds.DailyReport, "[projects].[DailyReport]")]
     [InlineData(ProjectRecordKinds.ReportRequest, "[projects].[ReportRequest]")]
     [InlineData(ProjectRecordKinds.Budget, "[projects].[Budget]")]
+    [InlineData(ProjectRecordKinds.CustodyEntry, "[projects].[CustodyEntry]")]
+    [InlineData(ProjectRecordKinds.SupplyAgreement, "[projects].[SupplyAgreement]")]
     public void Each_record_kind_is_found_on_its_own_project_only(string kind, string table)
     {
         using var db = new ProjectsDbContextDesignTimeFactory().CreateDbContext([]);
@@ -33,6 +35,6 @@ public sealed class RecordOwnershipQueryTests
         using var db = new ProjectsDbContextDesignTimeFactory().CreateDbContext([]);
 
         Assert.Null(ProjectRecordOwnership.Query(db, 3, ProjectRecordKinds.SubContract, [5]));
-        Assert.Equal(5, new ProjectRecordOwnership(db).Kinds.Count);
+        Assert.Equal(7, new ProjectRecordOwnership(db).Kinds.Count);
     }
 }

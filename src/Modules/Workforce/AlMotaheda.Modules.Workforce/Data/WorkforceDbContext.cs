@@ -22,6 +22,10 @@ internal sealed class WorkforceDbContext(DbContextOptions<WorkforceDbContext> op
     public DbSet<LaborAllocation> LaborAllocations => Set<LaborAllocation>();
     public DbSet<WorkerPayment> WorkerPayments => Set<WorkerPayment>();
     public DbSet<WorkerPaymentAllocation> WorkerPaymentAllocations => Set<WorkerPaymentAllocation>();
+    public DbSet<PayrollSettlement> PayrollSettlements => Set<PayrollSettlement>();
+    public DbSet<PayrollSettlementLine> PayrollSettlementLines => Set<PayrollSettlementLine>();
+    public DbSet<PayrollSettlementAllocation> PayrollSettlementAllocations => Set<PayrollSettlementAllocation>();
+    public DbSet<SettlementAlert> SettlementAlerts => Set<SettlementAlert>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

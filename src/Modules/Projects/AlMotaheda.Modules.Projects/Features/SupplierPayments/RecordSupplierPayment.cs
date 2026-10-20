@@ -59,6 +59,7 @@ internal static class RecordSupplierPayment
         ProjectsDbContext db,
         IProjectAccess access,
         IPaymentRequests requests,
+        PriceControl.PriceExceptionCases cases,
         CompanyClock clock,
         ProjectsLog log,
         CancellationToken cancellationToken)
@@ -168,6 +169,12 @@ internal static class RecordSupplierPayment
             {
                 return WorkspaceProblems.WrongStatus($"Record {line.ExpenseId} is not an approved credit record, so it can't be paid.");
             }
+        }
+
+        // A record whose price waits for the Executive in Price Control is not paid, whatever screen asks.
+        if (await cases.PaymentRefusalAsync(expenseIds, caller.UserId, cancellationToken) is { } gated)
+        {
+            return gated;
         }
 
         // What is still unpaid, less what open payment requests already hold, in this transaction.

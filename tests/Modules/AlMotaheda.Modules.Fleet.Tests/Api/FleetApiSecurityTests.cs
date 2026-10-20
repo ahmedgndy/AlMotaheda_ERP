@@ -244,6 +244,45 @@ public sealed class FleetApiSecurityTests
         Assert.Contains(database.Commands, sql => sql.Contains("[projects].[Supplier]", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData("POST", "/api/projects/1/equipment-costs")]
+    [InlineData("PUT", "/api/projects/1/equipment-costs/2")]
+    public async Task A_work_item_id_that_is_not_valid_is_refused_before_any_database_work(string method, string path)
+    {
+        var (app, database) = await StartAsync(new VisibleProject(IsCompleted: false, Executive: true));
+        await using var _ = app;
+        var token = TestTokens.Create(role: Manager, permissions: [("equipment", "VE")]);
+
+        var response = await Send(app, method, path, token, new
+        {
+            equipmentId = 3, costDate = "2026-01-15", type = "Fuel", liters = 182.5m, pricePerLiter = 15.25m, channel = "Custody",
+            projectItemId = 0, rowVersion = RowVersion,
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(["projectItemId"], await ErrorFields(response));
+        Assert.Empty(database.Commands);
+    }
+
+    [Fact]
+    public async Task A_work_item_that_is_not_on_the_project_is_a_form_error_asked_of_projects_in_sql()
+    {
+        var (app, database) = await StartAsync(new VisibleProject(IsCompleted: false, Executive: false));
+        await using var _ = app;
+        var token = TestTokens.Create(role: Manager, permissions: [("equipment", "VE")]);
+
+        // The stand-in database knows no machine and no work item: the item of another project looks the same.
+        var response = await Send(app, "POST", "/api/projects/1/equipment-costs", token, new
+        {
+            equipmentId = 3, costDate = "2026-01-15", type = "Fuel", liters = 182.5m, pricePerLiter = 15.25m, channel = "Custody", projectItemId = 9,
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(["equipmentId", "projectItemId"], (await ErrorFields(response)).Order());
+        var lookup = Assert.Single(database.Commands, sql => sql.Contains("[projects].[ProjectItem]", StringComparison.Ordinal));
+        Assert.Contains("[ProjectId] = @", lookup);
+    }
+
     [Fact]
     public async Task Assigning_a_machine_that_is_not_in_the_register_answers_400_before_any_lock()
     {

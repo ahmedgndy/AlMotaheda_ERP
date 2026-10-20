@@ -56,11 +56,17 @@ public sealed class ProjectsModule : IModule
         services.AddScoped<IProjectAccess, ProjectAccessContract>();
         services.AddScoped<IVisibleProjects, VisibleProjectsContract>();
         services.AddScoped<IPaymentSource, SupplierPaymentSource>();
+        services.AddScoped<IPaymentSource, CustodyFundingSource>();
+        services.AddScoped<ICustodyLedger, CustodyLedgerContract>();
+        services.AddScoped<Features.PriceControl.PriceExceptionCases>();
+        services.AddScoped<IPriceControl, PriceControlContract>();
         services.AddScoped<IProjectItems, ProjectItemsContract>();
+        services.AddScoped<IProjectDirectory, ProjectDirectoryContract>();
         services.AddScoped<ISupplierDirectory, SupplierDirectoryContract>();
         services.AddScoped<IProjectCatalog, ProjectCatalogContract>();
         services.AddScoped<IInvoicePosting, InvoicePostingContract>();
         services.AddScoped<AlMotaheda.Modules.Reports.Contracts.IReportSource, ProjectReports>();
+        services.AddScoped<AlMotaheda.Modules.Reports.Contracts.IReportSource, PriceControlReports>();
         services.AddScoped<IProjectRecordOwnership, ProjectRecordOwnership>();
         CoreFeatures.AddServices(services);
         PlanningFeatures.AddServices(services);
@@ -99,6 +105,7 @@ public sealed class ProjectsModule : IModule
         PlanningFeatures.Map(api, projects);
         Features.Prices.PriceFeatures.Map(api);
         ReportingFeatures.Map(projects);
+        Features.Custody.CustodyEndpoints.Map(projects);
         SiteLocationEndpoints.Map(projects);
         GetWorkInbox.Map(api);
     }

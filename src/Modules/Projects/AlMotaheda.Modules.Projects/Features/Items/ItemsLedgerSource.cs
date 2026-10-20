@@ -51,10 +51,11 @@ internal sealed record ItemsLedgerData(
 
 /// <summary>
 /// Loads the flat rows of one project and runs <see cref="ItemsLedger"/> over them: the project's records from
-/// this module, and the per-item totals that Workforce and Subcontractors report through the contracts. Projects
-/// never reads their tables.
+/// this module, and the per-item totals that Workforce, Subcontractors and Fleet report through the contracts.
+/// Projects never reads their tables.
 /// </summary>
-internal sealed class ItemsLedgerSource(ProjectsDbContext db, ILaborItemCosts labor, ISubcontractItemCosts subcontracts)
+internal sealed class ItemsLedgerSource(
+    ProjectsDbContext db, ILaborItemCosts labor, ISubcontractItemCosts subcontracts, IEquipmentItemCosts equipment)
 {
     public async Task<ItemsLedgerData> LoadAsync(int projectId, CancellationToken cancellationToken)
     {
@@ -62,8 +63,9 @@ internal sealed class ItemsLedgerSource(ProjectsDbContext db, ILaborItemCosts la
         var expenses = await ExpenseQueries.SettlementRows(db, projectId).ToListAsync(cancellationToken);
         var subcontractTotals = await subcontracts.TotalsByItemAsync(projectId, cancellationToken);
         var laborTotals = await labor.TotalsByItemAsync(projectId, cancellationToken);
+        var equipmentTotals = await equipment.TotalsByItemAsync(projectId, cancellationToken);
 
-        var ledger = ItemsLedger.Compute(SupplierLedgerRow.From(expenses), subcontractTotals, laborTotals);
+        var ledger = ItemsLedger.Compute(SupplierLedgerRow.From(expenses), subcontractTotals, laborTotals, equipmentTotals);
         return new ItemsLedgerData(items, expenses, ledger);
     }
 }

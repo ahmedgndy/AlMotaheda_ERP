@@ -8,6 +8,7 @@ internal sealed class EquipmentCostRow
 {
     public int Id { get; init; }
     public int ProjectId { get; init; }
+    public int? ProjectItemId { get; init; }
     public int EquipmentId { get; init; }
     public string AssetNo { get; init; } = "";
     public string EquipmentNameAr { get; init; } = "";
@@ -48,7 +49,35 @@ internal sealed class EquipmentCostRow
     public List<CostAdjustmentRef> Adjustments { get; init; } = [];
 
     public EquipmentCostSettlementRow Settlement =>
-        new(Id, EquipmentId, Type, Status, Channel, CostDate, AdjustedAmount, Liters, PaidOn is not null);
+        new(Id, EquipmentId, Type, Status, Channel, CostDate, AdjustedAmount, Liters, PaidOn is not null, ProjectItemId);
+}
+
+/// <summary>One approved cost on a work item with its machine, as the Projects items screens list it.</summary>
+/// <param name="AdjustedAmount">The recorded amount plus its approved corrections: the recognized cost.</param>
+internal sealed record EquipmentItemCostRow(
+    int Id,
+    int ProjectItemId,
+    DateOnly CostDate,
+    int EquipmentId,
+    string AssetNo,
+    string EquipmentNameAr,
+    string EquipmentNameEn,
+    EquipmentCostType Type,
+    CostBasis? Basis,
+    decimal? Quantity,
+    decimal? Rate,
+    decimal? Liters,
+    decimal? PricePerLiter,
+    string Description,
+    CostChannel Channel,
+    string? InvoiceNo,
+    int? SupplierId,
+    decimal AdjustedAmount,
+    bool PaymentRecorded)
+{
+    /// <summary>The same settlement row as every other figure of the cost, so paid and outstanding can't disagree.</summary>
+    public EquipmentCostSettlementRow Settlement =>
+        new(Id, EquipmentId, Type, EquipmentCostStatus.Approved, Channel, CostDate, AdjustedAmount, Liters, PaymentRecorded, ProjectItemId);
 }
 
 /// <summary>One correction of a cost, as loaded with it.</summary>
@@ -111,8 +140,48 @@ internal static class EquipmentCostQueries
             cost.Amount + (cost.Adjustments.Where(adjustment => adjustment.Status == AdjustmentStatus.Approved)
                 .Sum(adjustment => (decimal?)adjustment.Amount) ?? 0),
             cost.Liters,
-            cost.PaidOn != null));
+            cost.PaidOn != null,
+            cost.ProjectItemId));
     }
+
+    /// <summary>
+    /// The approved costs of a project on some work items, newest first, with their machine. Always one project, and
+    /// only approved costs: a recorded or returned cost is not a cost of the item yet.
+    /// </summary>
+    public static IQueryable<EquipmentItemCostRow> ApprovedOnItems(FleetDbContext db, int projectId, int[] itemIds) =>
+        db.EquipmentCosts.AsNoTracking()
+            .Where(cost => cost.ProjectId == projectId
+                           && cost.Status == EquipmentCostStatus.Approved
+                           && cost.ProjectItemId != null
+                           && itemIds.Contains(cost.ProjectItemId.Value))
+            .OrderByDescending(cost => cost.CostDate)
+            .ThenByDescending(cost => cost.Id)
+            .Select(cost => new EquipmentItemCostRow(
+                cost.Id,
+                cost.ProjectItemId!.Value,
+                cost.CostDate,
+                cost.EquipmentId,
+                cost.Equipment.AssetNo,
+                cost.Equipment.NameAr,
+                cost.Equipment.NameEn,
+                cost.Type,
+                cost.Basis,
+                cost.Quantity,
+                cost.Rate,
+                cost.Liters,
+                cost.PricePerLiter,
+                cost.Description,
+                cost.Channel,
+                cost.InvoiceNo,
+                cost.SupplierId,
+                // The adjusted amount, like SettlementRows.
+                cost.Amount + (cost.Adjustments.Where(adjustment => adjustment.Status == AdjustmentStatus.Approved)
+                    .Sum(adjustment => (decimal?)adjustment.Amount) ?? 0),
+                cost.PaidOn != null));
+
+    /// <summary>True when any cost of the project, approved or not, is linked to the work item.</summary>
+    public static IQueryable<EquipmentCost> LinkedTo(FleetDbContext db, int projectId, int itemId) =>
+        db.EquipmentCosts.AsNoTracking().Where(cost => cost.ProjectId == projectId && cost.ProjectItemId == itemId);
 
     /// <summary>The list screen: every filter, the sort (newest first) and the paging run in SQL.</summary>
     public static IQueryable<EquipmentCostRow> Filtered(FleetDbContext db, int projectId, EquipmentCostFilter filter)
@@ -172,6 +241,7 @@ internal static class EquipmentCostQueries
         {
             Id = cost.Id,
             ProjectId = cost.ProjectId,
+            ProjectItemId = cost.ProjectItemId,
             EquipmentId = cost.EquipmentId,
             AssetNo = cost.Equipment.AssetNo,
             EquipmentNameAr = cost.Equipment.NameAr,

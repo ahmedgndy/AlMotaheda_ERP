@@ -20,6 +20,7 @@ internal static class CoreFeatures
         services.AddScoped<ItemDetails>();
         services.AddScoped<IProjectItemsSummary, ProjectItemsSummaryProvider>();
         services.AddScoped<CostAlerts>();
+        services.AddScoped<ItemPlans>();
     }
 
     /// <param name="api">The shared <c>/api</c> group, for company-wide routes such as <c>/suppliers</c>.</param>
@@ -57,5 +58,8 @@ internal static class CoreFeatures
         RecordSupplierPayment.Map(projects);
         VoidSupplierPayment.Map(projects);
         GetSupplierBalances.Map(projects);
+
+        SupplyAgreements.Map(projects);
+        SupplierAccounts.Map(api, projects);
     }
 }

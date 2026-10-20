@@ -11,7 +11,7 @@ namespace AlMotaheda.Modules.Reports.Tests.Api;
 public sealed class ReportApiTests
 {
     private static readonly string[] AllCodes =
-        ["EQP-COST", "EQP-FUEL", "FIN-CASH", "FIN-LEDGER", "FIN-RECON", "FIN-REQUESTS", "HR-SALARIES", "PRJ-COST", "PRJ-ITEMS", "SUB-ACCOUNT", "SUP-ACCOUNT", "WRK-PAYROLL"];
+        ["EQP-COST", "EQP-FUEL", "FIN-CASH", "FIN-LEDGER", "FIN-RECON", "FIN-REQUESTS", "HR-SALARIES", "PRICE-CHANGES", "PRICE-EXCEPTIONS", "PRICE-VARIANCE", "PRJ-COST", "PRJ-ITEMS", "SUB-ACCOUNT", "SUP-ACCOUNT", "WRK-PAYROLL"];
 
     [Fact]
     public async Task Every_module_offers_well_formed_reports_with_unique_codes()
@@ -48,8 +48,8 @@ public sealed class ReportApiTests
     }
 
     [Theory]
-    [InlineData("accountant", "finance:VCEAF,payments:VCF,projects:VAF,workers:VCEAF,subcontractors:VCEF,equipment:VAF,hr:VAF",
-        new[] { "EQP-COST", "EQP-FUEL", "FIN-CASH", "FIN-LEDGER", "FIN-RECON", "FIN-REQUESTS", "HR-SALARIES", "PRJ-COST", "PRJ-ITEMS", "SUB-ACCOUNT", "SUP-ACCOUNT", "WRK-PAYROLL" })]
+    [InlineData("accountant", "finance:VCEAF,payments:VCF,projects:VAF,catalog:VF,workers:VCEAF,subcontractors:VCEF,equipment:VAF,hr:VAF",
+        new[] { "EQP-COST", "EQP-FUEL", "FIN-CASH", "FIN-LEDGER", "FIN-RECON", "FIN-REQUESTS", "HR-SALARIES", "PRICE-CHANGES", "PRICE-EXCEPTIONS", "PRICE-VARIANCE", "PRJ-COST", "PRJ-ITEMS", "SUB-ACCOUNT", "SUP-ACCOUNT", "WRK-PAYROLL" })]
     [InlineData("hr", "hr:VCEF", new[] { "HR-SALARIES" })]
     [InlineData("manager", "projects:VCEF,workers:VCAF,subcontractors:VCEF,payments:V", new[] { "PRJ-COST", "PRJ-ITEMS", "SUB-ACCOUNT", "SUP-ACCOUNT", "WRK-PAYROLL" })]
     [InlineData("engineer", "projects:VC,workers:VC,site:VC", new string[0])]
