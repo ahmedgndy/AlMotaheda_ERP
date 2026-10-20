@@ -31,7 +31,7 @@ internal sealed class PriceExceptionCases(ProjectsDbContext db, CostAlerts alert
     /// already have its id. Returns the case; its id is known after the save.
     /// </summary>
     public async Task<PriceException> OpenAsync(
-        string sourceType, int sourceId, int projectId, int? supplierId, PriceReference price, string summary, DateOnly transactionDate,
+        string sourceType, int sourceId, int? projectId, int? supplierId, PriceReference price, string summary, DateOnly transactionDate,
         int submittedBy, CancellationToken cancellationToken)
     {
         var now = clock.UtcNow;
@@ -66,7 +66,10 @@ internal sealed class PriceExceptionCases(ProjectsDbContext db, CostAlerts alert
             .Select(alert => alert.RecipientUserId)
             .Distinct()
             .ToListAsync(cancellationToken);
-        foreach (var recipient in (await alerts.CustodyWatchersAsync(projectId, submittedBy, cancellationToken)).Except(alreadyTold))
+        var recipients = projectId is { } project
+            ? await alerts.CustodyWatchersAsync(project, submittedBy, cancellationToken)
+            : await alerts.CompanyWatchersAsync(submittedBy, cancellationToken);
+        foreach (var recipient in recipients.Except(alreadyTold))
         {
             db.PriceExceptionAlerts.Add(new PriceExceptionAlert { Exception = exception, ProjectId = projectId, RecipientUserId = recipient, CreatedAt = now });
         }

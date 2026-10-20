@@ -226,9 +226,9 @@ internal static class PriceExceptionEndpoints
             exception.Status,
             exception.VarianceTotal,
             exception.ProjectId,
-            ProjectCode = exception.Project.Code,
-            ProjectNameAr = exception.Project.NameAr,
-            ProjectNameEn = exception.Project.NameEn,
+            ProjectCode = exception.Project!.Code,
+            ProjectNameAr = exception.Project!.NameAr,
+            ProjectNameEn = exception.Project!.NameEn,
             CategoryCode = exception.PriceItem.Category.Code,
             CategoryNameAr = exception.PriceItem.Category.NameAr,
             CategoryNameEn = exception.PriceItem.Category.NameEn,
@@ -260,7 +260,10 @@ internal static class PriceExceptionEndpoints
             counted.Count(row => row.Status == PriceExceptionStatus.Rejected),
             rows.Count(row => row.Status == PriceExceptionStatus.Withdrawn),
             counted.Sum(row => row.VarianceTotal),
-            counted.GroupBy(row => row.ProjectId).Select(group => Group<int>(group.Key.ToString(), group.First().ProjectNameAr, $"{group.First().ProjectCode} · {group.First().ProjectNameEn}", group)).OrderByDescending(group => group.VarianceTotal).ToList(),
+            // Office expenses have no project: they are one group of their own.
+            counted.GroupBy(row => row.ProjectId).Select(group => group.Key is null
+                ? Group<int>("office", "مصروفات المكتب", "Company office", group)
+                : Group<int>(group.Key.ToString()!, group.First().ProjectNameAr, $"{group.First().ProjectCode} · {group.First().ProjectNameEn}", group)).OrderByDescending(group => group.VarianceTotal).ToList(),
             counted.GroupBy(row => row.CategoryCode).Select(group => Group<string>(group.Key, group.First().CategoryNameAr, group.First().CategoryNameEn, group)).OrderByDescending(group => group.VarianceTotal).ToList(),
             counted.Where(row => row.SupplierId != null).GroupBy(row => row.SupplierId!.Value).Select(group => Group<int>(group.Key.ToString(), group.First().SupplierNameAr, group.First().SupplierNameEn, group)).OrderByDescending(group => group.VarianceTotal).ToList(),
             counted.GroupBy(row => row.SubmittedBy).Select(group => Group<int>(group.Key.ToString(), people.GetValueOrDefault(group.Key)?.NameAr, people.GetValueOrDefault(group.Key)?.NameEn, group)).OrderByDescending(group => group.Count).ToList(),
@@ -439,7 +442,7 @@ internal static class PriceExceptionEndpoints
         if (visible is not null)
         {
             var ids = visible.ToList();
-            query = query.Where(exception => ids.Contains(exception.ProjectId) || exception.SubmittedBy == userId);
+            query = query.Where(exception => (exception.ProjectId != null && ids.Contains(exception.ProjectId.Value)) || exception.SubmittedBy == userId);
         }
 
         return query;

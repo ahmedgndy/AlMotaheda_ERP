@@ -25,6 +25,15 @@ internal static class NotificationTypes
     public const string RecordReversed = "RecordReversed";
     public const string PayrollSettled = "PayrollSettled";
     public const string CustodyChanged = "CustodyChanged";
+
+    // Office management (company office cash custody).
+    public const string OfficeExpenseSubmitted = "OfficeExpenseSubmitted";
+    public const string OfficeExpensePosted = "OfficeExpensePosted";
+    public const string OfficeFundingRequested = "OfficeFundingRequested";
+    public const string OfficeFundsDisbursed = "OfficeFundsDisbursed";
+    public const string OfficeLowBalance = "OfficeLowBalance";
+    public const string OfficeCashDiscrepancy = "OfficeCashDiscrepancy";
+    public const string OfficeSpendRequested = "OfficeSpendRequested";
 }
 
 /// <summary>A notification to store: who gets it, its type and its title in both languages.</summary>
@@ -77,6 +86,17 @@ internal static class NotificationRules
         ["SettlementAlert"] = ("weekly labor settlement", "تسوية العمالة الأسبوعية"),
         ["ContractVariation"] = ("subcontract value change", "تعديل قيمة عقد الباطن"),
         ["CustodyEntry"] = ("custody", "العهدة"),
+        ["OfficeExpense"] = ("office expense", "مصروف المكتب"),
+        ["OfficeFundingRequest"] = ("custody funding request", "طلب تغذية العهدة"),
+        ["OfficeSpendRequest"] = ("office repair or purchase request", "طلب صيانة أو شراء للمكتب"),
+        ["OfficeCashCount"] = ("cash count", "جرد النقدية"),
+        ["OfficeExpenseSubmittedAlert"] = ("office expense", "مصروف المكتب"),
+        ["OfficeExpensePostedAlert"] = ("office expense", "مصروف المكتب"),
+        ["OfficeFundingRequestedAlert"] = ("custody funding request", "طلب تغذية العهدة"),
+        ["OfficeFundsDisbursedAlert"] = ("custody funding", "تغذية العهدة"),
+        ["OfficeLowBalanceAlert"] = ("office custody", "عهدة المكتب"),
+        ["OfficeDiscrepancyAlert"] = ("cash count", "جرد النقدية"),
+        ["OfficeSpendRequestedAlert"] = ("office repair or purchase request", "طلب صيانة أو شراء للمكتب"),
     };
 
     /// <summary>StatusAfter <c>null</c> = the record was just added.</summary>
@@ -157,6 +177,25 @@ internal static class NotificationRules
 
         // Cash custody (Projects): the holder hears of every funding, return or wage payment someone else records.
         new("CustodyEntry", null, "HolderUserId", NotificationTypes.CustodyChanged),
+
+        // Office management (Office): the custodian hears every decision on what they submitted; reviewers hear of new
+        // items through alert rows (one per reviewer, the submitter never told about their own record).
+        new("OfficeExpense", "Approved", "CreatedBy", NotificationTypes.RecordApproved),
+        new("OfficeExpense", "Returned", "CreatedBy", NotificationTypes.RecordReturned),
+        new("OfficeExpense", "Rejected", "CreatedBy", NotificationTypes.RecordRejected),
+        new("OfficeFundingRequest", "Approved", "RequestedBy", NotificationTypes.RecordApproved),
+        new("OfficeFundingRequest", "Rejected", "RequestedBy", NotificationTypes.RecordRejected),
+        new("OfficeSpendRequest", "Approved", "RequestedBy", NotificationTypes.RecordApproved),
+        new("OfficeSpendRequest", "Rejected", "RequestedBy", NotificationTypes.RecordRejected),
+        new("OfficeCashCount", "Accepted", "CountedBy", NotificationTypes.RecordReviewed),
+        new("OfficeCashCount", "Adjusted", "CountedBy", NotificationTypes.RecordReviewed),
+        new("OfficeExpenseSubmittedAlert", null, "RecipientUserId", NotificationTypes.OfficeExpenseSubmitted),
+        new("OfficeExpensePostedAlert", null, "RecipientUserId", NotificationTypes.OfficeExpensePosted),
+        new("OfficeFundingRequestedAlert", null, "RecipientUserId", NotificationTypes.OfficeFundingRequested),
+        new("OfficeFundsDisbursedAlert", null, "RecipientUserId", NotificationTypes.OfficeFundsDisbursed),
+        new("OfficeLowBalanceAlert", null, "RecipientUserId", NotificationTypes.OfficeLowBalance),
+        new("OfficeDiscrepancyAlert", null, "RecipientUserId", NotificationTypes.OfficeCashDiscrepancy),
+        new("OfficeSpendRequestedAlert", null, "RecipientUserId", NotificationTypes.OfficeSpendRequested),
     ];
 
     /// <summary>The notifications one changed record causes. <paramref name="actorUserId"/> made the change.</summary>
@@ -228,6 +267,13 @@ internal static class NotificationRules
         NotificationTypes.RecordReversed => ($"Your {noun.En} was reversed", $"تم عكس {noun.Ar}"),
         NotificationTypes.PayrollSettled => ("A weekly labor settlement is waiting for review", "تسوية عمالة أسبوعية بانتظار المراجعة"),
         NotificationTypes.CustodyChanged => ("Your custody was updated", "تم تحديث عهدتك"),
+        NotificationTypes.OfficeExpenseSubmitted => ("An office expense is waiting for review", "مصروف مكتب بانتظار المراجعة"),
+        NotificationTypes.OfficeExpensePosted => ("An office expense was deducted from the custody", "تم خصم مصروف مكتب من العهدة"),
+        NotificationTypes.OfficeFundingRequested => ("A custody funding request is waiting for review", "طلب تغذية عهدة بانتظار المراجعة"),
+        NotificationTypes.OfficeFundsDisbursed => ("Custody funds were paid out: confirm you received them", "تم صرف تغذية العهدة: أكّد الاستلام"),
+        NotificationTypes.OfficeLowBalance => ("The office custody balance is low", "رصيد عهدة المكتب منخفض"),
+        NotificationTypes.OfficeCashDiscrepancy => ("A cash count does not match the custody balance", "جرد النقدية لا يطابق رصيد العهدة"),
+        NotificationTypes.OfficeSpendRequested => ("An office repair or purchase request is waiting for review", "طلب صيانة أو شراء للمكتب بانتظار المراجعة"),
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown notification type."),
     };
 }

@@ -84,8 +84,9 @@ internal sealed class PriceException
 
     public int SourceId { get; set; }
 
-    public int ProjectId { get; set; }
-    public Project Project { get; set; } = null!;
+    /// <summary>The project, or <c>null</c> for company overhead (an office expense).</summary>
+    public int? ProjectId { get; set; }
+    public Project? Project { get; set; }
 
     public int? SupplierId { get; set; }
 
@@ -197,7 +198,8 @@ internal sealed class PriceExceptionAlert
     public int ExceptionId { get; set; }
     public PriceException Exception { get; set; } = null!;
 
-    public int ProjectId { get; set; }
+    /// <summary>The case's project; <c>null</c> for company overhead.</summary>
+    public int? ProjectId { get; set; }
 
     public int RecipientUserId { get; set; }
 

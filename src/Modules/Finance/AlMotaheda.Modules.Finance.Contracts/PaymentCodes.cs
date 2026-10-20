@@ -13,7 +13,10 @@ public static class PayeeTypes
     /// <summary>A person given cash to spend on a project (a site engineer's custody, "العهدة"); the payee id is the user id.</summary>
     public const string CustodyHolder = "CustodyHolder";
 
-    public static IReadOnlyList<string> All { get; } = [Supplier, Worker, Subcontractor, Employees, CustodyHolder];
+    /// <summary>The company office's cash custody (Office module); the payee id is the office custody account's id.</summary>
+    public const string OfficeCustody = "OfficeCustody";
+
+    public static IReadOnlyList<string> All { get; } = [Supplier, Worker, Subcontractor, Employees, CustodyHolder, OfficeCustody];
 }
 
 /// <summary>What a payment is for. Stored by name; reports group by it.</summary>
@@ -34,7 +37,13 @@ public static class PaymentPurposes
     /// </summary>
     public const string CustodyAdvance = "CustodyAdvance";
 
-    public static IReadOnlyList<string> All { get; } = [SupplierInvoices, WorkerWages, SubcontractWork, SubcontractAdvance, EquipmentCost, Salaries, CustodyAdvance];
+    /// <summary>
+    /// Cash handed to the company office's custody for office expenses. Money out of the company, but not yet a cost:
+    /// the office expenses paid out of it are recognized one by one when they are approved (Office module).
+    /// </summary>
+    public const string OfficeCustodyAdvance = "OfficeCustodyAdvance";
+
+    public static IReadOnlyList<string> All { get; } = [SupplierInvoices, WorkerWages, SubcontractWork, SubcontractAdvance, EquipmentCost, Salaries, CustodyAdvance, OfficeCustodyAdvance];
 }
 
 /// <summary>How money leaves. Cash is paid by hand; bank transfers and cheques go through the bank and wait for its confirmation.</summary>
@@ -61,7 +70,10 @@ public static class PaymentSourceTypes
     /// <summary>Cash handed to a custody (Projects writes the custody funding when the request is paid).</summary>
     public const string CustodyFunding = "CustodyFunding";
 
-    public static IReadOnlyList<string> All { get; } = [SupplierPayment, WorkerPayment, SubcontractPayment, EquipmentCostPayment, SalarySheetPayment, CustodyFunding];
+    /// <summary>Cash handed to the office custody (Office records the disbursement when the request is paid).</summary>
+    public const string OfficeCustodyFunding = "OfficeCustodyFunding";
+
+    public static IReadOnlyList<string> All { get; } = [SupplierPayment, WorkerPayment, SubcontractPayment, EquipmentCostPayment, SalarySheetPayment, CustodyFunding, OfficeCustodyFunding];
 }
 
 /// <summary>The records a request's lines point to (what each part of the money pays for).</summary>

@@ -60,7 +60,7 @@ internal sealed partial class ProjectsLog
 internal sealed partial class ProjectsLog
 {
     [LoggerMessage(EventId = 2881, Level = LogLevel.Warning, Message = "Price exception {ExceptionId} opened by user {ActorId} on {SourceType} {SourceId} (project {ProjectId}, price item {PriceItemId}); {RecipientCount} told")]
-    public partial void PriceExceptionOpened(int actorId, int exceptionId, string sourceType, int sourceId, int projectId, int priceItemId, int recipientCount);
+    public partial void PriceExceptionOpened(int actorId, int exceptionId, string sourceType, int sourceId, int? projectId, int priceItemId, int recipientCount);
 
     [LoggerMessage(EventId = 2882, Level = LogLevel.Information, Message = "User {ActorId} decided price exception {ExceptionId}: {NewStatus} (new range {NewRangeId})")]
     public partial void PriceExceptionDecided(int actorId, int exceptionId, string newStatus, int? newRangeId);

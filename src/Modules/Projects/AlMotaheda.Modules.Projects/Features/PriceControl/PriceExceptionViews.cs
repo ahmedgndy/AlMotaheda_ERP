@@ -9,7 +9,7 @@ internal sealed record PriceExceptionView(
     int Id,
     string SourceType,
     int SourceId,
-    int ProjectId,
+    int? ProjectId,
     string? ProjectCode,
     string? ProjectNameAr,
     string? ProjectNameEn,
@@ -79,9 +79,9 @@ internal static class PriceExceptionQueries
         exceptions.Select(exception => new Row
         {
             Exception = exception,
-            ProjectCode = exception.Project.Code,
-            ProjectNameAr = exception.Project.NameAr,
-            ProjectNameEn = exception.Project.NameEn,
+            ProjectCode = exception.Project!.Code,
+            ProjectNameAr = exception.Project!.NameAr,
+            ProjectNameEn = exception.Project!.NameEn,
             SupplierNameAr = db.Suppliers.Where(supplier => supplier.Id == exception.SupplierId).Select(supplier => supplier.NameAr).FirstOrDefault(),
             SupplierNameEn = db.Suppliers.Where(supplier => supplier.Id == exception.SupplierId).Select(supplier => supplier.NameEn).FirstOrDefault(),
             PriceItemNameAr = exception.PriceItem.NameAr,

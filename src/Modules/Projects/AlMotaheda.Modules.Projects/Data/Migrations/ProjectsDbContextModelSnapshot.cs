@@ -1248,7 +1248,7 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                     b.Property<int?>("PriceRangeId")
                         .HasColumnType("int");
 
-                    b.Property<int>("ProjectId")
+                    b.Property<int?>("ProjectId")
                         .HasColumnType("int");
 
                     b.Property<decimal>("Quantity")
@@ -1355,7 +1355,7 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
 
                             t.HasCheckConstraint("CK_PriceException_NewRange", "[NewRangeId] IS NULL OR [Status] = 'ApprovedWithPriceChange'");
 
-                            t.HasCheckConstraint("CK_PriceException_SourceType", "[SourceType] IN ('ProjectExpense', 'SupplierInvoiceLine')");
+                            t.HasCheckConstraint("CK_PriceException_SourceType", "[SourceType] IN ('ProjectExpense', 'SupplierInvoiceLine', 'OfficeExpense')");
 
                             t.HasCheckConstraint("CK_PriceException_Status", "[Status] IN ('Pending', 'ApprovedOnce', 'ApprovedWithPriceChange', 'Rejected', 'Withdrawn')");
                         });
@@ -1375,7 +1375,7 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                     b.Property<int>("ExceptionId")
                         .HasColumnType("int");
 
-                    b.Property<int>("ProjectId")
+                    b.Property<int?>("ProjectId")
                         .HasColumnType("int");
 
                     b.Property<int>("RecipientUserId")
@@ -3119,8 +3119,7 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                     b.HasOne("AlMotaheda.Modules.Projects.Data.Project", "Project")
                         .WithMany()
                         .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("PriceItem");
 

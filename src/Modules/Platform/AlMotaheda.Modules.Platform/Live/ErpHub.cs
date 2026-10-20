@@ -59,6 +59,8 @@ internal static class LiveAccess
                 return caller.HasPermission("finance", PermissionAction.View) || caller.HasPermission("payments", PermissionAction.Approve);
             case ["company", "hr"]:
                 return caller.HasPermission("hr", PermissionAction.View);
+            case ["company", "office"]:
+                return caller.HasPermission("office", PermissionAction.View);
             case ["company", "procurement"]:
                 return caller.HasPermission("procurement", PermissionAction.Edit) || caller.GetRoleCode() == AccessRoles.Executive;
             case ["project", var id]:

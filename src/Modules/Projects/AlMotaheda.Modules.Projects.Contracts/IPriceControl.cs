@@ -50,7 +50,10 @@ public static class PriceExceptionSources
     /// <summary>A line of a supplier invoice (Procurement).</summary>
     public const string SupplierInvoiceLine = "SupplierInvoiceLine";
 
-    public static IReadOnlyList<string> All { get; } = [ProjectExpense, SupplierInvoiceLine];
+    /// <summary>An office expense paid from the company office's cash custody (Office). Company overhead: no project.</summary>
+    public const string OfficeExpense = "OfficeExpense";
+
+    public static IReadOnlyList<string> All { get; } = [ProjectExpense, SupplierInvoiceLine, OfficeExpense];
 }
 
 public sealed record PriceItemRef(int Id, string NameAr, string NameEn, string Unit, string CategoryCode, bool IsActive);
@@ -82,11 +85,12 @@ public sealed record PriceVerdict(
     public bool IsAboveRange => Result == AboveRange;
 }
 
+/// <param name="ProjectId">The project, or <c>null</c> for company overhead (an office expense).</param>
 /// <param name="Summary">What the transaction is, for the inbox (item, invoice number).</param>
 public sealed record PriceExceptionDraft(
     string SourceType,
     int SourceId,
-    int ProjectId,
+    int? ProjectId,
     int? SupplierId,
     int PriceItemId,
     PriceVerdict Verdict,
@@ -108,4 +112,4 @@ public sealed record PriceExceptionState(int ExceptionId, int SourceId, string S
 }
 
 /// <param name="Approved">True for decision A or B; false for C.</param>
-public sealed record PriceExceptionDecision(int ExceptionId, string SourceType, int SourceId, int ProjectId, string Status, bool Approved, int DecidedBy, string Note);
+public sealed record PriceExceptionDecision(int ExceptionId, string SourceType, int SourceId, int? ProjectId, string Status, bool Approved, int DecidedBy, string Note);
