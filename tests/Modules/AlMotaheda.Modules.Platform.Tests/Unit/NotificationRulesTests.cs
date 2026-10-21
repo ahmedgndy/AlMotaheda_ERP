@@ -280,6 +280,8 @@ public sealed class NotificationRulesTests
         var draft = Assert.Single(NotificationRules.For(approved, Reviewer));
 
         Assert.Equal((Recorder, NotificationTypes.RecordApproved, "تم اعتماد تعديل قيمة عقد الباطن"), (draft.RecipientUserId, draft.Type, draft.TitleAr));
+    }
+
     [Fact]
     public void A_low_battery_alert_tells_its_recipient_once_and_its_recovery_only_shows_on_the_map()
     {
