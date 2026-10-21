@@ -18,7 +18,7 @@ public sealed class DatabaseSchemaTests
         using var db = CreateContext();
 
         Assert.False(db.Database.HasPendingModelChanges(), "The model changed without a migration. Run dotnet ef migrations add.");
-        Assert.Equal(["InitialFinance", "ImportExistingPayments", "SalaryPayments", "CustodyFunding", "TreasuryAndCustody", "CustodyAdjustmentDisputes"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
+        Assert.Equal(["InitialFinance", "ImportExistingPayments", "SalaryPayments", "CustodyFunding", "OfficeCustodyFunding", "TreasuryAndCustody", "CustodyAdjustmentDisputes", "OfficeAndTreasuryCodes"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
     }
 
     [Theory]
@@ -44,7 +44,7 @@ public sealed class DatabaseSchemaTests
     [InlineData("CONSTRAINT [CK_LedgerEntry_CustodyAccount] CHECK (([Account] = 'Custody' AND [CustodyAccountId] IS NOT NULL) OR ([Account] <> 'Custody' AND [CustodyAccountId] IS NULL))")]
     [InlineData("CONSTRAINT [CK_LedgerEntry_Account] CHECK ([Account] IN ('Bank', 'Cash', 'Custody'))")]
     [InlineData("CONSTRAINT [CK_PaymentRequest_CustodySource] CHECK ([SourceCustodyAccountId] IS NULL OR [Method] = 'Cash')")]
-    [InlineData("CONSTRAINT [CK_PaymentRequest_Purpose] CHECK ([Purpose] IN ('SupplierInvoices', 'WorkerWages', 'SubcontractWork', 'SubcontractAdvance', 'EquipmentCost', 'Salaries', 'CustodyAdvance', 'CustodyReturn'))")]
+    [InlineData("CONSTRAINT [CK_PaymentRequest_Purpose] CHECK ([Purpose] IN ('SupplierInvoices', 'WorkerWages', 'SubcontractWork', 'SubcontractAdvance', 'EquipmentCost', 'Salaries', 'CustodyAdvance', 'CustodyReturn', 'OfficeCustodyAdvance'))")]
     [InlineData("CONSTRAINT [CK_TreasuryAccount_Account] CHECK ([Account] IN ('Bank', 'Cash'))")]
     [InlineData("CREATE UNIQUE INDEX [UX_TreasuryAccount_Account] ON [finance].[TreasuryAccount] ([Account])")]
     [InlineData("CONSTRAINT [CK_CustodyAccount_Kind] CHECK ([Kind] IN ('Accountant', 'PayrollBatch', 'EngineerProject', 'Vehicle', 'Office'))")]
@@ -55,7 +55,7 @@ public sealed class DatabaseSchemaTests
     [InlineData("CREATE UNIQUE INDEX [UX_CustodyMovement_Account_Source] ON [finance].[CustodyMovement] ([AccountId], [SourceType], [SourceId])")]
     [InlineData("CREATE UNIQUE INDEX [UX_CustodyMovement_Reverses] ON [finance].[CustodyMovement] ([ReversesMovementId]) WHERE [ReversesMovementId] IS NOT NULL")]
     [InlineData("CONSTRAINT [CK_CustodyTransfer_Status] CHECK ([Status] IN ('Requested', 'Approved', 'Disbursed', 'Received', 'Rejected', 'Cancelled', 'Reversed'))")]
-    [InlineData("CONSTRAINT [CK_CustodyTransfer_Purpose] CHECK ([Purpose] IN ('CustodyAdvance', 'CustodyReturn'))")]
+    [InlineData("CONSTRAINT [CK_CustodyTransfer_Purpose] CHECK ([Purpose] IN ('CustodyAdvance', 'CustodyReturn', 'OfficeCustodyAdvance'))")]
     [InlineData("CONSTRAINT [CK_CustodyTransfer_Amount] CHECK ([Amount] > 0)")]
     [InlineData("CREATE UNIQUE INDEX [UX_CustodyTransfer_IdempotencyKey] ON [finance].[CustodyTransfer] ([IdempotencyKey])")]
     [InlineData("[Number] AS CONCAT('CT-', REPLICATE('0', 6 - LEN([Id])), [Id]) PERSISTED")]

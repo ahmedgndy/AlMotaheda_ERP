@@ -75,6 +75,13 @@ internal sealed class CostAlerts(ProjectsDbContext db, IUserDirectory users)
     /// For cash paid from a custody: the project's active managers, every active Executive and every active
     /// accountant, never the actor.
     /// </summary>
+    /// <summary>Company overhead (no project, e.g. an office expense): the active Executives and Accountants, never the actor.</summary>
+    public async Task<IReadOnlyList<int>> CompanyWatchersAsync(int actorUserId, CancellationToken cancellationToken)
+    {
+        var company = await users.ListActiveAsync([AccessRoles.Executive, AccessRoles.Accountant], cancellationToken);
+        return company.Select(user => user.Id).Where(id => id != actorUserId).Distinct().Order().ToList();
+    }
+
     public async Task<IReadOnlyList<int>> CustodyWatchersAsync(int projectId, int actorUserId, CancellationToken cancellationToken)
     {
         var managers = await ManagersAsync(projectId, actorUserId, cancellationToken);

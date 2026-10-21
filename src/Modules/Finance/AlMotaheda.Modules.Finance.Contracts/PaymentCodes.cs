@@ -19,7 +19,10 @@ public static class PayeeTypes
     /// </summary>
     public const string CustodyAccount = "CustodyAccount";
 
-    public static IReadOnlyList<string> All { get; } = [Supplier, Worker, Subcontractor, Employees, CustodyHolder, CustodyAccount];
+    /// <summary>The company office's cash custody (Office module); the payee id is the office custody account's id.</summary>
+    public const string OfficeCustody = "OfficeCustody";
+
+    public static IReadOnlyList<string> All { get; } = [Supplier, Worker, Subcontractor, Employees, CustodyHolder, CustodyAccount, OfficeCustody];
 }
 
 /// <summary>What a payment is for. Stored by name; reports group by it.</summary>
@@ -43,7 +46,13 @@ public static class PaymentPurposes
     /// <summary>Cash handed back from a custody to the treasury. Money in, never income: it undoes an advance.</summary>
     public const string CustodyReturn = "CustodyReturn";
 
-    public static IReadOnlyList<string> All { get; } = [SupplierInvoices, WorkerWages, SubcontractWork, SubcontractAdvance, EquipmentCost, Salaries, CustodyAdvance, CustodyReturn];
+    /// <summary>
+    /// Cash handed to the company office's custody for office expenses. Money out of the company, but not yet a cost:
+    /// the office expenses paid out of it are recognized one by one when they are approved (Office module).
+    /// </summary>
+    public const string OfficeCustodyAdvance = "OfficeCustodyAdvance";
+
+    public static IReadOnlyList<string> All { get; } = [SupplierInvoices, WorkerWages, SubcontractWork, SubcontractAdvance, EquipmentCost, Salaries, CustodyAdvance, CustodyReturn, OfficeCustodyAdvance];
 
     /// <summary>An internal movement between the treasury and a custody, or between custodies: counted zero times as expense.</summary>
     public static bool IsInternalTransfer(string purpose) => purpose is CustodyAdvance or CustodyReturn;
@@ -79,8 +88,11 @@ public static class PaymentSourceTypes
     /// </summary>
     public const string CustodyTransfer = "CustodyTransfer";
 
+    /// <summary>Cash handed to the office custody (Office records the disbursement when the request is paid).</summary>
+    public const string OfficeCustodyFunding = "OfficeCustodyFunding";
+
     /// <summary>The source types a payment request may have (a custody transfer is not one).</summary>
-    public static IReadOnlyList<string> All { get; } = [SupplierPayment, WorkerPayment, SubcontractPayment, EquipmentCostPayment, SalarySheetPayment, CustodyFunding];
+    public static IReadOnlyList<string> All { get; } = [SupplierPayment, WorkerPayment, SubcontractPayment, EquipmentCostPayment, SalarySheetPayment, CustodyFunding, OfficeCustodyFunding];
 }
 
 /// <summary>The records a request's lines point to (what each part of the money pays for).</summary>

@@ -115,7 +115,7 @@ internal sealed class ProjectsInboxSource(ProjectsDbContext db) : IWorkInboxSour
         {
             var seesVariance = query.Caller.HasPermission(Prices.PricePermissions.Module, PermissionAction.SeeMoney);
             var exceptions = await db.PriceExceptions.AsNoTracking()
-                .Where(exception => ids.Contains(exception.ProjectId) && exception.Status == PriceExceptionStatus.Pending && exception.SubmittedBy != me)
+                .Where(exception => (exception.ProjectId == null || ids.Contains(exception.ProjectId.Value)) && exception.Status == PriceExceptionStatus.Pending && exception.SubmittedBy != me)
                 .OrderBy(exception => exception.SubmittedAt)
                 .Take(query.Limit)
                 .Select(exception => new

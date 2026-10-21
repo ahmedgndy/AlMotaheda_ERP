@@ -101,7 +101,7 @@ internal sealed class PriceControlReports(ProjectsDbContext db, IUserDirectory u
         var exceptions = db.PriceExceptions.AsNoTracking();
         if (visible is not null)
         {
-            exceptions = exceptions.Where(exception => visible.Contains(exception.ProjectId));
+            exceptions = exceptions.Where(exception => exception.ProjectId != null && visible.Contains(exception.ProjectId.Value));
         }
 
         if (query.Id("projectId") is { } projectId)
@@ -218,7 +218,8 @@ internal sealed class PriceControlReports(ProjectsDbContext db, IUserDirectory u
         var groups = rows
             .GroupBy(row => groupBy switch
             {
-                "Project" => (Key: row.Exception.ProjectId, Label: row.ProjectNameEn ?? row.ProjectCode, Link: new ReportLink("project", row.Exception.ProjectId, row.Exception.ProjectId)),
+                "Project" => (Key: row.Exception.ProjectId ?? 0, Label: row.Exception.ProjectId is null ? "Company office" : row.ProjectNameEn ?? row.ProjectCode,
+                    Link: row.Exception.ProjectId is { } projectId ? new ReportLink("project", projectId, projectId) : (ReportLink?)null),
                 "Category" => (Key: 0, Label: row.CategoryCode, Link: (ReportLink?)null),
                 "Supplier" => (Key: row.Exception.SupplierId ?? 0, Label: row.SupplierNameEn ?? "No supplier", Link: null),
                 "Submitter" => (Key: row.Exception.SubmittedBy, Label: people.GetValueOrDefault(row.Exception.SubmittedBy)?.NameEn ?? $"User {row.Exception.SubmittedBy}", Link: null),

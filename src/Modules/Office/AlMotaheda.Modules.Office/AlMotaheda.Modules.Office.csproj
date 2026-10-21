@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Office module: the company office's cash custody ("عهدة المكتب"). The office custodian records office expenses
+    with camera receipts, asks for replenishment, reports repairs and counts the cash; the Accountant and the
+    Executive review. Replenishment money moves through Finance payment requests; office prices are checked against
+    the central Price Control catalog (Projects). Company overhead: nothing here belongs to a project.
+    Allowed references: BuildingBlocks and other modules' *.Contracts projects only.
+    Everything except OfficeModule stays internal.
+  -->
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The module owns its tables, so it owns its EF Core context and migrations (schema "office"). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <!-- Design-time only: lets `dotnet ef` create migrations for this module. Not shipped with the application. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks\AlMotaheda.BuildingBlocks.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks.Data\AlMotaheda.BuildingBlocks.Data.csproj" />
+    <!-- User names and roles (who reviews office expenses). -->
+    <ProjectReference Include="..\..\Access\AlMotaheda.Modules.Access.Contracts\AlMotaheda.Modules.Access.Contracts.csproj" />
+    <!-- Replenishments are paid through Finance payment requests; Finance tells this module when the money left. -->
+    <ProjectReference Include="..\..\Finance\AlMotaheda.Modules.Finance.Contracts\AlMotaheda.Modules.Finance.Contracts.csproj" />
+    <!-- The central Price Control catalog and its exception cases, and the shared work inbox. -->
+    <ProjectReference Include="..\..\Projects\AlMotaheda.Modules.Projects.Contracts\AlMotaheda.Modules.Projects.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AlMotaheda.Modules.Office.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="AlMotaheda.BuildingBlocks.Validation" />
+    <Using Include="AlMotaheda.BuildingBlocks.Data" />
+  </ItemGroup>
+
+</Project>

@@ -22,8 +22,8 @@ public sealed class ModuleRegistrationTests
         // The order matters: each module's startup applies its migrations in this order. Every save writes the
         // Platform audit and outbox tables, the Projects tables point to access.User, Fleet's vehicle tables point to
         // hr.Employee, the other modules' tables point to projects tables, and Finance copies the existing payments of
-        // those modules, so: Platform, Access, Projects, HR, the rest, Finance.
-        Assert.Equal(new[] { "Platform", "Access", "Projects", "HR", "Workforce", "Subcontractors", "Fleet", "Archive", "Procurement", "Reports", "Finance" }, registered);
+        // those modules, so: Platform, Access, Projects, HR, the rest (Office after Archive), Finance.
+        Assert.Equal(new[] { "Platform", "Access", "Projects", "HR", "Workforce", "Subcontractors", "Fleet", "Archive", "Office", "Procurement", "Reports", "Finance" }, registered);
     }
 
     [Fact]

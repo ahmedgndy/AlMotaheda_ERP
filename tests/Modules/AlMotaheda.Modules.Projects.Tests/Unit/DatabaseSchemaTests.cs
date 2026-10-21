@@ -19,7 +19,7 @@ public sealed class DatabaseSchemaTests
         using var db = CreateContext();
 
         Assert.False(db.Database.HasPendingModelChanges(), "The model changed without a migration. Run dotnet ef migrations add.");
-        Assert.Equal(["InitialProjects", "ProjectWorkspace", "ExpenseAdjustments", "SupplierUniqueness", "ExpenseSource", "SiteLocation", "CostManagement", "CustodyAndSupply", "PriceControl", "CustodyAdjustmentsAndVehicleExpenseCases"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
+        Assert.Equal(["InitialProjects", "ProjectWorkspace", "ExpenseAdjustments", "SupplierUniqueness", "ExpenseSource", "SiteLocation", "CostManagement", "CustodyAndSupply", "PriceControl", "OfficePriceExceptions", "CustodyAdjustmentsAndVehicleExpenseCases", "OfficeAndTreasuryCodes"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
     }
 
     [Fact]
@@ -35,7 +35,7 @@ public sealed class DatabaseSchemaTests
     [Theory]
     [InlineData("CREATE UNIQUE INDEX [UX_Project_Code] ON [projects].[Project] ([Code])")]
     [InlineData("CONSTRAINT [CK_CustodyEntry_Kind] CHECK ([Kind] IN ('Funding', 'Return', 'Payroll', 'AdjustmentIn', 'AdjustmentOut'))")]
-    [InlineData("CONSTRAINT [CK_PriceException_SourceType] CHECK ([SourceType] IN ('ProjectExpense', 'SupplierInvoiceLine', 'VehicleExpense'))")]
+    [InlineData("CONSTRAINT [CK_PriceException_SourceType] CHECK ([SourceType] IN ('ProjectExpense', 'SupplierInvoiceLine', 'VehicleExpense', 'OfficeExpense'))")]
     [InlineData("CREATE INDEX [IX_Project_Status] ON [projects].[Project] ([Status])")]
     [InlineData("CREATE UNIQUE INDEX [UX_ProjectMember_ActiveUser] ON [projects].[ProjectMember] ([ProjectId], [UserId]) WHERE [EndDate] IS NULL")]
     [InlineData("CREATE UNIQUE INDEX [UX_ProjectMember_ActiveManager] ON [projects].[ProjectMember] ([ProjectId]) WHERE [Responsibility] = 'ProjectManager' AND [EndDate] IS NULL")]

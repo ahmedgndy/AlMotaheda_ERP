@@ -36,6 +36,9 @@ internal static class LiveScopes
     public const string Hr = "company:hr";
     public const string Procurement = "company:procurement";
 
+    /// <summary>The company office's cash custody and expenses (Office module): custodians and finance.</summary>
+    public const string Office = "company:office";
+
     public static string User(int userId) => $"user:{userId}";
 
     public static string Project(int projectId) => $"project:{projectId}";
@@ -113,6 +116,13 @@ internal static class LiveScopes
         ["EmployeeAssignment"] = new(["EmployeeAssignments", "Employees"], false, [Hr]),
         ["HrReferral"] = new(["HrReferrals"], false, [Hr]),
         ["HrRequest"] = new(["HrRequests"], false, [Hr]),
+        // Office management: company overhead, no project. Office screens refetch; Finance hears of what moves cash.
+        ["OfficeCustody"] = new(["OfficeCustody"], false, [Office]),
+        ["OfficeLedgerEntry"] = new(["OfficeCustody", "OfficeLedger", "OfficeSummary"], false, [Office, Finance]),
+        ["OfficeExpense"] = new(["OfficeExpenses", "OfficeCustody", "OfficeSummary"], false, [Office]),
+        ["OfficeFundingRequest"] = new(["OfficeFunding", "OfficeCustody", "OfficeSummary"], false, [Office, Finance]),
+        ["OfficeSpendRequest"] = new(["OfficeSpendRequests", "OfficeCustody"], false, [Office]),
+        ["OfficeCashCount"] = new(["OfficeCashCounts", "OfficeCustody", "OfficeSummary"], false, [Office]),
     };
 
     /// <summary>Records that only add detail to a parent that changes in the same save; they send nothing alone.</summary>
@@ -124,6 +134,8 @@ internal static class LiveScopes
         "ReportRun", "RefreshToken", "UserSignInState", "PriceAboveRangeAlert", "CostRecordedAlert", "PriceExceptionAlert",
         "PayrollSettlementLine", "PayrollSettlementAllocation", "SettlementAlert",
         "CustodyTransferEvent", "CustodyTransferAlert", "HrRequestAlert", "HrRequestMessage", "HrRequestAttachment", "PayrollBatchAllocation", "VehicleExpenseFlag", "VehicleExpenseAlert", "FleetAttachment",
+        "OfficeExpenseApproval", "OfficeAttachment", "OfficeExpenseSubmittedAlert", "OfficeExpensePostedAlert", "OfficeFundingRequestedAlert",
+        "OfficeFundsDisbursedAlert", "OfficeLowBalanceAlert", "OfficeDiscrepancyAlert", "OfficeSpendRequestedAlert",
     };
 
     /// <summary>The signals one changed record sends.</summary>

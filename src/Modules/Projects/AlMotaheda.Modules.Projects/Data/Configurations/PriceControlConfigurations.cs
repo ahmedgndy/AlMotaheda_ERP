@@ -86,7 +86,7 @@ internal sealed class PriceExceptionConfiguration : IEntityTypeConfiguration<Pri
         builder.HasIndex(exception => new { exception.PriceItemId, exception.Status }, "IX_PriceException_PriceItem_Status");
         builder.HasIndex(exception => exception.SubmittedBy, "IX_PriceException_SubmittedBy");
 
-        builder.HasOne(exception => exception.Project).WithMany().HasForeignKey(exception => exception.ProjectId).OnDelete(DeleteBehavior.NoAction);
+        builder.HasOne(exception => exception.Project).WithMany().HasForeignKey(exception => exception.ProjectId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
         builder.HasOne(exception => exception.PriceItem).WithMany().HasForeignKey(exception => exception.PriceItemId).OnDelete(DeleteBehavior.NoAction);
         builder.HasOne<PriceRange>().WithMany().HasForeignKey(exception => exception.PriceRangeId).OnDelete(DeleteBehavior.NoAction);
         builder.HasOne<PriceRange>().WithMany().HasForeignKey(exception => exception.NewRangeId).OnDelete(DeleteBehavior.NoAction)

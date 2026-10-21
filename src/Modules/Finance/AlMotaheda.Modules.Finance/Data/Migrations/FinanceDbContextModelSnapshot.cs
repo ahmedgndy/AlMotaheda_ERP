@@ -980,11 +980,11 @@ namespace AlMotaheda.Modules.Finance.Data.Migrations
 
                             t.HasCheckConstraint("CK_PaymentRequest_Paid", "[Status] NOT IN ('Paid', 'Reversed') OR ([PaidOn] IS NOT NULL AND [SourcePaymentId] IS NOT NULL)");
 
-                            t.HasCheckConstraint("CK_PaymentRequest_PayeeType", "[PayeeType] IN ('Supplier', 'Worker', 'Subcontractor', 'Employees', 'CustodyHolder', 'CustodyAccount')");
+                            t.HasCheckConstraint("CK_PaymentRequest_PayeeType", "[PayeeType] IN ('Supplier', 'Worker', 'Subcontractor', 'Employees', 'CustodyHolder', 'CustodyAccount', 'OfficeCustody')");
 
-                            t.HasCheckConstraint("CK_PaymentRequest_Purpose", "[Purpose] IN ('SupplierInvoices', 'WorkerWages', 'SubcontractWork', 'SubcontractAdvance', 'EquipmentCost', 'Salaries', 'CustodyAdvance', 'CustodyReturn')");
+                            t.HasCheckConstraint("CK_PaymentRequest_Purpose", "[Purpose] IN ('SupplierInvoices', 'WorkerWages', 'SubcontractWork', 'SubcontractAdvance', 'EquipmentCost', 'Salaries', 'CustodyAdvance', 'CustodyReturn', 'OfficeCustodyAdvance')");
 
-                            t.HasCheckConstraint("CK_PaymentRequest_SourceType", "[SourceType] IN ('SupplierPayment', 'WorkerPayment', 'SubcontractPayment', 'EquipmentCostPayment', 'SalarySheetPayment', 'CustodyFunding')");
+                            t.HasCheckConstraint("CK_PaymentRequest_SourceType", "[SourceType] IN ('SupplierPayment', 'WorkerPayment', 'SubcontractPayment', 'EquipmentCostPayment', 'SalarySheetPayment', 'CustodyFunding', 'OfficeCustodyFunding')");
 
                             t.HasCheckConstraint("CK_PaymentRequest_Status", "[Status] IN ('Submitted', 'Approved', 'SentToBank', 'Paid', 'Rejected', 'Failed', 'Cancelled', 'Reversed')");
                         });

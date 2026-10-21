@@ -4,6 +4,7 @@ using AlMotaheda.Modules.Archive;
 using AlMotaheda.Modules.Finance;
 using AlMotaheda.Modules.Fleet;
 using AlMotaheda.Modules.HR;
+using AlMotaheda.Modules.Office;
 using AlMotaheda.Modules.Platform;
 using AlMotaheda.Modules.Procurement;
 using AlMotaheda.Modules.Projects;
@@ -26,7 +27,7 @@ internal static class ModuleCatalog
     /// <remarks>
     /// The order is the migration order: Platform first (every save of every module writes its audit and outbox
     /// tables), then Access, then Projects, then HR (vehicles' drivers are employees, so Fleet's tables point to
-    /// <c>hr</c>), then the modules whose tables point to <c>projects</c> tables, then Procurement and Reports, and
+    /// <c>hr</c>), then the modules whose tables point to <c>projects</c> tables, then Office, Procurement and Reports, and
     /// Finance last (its first migration copies the payments already recorded in those modules into the ledger).
     /// </remarks>
     public static IReadOnlyList<IModule> CreateAll() =>
@@ -39,6 +40,7 @@ internal static class ModuleCatalog
         new SubcontractorsModule(),
         new FleetModule(),
         new ArchiveModule(),
+        new OfficeModule(),
         new ProcurementModule(),
         new ReportsModule(),
         new FinanceModule(),
