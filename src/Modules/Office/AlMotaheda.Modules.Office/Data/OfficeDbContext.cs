@@ -14,6 +14,7 @@ internal sealed class OfficeDbContext(DbContextOptions<OfficeDbContext> options)
     public const string MigrationsHistoryTable = "__EFMigrationsHistory";
 
     public DbSet<OfficeCustody> Custodies => Set<OfficeCustody>();
+    public DbSet<OfficeCustodyPeriod> Periods => Set<OfficeCustodyPeriod>();
     public DbSet<OfficeLedgerEntry> LedgerEntries => Set<OfficeLedgerEntry>();
     public DbSet<OfficeCashReturn> CashReturns => Set<OfficeCashReturn>();
     public DbSet<OfficeFundingRequest> FundingRequests => Set<OfficeFundingRequest>();

@@ -32,6 +32,40 @@ internal sealed class OfficeOptions
 
     /// <summary>How many days back an expense date may be. Older purchases need finance to record them.</summary>
     public int MaxExpenseAgeDays { get; set; } = 60;
+
+    /// <summary>The monthly custody cycle (<c>Office:Periods</c>).</summary>
+    public OfficePeriodOptions Periods { get; set; } = new();
+}
+
+/// <summary>The monthly custody cycle (<c>Office:Periods</c>).</summary>
+internal sealed class OfficePeriodOptions
+{
+    /// <summary>
+    /// What may be done with money left when a month ends. Nothing happens by itself: a reviewer settles the month,
+    /// and only the actions this policy allows are offered.
+    /// </summary>
+    public OfficeUnusedBalancePolicy UnusedBalancePolicy { get; set; } = OfficeUnusedBalancePolicy.Return;
+
+    /// <summary>
+    /// When a month starts and the custody has a standing monthly allocation, ask Finance to pay it at once, on behalf
+    /// of the reviewer who authorized that amount. Off: finance authorizes each month's allocation by hand.
+    /// </summary>
+    public bool AutoRequestAllocation { get; set; } = true;
+
+    /// <summary>How often the background check opens new months and ends finished ones (minutes).</summary>
+    public int CheckEveryMinutes { get; set; } = 15;
+}
+
+internal enum OfficeUnusedBalancePolicy
+{
+    /// <summary>The leftover is handed back to the company.</summary>
+    Return,
+
+    /// <summary>The leftover is moved into the next month.</summary>
+    CarryForward,
+
+    /// <summary>Finance chooses, month by month, between returning and carrying forward.</summary>
+    ReviewerChooses,
 }
 
 /// <summary>Where office files are kept (<c>Office:Storage</c>): a private folder, never served by a web server.</summary>
@@ -129,6 +163,16 @@ internal sealed class OfficeOptionsValidator : IValidateOptions<OfficeOptions>
         if (options.MaxExpenseAgeDays is < 1 or > 3650)
         {
             failures.Add("Office:MaxExpenseAgeDays must be between 1 and 3650.");
+        }
+
+        if (options.Periods.CheckEveryMinutes is < 1 or > 1440)
+        {
+            failures.Add("Office:Periods:CheckEveryMinutes must be between 1 and 1440.");
+        }
+
+        if (!Enum.IsDefined(options.Periods.UnusedBalancePolicy))
+        {
+            failures.Add($"Office:Periods:UnusedBalancePolicy must be one of: {string.Join(", ", Enum.GetNames<OfficeUnusedBalancePolicy>())}.");
         }
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
