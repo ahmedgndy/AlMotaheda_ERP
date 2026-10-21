@@ -30,7 +30,7 @@
 | T3 | The treasury balance is never stored: opening balance (set once by an Executive) + the ledger from the opening date | One rule for the ledger and the treasury; no stored total to drift |
 | T4 | `Projects:CustodyBalanceCheck` is the one overdraft policy for the treasury, every custody account and the vehicle custody | The brief asks for reuse; two policies would disagree |
 | T5 | A payroll batch never recalculates entitlements: Workforce (and HR) answer `IPayrollEntitlementSource`; only the Accountant's settlement confirmation marks wages paid | Separation of duties and no second source of truth for payroll |
-| T6 | The `Office` custody kind is reserved and not wired; the Office module keeps its custody | Out of this delivery's scope; registering it later is one `ICustodyLedgerSource` |
+| T6 | The `Office` custody kind is reserved and not wired; the Office module keeps its custody (superseded by T17 after the Office merge) | Out of this delivery's scope; registering it later is one `ICustodyLedgerSource` |
 | T7 | A fuel claim gated by price control opens a `PriceException` only when the vehicle is on a project; off-project it is `Escalated` to an Executive | A price exception belongs to a project (table and inbox); the Executive still decides either way |
 | T8 | Claim evidence is stored by a Fleet file store (`Fleet:Storage:RootPath`), typed from the bytes, served only through the API | The Archive module's documents are project-scoped with their own approval; a claim photo is a private attachment of the claim |
 | T9 | An HR referral closes with `NoAction`, `Warning` or `DeductionApplied`; only the last raises a `PayrollInput` deduction, through HR's own rules, approved with the salary sheet | Nothing is deducted automatically; Fleet never writes payroll |
@@ -41,6 +41,7 @@
 | T14 | Evidence is answered by the Archive (`IRecordDocuments`): a custody expense with no document linked is "unsupported" on the central custody page and in the statement; nothing is blocked, nothing is hidden | The brief: flag, route, never silently reconcile; the Archive already holds the documents |
 | T15 | A reviewer's custody adjustment is a ledger transaction the holder is told of and may dispute; a reviewer resolves by keeping it or undoing it with an opposite adjustment. Never a payroll deduction | The brief: no balance overwrite, every change reconstructible, deductions only through HR |
 | T16 | A new price item's first range is approved only when a database-checked Executive creates it; otherwise it is a pending proposal like any later change. Permission removals are audited through the change tracker; the audit table refuses updates and deletes by trigger | Section 14 and 17: no one's own number becomes the reference without the Executive; the trail is complete and immutable |
+| T17 | The Office custody joins Finance's registry as kind `Office` through `OfficeCustodyLedgerSource` (supersedes T6's reservation): the Office ledger stays the one ledger; Finance writes transfers and adjustments into it in its transaction | The user chose option (a): merge the Office branch, then register its custody; one hierarchy, one central page |
 
 ## 2. Open business questions (need an answer from the company)
 

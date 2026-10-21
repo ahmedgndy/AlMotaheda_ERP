@@ -407,9 +407,9 @@ internal static class CustodyTransferEndpoints
             return found;
         }
 
-        if (kind is not (CustodyAccountKinds.EngineerProject or CustodyAccountKinds.Vehicle or CustodyAccountKinds.Accountant))
+        if (kind is not (CustodyAccountKinds.EngineerProject or CustodyAccountKinds.Vehicle or CustodyAccountKinds.Accountant or CustodyAccountKinds.Office))
         {
-            errors.Add("destination.accountKind", "Only an engineer's project custody, a vehicle custody or an accountant's custody can be opened on the way.");
+            errors.Add("destination.accountKind", "Only an engineer's project custody, a vehicle custody, an office custody or an accountant's custody can be opened on the way.");
             return null;
         }
 

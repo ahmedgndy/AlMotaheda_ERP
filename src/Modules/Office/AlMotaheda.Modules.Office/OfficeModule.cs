@@ -34,6 +34,7 @@ public sealed class OfficeModule : IModule
 
         services.AddCompanyClock();
         services.AddScoped<IPaymentSource, OfficeFundingSource>();
+        services.AddScoped<ICustodyLedgerSource, OfficeCustodyLedgerSource>();
         services.AddScoped<IPriceExceptionSource, OfficePriceExceptionSource>();
         OfficeFeatures.AddServices(services, configuration);
 

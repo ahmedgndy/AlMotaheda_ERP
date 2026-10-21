@@ -116,7 +116,16 @@ internal static class OfficeLedgerSources
     public const string CashReturn = "OfficeCashReturn";
     public const string CashCount = "OfficeCashCount";
 
-    public static IReadOnlyList<string> All { get; } = [FundingRequest, Expense, ExpenseReversal, CashReturn, CashCount];
+    /// <summary>Cash handed down or back through Finance's custody hierarchy (a custody transfer received or returned).</summary>
+    public const string FinanceTransfer = "CustodyTransfer";
+
+    /// <summary>The reversal of such a transfer.</summary>
+    public const string FinanceTransferReversal = "CustodyTransferReversal";
+
+    /// <summary>A reviewer's adjustment posted from Finance's central custody page.</summary>
+    public const string FinanceAdjustment = "CustodyAdjustment";
+
+    public static IReadOnlyList<string> All { get; } = [FundingRequest, Expense, ExpenseReversal, CashReturn, CashCount, FinanceTransfer, FinanceTransferReversal, FinanceAdjustment];
 }
 
 /// <summary>

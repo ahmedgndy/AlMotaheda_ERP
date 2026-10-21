@@ -69,4 +69,7 @@ internal sealed partial class OfficeLog(ILogger<OfficeLog> logger)
 
     [LoggerMessage(EventId = 12081, Level = LogLevel.Warning, Message = "User {ActorId} was refused {Action}: {Reason}")]
     public partial void ActionRefused(int actorId, string action, string reason);
+
+    [LoggerMessage(EventId = 12082, Level = LogLevel.Information, Message = "User {ActorId} wrote Finance custody entry {EntryId} on office custody {CustodyId} ({SourceType} {SourceId})")]
+    public partial void FinanceCustodyWritten(int actorId, int custodyId, long entryId, string sourceType, int sourceId);
 }

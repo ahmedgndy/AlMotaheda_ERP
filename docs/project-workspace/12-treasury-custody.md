@@ -17,7 +17,7 @@ spine of every movement of cash between them (`CustodyTransfer`), but each modul
 | `PayrollBatch` | the batch's custodian | the `PayrollBatch` | `finance.CustodyMovement` |
 | `EngineerProject` | the site engineer | the project | `projects.CustodyEntry` (the existing project custody) |
 | `Vehicle` | – (the driver of the day is accountable) | the vehicle | `fleet.VehicleCustodyEntry` |
-| `Office` | reserved | – | not wired (Office module keeps its own, decision T6) |
+| `Office` | the office custodian (from the Office record) | the `OfficeCustody` | `office.OfficeLedgerEntry` (the Office module's ledger; registered after the Office merge, T17) |
 
 A transfer is a **linked pair of movements**: the source side is written when the cash leaves (`Disbursed`), the
 destination side when the holder confirms it is in hand (`Received`). Finance writes its own ledger directly and the
@@ -280,7 +280,8 @@ violations, HR assignments and referrals, the GPS status page (truthful "no prov
 ## 9. Known gaps (accepted for this delivery)
 
 - No GPS provider is integrated: the abstraction and the truthful empty answer only.
-- The `Office` custody kind is reserved; the Office module's own custody is not registered here (T6).
+- The Office module keeps its own funding requests (a Finance payment request) next to the registry's transfers:
+  both reach the same office ledger; the central page shows the ledger, so nothing is counted twice.
 - Claims of a vehicle on no project are not in the work inbox (project-scoped); the claims queue and the
   notifications carry them.
 - Evidence files are stored by the Fleet file store, not the Archive module's documents (T8).
@@ -314,6 +315,15 @@ never the referrer's notes). HR: `GET /api/hr/requests` (hr View), `/start-revie
 (hr Edit), `/approve`, `/reject`, `/close` (hr Approve, never one's own). `GET /api/hr/attachments/{id}/content`
 for the uploader or HR. A login not linked to an employee gets 404 `not_an_employee`. An approved request changes no
 payroll by itself.
+
+**Office (15).** After the merge of `feature/office-management`, the office cash custody (`office.OfficeCustody`,
+`OfficeLedgerEntry`, expenses with receipts, funding requests, cash counts) is one account of the hierarchy: kind
+`Office`, reference = the office custody id, holder = its custodian, ledgered by the Office module through
+`OfficeCustodyLedgerSource` (a transfer received or returned, its reversal and a reviewer's adjustment are written
+to the office ledger with source types `CustodyTransfer`, `CustodyTransferReversal`, `CustodyAdjustment`; migration
+`FinanceCustodyLinks`). The central custody page lists the office custodian from that ledger; an office expense is
+unsupported only when its receipt is missing. Office is registered with `POST /api/custody-accounts
+{ kind: "Office", referenceId }` or opened on the way by a transfer naming it.
 
 **Accountant supervision (13).** `FIN-ACTIVITY` report (finance See money): every payment request, custody transfer,
 adjustment and cash count of a period with who initiated it, who decided, the evidence reference and the link. The

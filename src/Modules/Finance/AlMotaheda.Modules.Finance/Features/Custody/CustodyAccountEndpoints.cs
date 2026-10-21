@@ -442,6 +442,13 @@ internal static class CustodyAccountOpening
 
                 break;
 
+            case CustodyAccountKinds.Office:
+                if (referenceId is null)
+                {
+                    errors.Add("referenceId", "An office custody needs its office custody record (referenceId).");
+                }
+
+                break;
             case CustodyAccountKinds.Vehicle:
                 if (holderUserId is not null)
                 {
@@ -486,6 +493,9 @@ internal static class CustodyAccountOpening
             else
             {
                 (targetAr, targetEn) = (targetAr is null ? target.NameAr : $"{targetAr} – {target.NameAr}", targetEn is null ? target.NameEn : $"{targetEn} – {target.NameEn}");
+
+                // A kind whose holder is recorded by the owning module (an office custody's custodian) takes it from there.
+                holderUserId ??= target.HolderUserId;
             }
         }
 

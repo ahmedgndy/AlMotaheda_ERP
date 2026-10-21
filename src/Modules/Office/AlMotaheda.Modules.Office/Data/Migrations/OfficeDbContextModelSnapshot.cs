@@ -857,7 +857,7 @@ namespace AlMotaheda.Modules.Office.Data.Migrations
 
                             t.HasCheckConstraint("CK_OfficeLedgerEntry_Sign", "([Kind] IN ('Funding', 'Reversal') AND [Amount] > 0) OR ([Kind] IN ('Expense', 'Return') AND [Amount] < 0) OR [Kind] = 'Adjustment'");
 
-                            t.HasCheckConstraint("CK_OfficeLedgerEntry_Source", "[SourceType] IN ('OfficeFundingRequest', 'OfficeExpense', 'OfficeExpenseReversal', 'OfficeCashReturn', 'OfficeCashCount')");
+                            t.HasCheckConstraint("CK_OfficeLedgerEntry_Source", "[SourceType] IN ('OfficeFundingRequest', 'OfficeExpense', 'OfficeExpenseReversal', 'OfficeCashReturn', 'OfficeCashCount', 'CustodyTransfer', 'CustodyTransferReversal', 'CustodyAdjustment')");
                         });
                 });
 

@@ -7,9 +7,9 @@ namespace AlMotaheda.Modules.Finance.Contracts;
 /// Finance keeps the movements of <see cref="Accountant"/> and <see cref="PayrollBatch"/> accounts itself. The
 /// movements of an <see cref="EngineerProject"/> account are the project custody of the Projects module
 /// (<c>projects.CustodyEntry</c>) and those of a <see cref="Vehicle"/> account are the vehicle custody of the Fleet
-/// module (<c>fleet.VehicleCustodyEntry</c>): each module keeps one ledger for the money it answers for, and Finance
-/// reads and writes them through <see cref="ICustodyLedgerSource"/>. <see cref="Office"/> is reserved for the office
-/// petty cash of the Office module (another branch) and is not opened here.
+/// module (<c>fleet.VehicleCustodyEntry</c>), and those of an <see cref="Office"/> account are the office cash custody
+/// of the Office module (<c>office.OfficeLedgerEntry</c>): each module keeps one ledger for the money it answers for,
+/// and Finance reads and writes them through <see cref="ICustodyLedgerSource"/>.
 /// </remarks>
 public static class CustodyAccountKinds
 {
