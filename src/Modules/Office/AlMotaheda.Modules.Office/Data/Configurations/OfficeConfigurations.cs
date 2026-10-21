@@ -33,7 +33,6 @@ internal sealed class OfficeCustodyConfiguration : IEntityTypeConfiguration<Offi
         {
             table.HasCheckConstraint("CK_OfficeCustody_Status", $"[Status] IN ({SqlList.Of(Enum.GetNames<OfficeCustodyStatus>())})");
             table.HasCheckConstraint("CK_OfficeCustody_Threshold", "[LowBalanceThreshold] >= 0");
-            table.HasCheckConstraint("CK_OfficeCustody_MonthlyAllocation", "[MonthlyAllocation] >= 0");
         });
 
         builder.Property(custody => custody.NameAr).HasMaxLength(OfficeLengths.Name).IsUnicode();
@@ -47,37 +46,6 @@ internal sealed class OfficeCustodyConfiguration : IEntityTypeConfiguration<Offi
         builder.HasIndex(custody => custody.NameAr).IsUnique().HasDatabaseName(NameArIndex);
         builder.HasIndex(custody => custody.NameEn).IsUnique().HasDatabaseName(NameEnIndex);
         builder.HasIndex(custody => new { custody.HolderUserId, custody.Status }, "IX_OfficeCustody_Holder_Status");
-    }
-}
-
-internal sealed class OfficeCustodyPeriodConfiguration : IEntityTypeConfiguration<OfficeCustodyPeriod>
-{
-    /// <summary>One row per custody and month: a month is opened once, whatever the races.</summary>
-    public const string MonthIndex = "UX_OfficeCustodyPeriod_Month";
-
-    public void Configure(EntityTypeBuilder<OfficeCustodyPeriod> builder)
-    {
-        builder.ToTable(nameof(OfficeCustodyPeriod), table =>
-        {
-            table.HasCheckConstraint("CK_OfficeCustodyPeriod_Status", $"[Status] IN ({SqlList.Of(Enum.GetNames<OfficePeriodStatus>())})");
-            table.HasCheckConstraint("CK_OfficeCustodyPeriod_Settlement",
-                $"[Settlement] IS NULL OR [Settlement] IN ({SqlList.Of(Enum.GetNames<OfficePeriodSettlement>())})");
-            table.HasCheckConstraint("CK_OfficeCustodyPeriod_Month", "[Month] BETWEEN 1 AND 12 AND [Year] BETWEEN 2000 AND 2200 AND [EndsOn] >= [StartsOn]");
-            table.HasCheckConstraint("CK_OfficeCustodyPeriod_Planned", "[PlannedAllocation] >= 0");
-            // A closed month always says how; an open one never does.
-            table.HasCheckConstraint("CK_OfficeCustodyPeriod_Closed",
-                "([Status] = 'Closed' AND [Settlement] IS NOT NULL AND [ClosedAt] IS NOT NULL) OR ([Status] <> 'Closed' AND [Settlement] IS NULL)");
-        });
-
-        builder.Property(period => period.Status).HasConversion<string>().HasMaxLength(20);
-        builder.Property(period => period.Settlement).HasConversion<string>().HasMaxLength(20);
-        builder.Property(period => period.ClosingNote).HasMaxLength(OfficeLengths.Note).IsUnicode();
-        builder.Property(period => period.RowVersion).IsRowVersion();
-        builder.Ignore(period => period.AcceptsRecords);
-
-        builder.HasIndex(period => new { period.CustodyId, period.Year, period.Month }).IsUnique().HasDatabaseName(MonthIndex);
-        builder.HasIndex(period => new { period.Status, period.CustodyId }, "IX_OfficeCustodyPeriod_Status");
-        builder.HasOne<OfficeCustody>().WithMany().HasForeignKey(period => period.CustodyId).OnDelete(DeleteBehavior.NoAction);
     }
 }
 
@@ -96,11 +64,9 @@ internal sealed class OfficeLedgerEntryConfiguration : IEntityTypeConfiguration<
             table.HasCheckConstraint("CK_OfficeLedgerEntry_Kind", $"[Kind] IN ({SqlList.Of(Enum.GetNames<OfficeLedgerKind>())})");
             table.HasCheckConstraint("CK_OfficeLedgerEntry_Source", $"[SourceType] IN ({SqlList.Of(OfficeLedgerSources.All)})");
             table.HasCheckConstraint("CK_OfficeLedgerEntry_Amount", "[Amount] <> 0");
-            // The sign follows the kind: allocations, funding, carried-in money and reversals bring money in;
-            // expenses, returns and carried-out money take it out.
+            // The sign follows the kind: funding and reversals bring money in, expenses and returns take it out.
             table.HasCheckConstraint("CK_OfficeLedgerEntry_Sign",
-                "([Kind] IN ('Allocation', 'Funding', 'CarryForwardIn', 'Reversal') AND [Amount] > 0) "
-                + "OR ([Kind] IN ('Expense', 'Return', 'CarryForwardOut') AND [Amount] < 0) OR [Kind] = 'Adjustment'");
+                "([Kind] IN ('Funding', 'Reversal') AND [Amount] > 0) OR ([Kind] IN ('Expense', 'Return') AND [Amount] < 0) OR [Kind] = 'Adjustment'");
         });
 
         builder.Property(entry => entry.Kind).HasConversion<string>().HasMaxLength(20);
@@ -111,10 +77,8 @@ internal sealed class OfficeLedgerEntryConfiguration : IEntityTypeConfiguration<
         builder.HasIndex(entry => new { entry.SourceType, entry.SourceId }).IsUnique().HasDatabaseName(SourceIndex);
         builder.HasIndex(entry => entry.ReversesEntryId).IsUnique().HasFilter("[ReversesEntryId] IS NOT NULL").HasDatabaseName(ReversesIndex);
         builder.HasIndex(entry => new { entry.CustodyId, entry.EntryDate, entry.Id }, "IX_OfficeLedgerEntry_Custody_Date");
-        builder.HasIndex(entry => new { entry.PeriodId, entry.Kind }, "IX_OfficeLedgerEntry_Period_Kind");
 
         builder.HasOne<OfficeCustody>().WithMany().HasForeignKey(entry => entry.CustodyId).OnDelete(DeleteBehavior.NoAction);
-        builder.HasOne<OfficeCustodyPeriod>().WithMany().HasForeignKey(entry => entry.PeriodId).OnDelete(DeleteBehavior.NoAction);
         builder.HasOne<OfficeLedgerEntry>().WithMany().HasForeignKey(entry => entry.ReversesEntryId).OnDelete(DeleteBehavior.NoAction);
     }
 }
@@ -133,16 +97,12 @@ internal sealed class OfficeCashReturnConfiguration : IEntityTypeConfiguration<O
         builder.HasIndex(cashReturn => cashReturn.IdempotencyKey).IsUnique().HasDatabaseName(KeyIndex);
         builder.HasIndex(cashReturn => cashReturn.CustodyId, "IX_OfficeCashReturn_Custody");
         builder.HasOne<OfficeCustody>().WithMany().HasForeignKey(cashReturn => cashReturn.CustodyId).OnDelete(DeleteBehavior.NoAction);
-        builder.HasOne<OfficeCustodyPeriod>().WithMany().HasForeignKey(cashReturn => cashReturn.PeriodId).OnDelete(DeleteBehavior.NoAction);
     }
 }
 
 internal sealed class OfficeFundingRequestConfiguration : IEntityTypeConfiguration<OfficeFundingRequest>
 {
     public const string KeyIndex = "UX_OfficeFundingRequest_IdempotencyKey";
-
-    /// <summary>A month has at most one live allocation: it is never asked from Finance twice.</summary>
-    public const string AllocationIndex = "UX_OfficeFundingRequest_Allocation";
 
     public void Configure(EntityTypeBuilder<OfficeFundingRequest> builder)
     {
@@ -153,13 +113,8 @@ internal sealed class OfficeFundingRequestConfiguration : IEntityTypeConfigurati
             // Partial approval only: never more than asked, never more received than paid out.
             table.HasCheckConstraint("CK_OfficeFundingRequest_Approved", "[ApprovedAmount] IS NULL OR ([ApprovedAmount] > 0 AND [ApprovedAmount] <= [RequestedAmount])");
             table.HasCheckConstraint("CK_OfficeFundingRequest_Received", "[ReceivedAmount] IS NULL OR ([ReceivedAmount] > 0 AND [ReceivedAmount] <= [DisbursedAmount])");
-            table.HasCheckConstraint("CK_OfficeFundingRequest_Kind", $"[Kind] IN ({SqlList.Of(Enum.GetNames<OfficeFundingKind>())})");
-            // An allocation always names its month; a replenishment counts in the month it is received.
-            table.HasCheckConstraint("CK_OfficeFundingRequest_Period",
-                "([Kind] = 'MonthlyAllocation' AND [PeriodId] IS NOT NULL) OR ([Kind] = 'Replenishment' AND [PeriodId] IS NULL)");
         });
 
-        builder.Property(funding => funding.Kind).HasConversion<string>().HasMaxLength(20);
         builder.Property(funding => funding.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(funding => funding.Reason).HasMaxLength(OfficeLengths.Note).IsUnicode();
         builder.Property(funding => funding.ReviewNote).HasMaxLength(OfficeLengths.Note).IsUnicode();
@@ -171,10 +126,7 @@ internal sealed class OfficeFundingRequestConfiguration : IEntityTypeConfigurati
 
         builder.HasIndex(funding => funding.IdempotencyKey).IsUnique().HasDatabaseName(KeyIndex);
         builder.HasIndex(funding => new { funding.CustodyId, funding.Status }, "IX_OfficeFundingRequest_Custody_Status");
-        builder.HasIndex(funding => funding.PeriodId).IsUnique()
-            .HasFilter("[PeriodId] IS NOT NULL AND [Status] <> 'Rejected' AND [Status] <> 'Cancelled'").HasDatabaseName(AllocationIndex);
         builder.HasOne<OfficeCustody>().WithMany().HasForeignKey(funding => funding.CustodyId).OnDelete(DeleteBehavior.NoAction);
-        builder.HasOne<OfficeCustodyPeriod>().WithMany().HasForeignKey(funding => funding.PeriodId).OnDelete(DeleteBehavior.NoAction);
     }
 }
 
@@ -226,10 +178,8 @@ internal sealed class OfficeExpenseConfiguration : IEntityTypeConfiguration<Offi
         builder.HasIndex(expense => new { expense.Vendor, expense.InvoiceNo }, "IX_OfficeExpense_Vendor_Invoice");
         builder.HasIndex(expense => new { expense.ExpenseDate, expense.Amount }, "IX_OfficeExpense_Date_Amount");
         builder.HasIndex(expense => expense.PriceExceptionId, "IX_OfficeExpense_PriceException");
-        builder.HasIndex(expense => new { expense.PeriodId, expense.Status }, "IX_OfficeExpense_Period_Status");
 
         builder.HasOne<OfficeCustody>().WithMany().HasForeignKey(expense => expense.CustodyId).OnDelete(DeleteBehavior.NoAction);
-        builder.HasOne<OfficeCustodyPeriod>().WithMany().HasForeignKey(expense => expense.PeriodId).OnDelete(DeleteBehavior.NoAction);
         builder.HasOne<OfficeSpendRequest>().WithMany().HasForeignKey(expense => expense.SpendRequestId).OnDelete(DeleteBehavior.NoAction);
         builder.HasOne<OfficeLedgerEntry>().WithMany().HasForeignKey(expense => expense.LedgerEntryId).OnDelete(DeleteBehavior.NoAction);
         builder.HasOne<OfficeLedgerEntry>().WithMany().HasForeignKey(expense => expense.ReversalEntryId).OnDelete(DeleteBehavior.NoAction);
@@ -351,8 +301,6 @@ internal sealed class OfficeAlertConfiguration : IEntityTypeConfiguration<Office
         (typeof(OfficeLowBalanceAlert), "LowBalance"),
         (typeof(OfficeDiscrepancyAlert), "Discrepancy"),
         (typeof(OfficeSpendRequestedAlert), "SpendRequested"),
-        (typeof(OfficePeriodOpenedAlert), "PeriodOpened"),
-        (typeof(OfficePeriodEndedAlert), "PeriodEnded"),
     ];
 
     public void Configure(EntityTypeBuilder<OfficeAlert> builder)

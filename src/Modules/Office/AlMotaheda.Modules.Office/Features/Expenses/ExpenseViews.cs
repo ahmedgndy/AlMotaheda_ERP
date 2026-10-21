@@ -43,7 +43,6 @@ internal sealed record OfficeExpenseView(
     decimal Tax,
     decimal Amount,
     DateOnly ExpenseDate,
-    int PeriodId,
     int? SpendRequestId,
     OfficeExpensePriceView? Price,
     int RequiredApprovals,
@@ -79,7 +78,6 @@ internal sealed record OfficeExpenseRow(
     string? InvoiceNo,
     decimal Amount,
     DateOnly ExpenseDate,
-    int PeriodId,
     string Status,
     string PostingStatus,
     int RequiredApprovals,
@@ -136,7 +134,7 @@ internal static class ExpenseQueries
         return new OfficeExpenseView(
             expense.Id, expense.CustodyId, custody.NameAr, custody.NameEn, expense.Category, expense.PriceItemId, expense.Description, expense.Purpose,
             expense.Vendor, expense.InvoiceNo, expense.Quantity, expense.Unit, expense.UnitPrice, expense.Discount, expense.Tax, expense.Amount,
-            expense.ExpenseDate, expense.PeriodId, expense.SpendRequestId,
+            expense.ExpenseDate, expense.SpendRequestId,
             expense.PriceItemId is null
                 ? null
                 : new OfficeExpensePriceView(expense.PriceCheck, expense.PriceRangeId, expense.ReferencePrice, expense.ReferenceMinPrice, expense.ReferenceMaxPrice,
@@ -153,8 +151,7 @@ internal static class ExpenseQueries
                 reviewer && expense.InReview && !approvedThisRound,
                 reviewer && expense.InReview,
                 reviewer && (expense.InReview || (expense.Status == OfficeExpenseStatus.Approved && expense.PostingStatus == OfficePostingStatus.NotPosted)),
-                expense.CreatedBy == caller.UserId && expense.Status == OfficeExpenseStatus.Returned && custody.IsActive
-                && await db.Periods.AnyAsync(period => period.Id == expense.PeriodId && period.Status != OfficePeriodStatus.Closed, cancellationToken),
+                expense.CreatedBy == caller.UserId && expense.Status == OfficeExpenseStatus.Returned && custody.IsActive,
                 reviewer && expense.PostingStatus == OfficePostingStatus.Posted),
             RowVersions.Format(expense.RowVersion));
     }
@@ -172,7 +169,7 @@ internal static class ExpenseQueries
         var people = await users.FindAsync(rows.Select(row => row.Expense.CreatedBy).Distinct().ToList(), cancellationToken);
         return rows.Select(row => new OfficeExpenseRow(
                 row.Expense.Id, row.Expense.CustodyId, row.Expense.Category, row.Expense.Description, row.Expense.Vendor, row.Expense.InvoiceNo,
-                row.Expense.Amount, row.Expense.ExpenseDate, row.Expense.PeriodId, row.Expense.Status.ToString(), row.Expense.PostingStatus.ToString(),
+                row.Expense.Amount, row.Expense.ExpenseDate, row.Expense.Status.ToString(), row.Expense.PostingStatus.ToString(),
                 row.Expense.RequiredApprovals, row.Approvals, ExpensePolicy.Split(row.Expense.ReviewReasons), row.Expense.DuplicateOf is not null,
                 row.Expense.PriceCheck, OfficePersonRef.From(row.Expense.CreatedBy, people), row.Expense.SubmittedAt))
             .ToList();

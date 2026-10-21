@@ -29,10 +29,6 @@ internal static class OfficeProblems
     public const string IdempotencyKeyReused = "idempotency_key_reused";
     public const string Busy = "busy";
     public const string FinanceSeparation = "finance_separation";
-    public const string PeriodClosed = "period_closed";
-    public const string PeriodNotSettleable = "period_not_settleable";
-    public const string PolicyNotAllowed = "policy_not_allowed";
-    public const string AllocationExists = "allocation_exists";
 
     public static ValidationProblem Validation(ValidationErrors errors) => ApiProblem.Validation(errors.ToDictionary());
 
@@ -45,21 +41,6 @@ internal static class OfficeProblems
     public static ProblemHttpResult CountNotFound() => NotFound("cash count");
     public static ProblemHttpResult AttachmentNotFound() => NotFound("attachment");
     public static ProblemHttpResult AlertNotFound() => NotFound("alert");
-    public static ProblemHttpResult PeriodNotFound() => NotFound("custody month");
-
-    public static ProblemHttpResult MonthClosed(int year, int month) =>
-        Conflict(PeriodClosed, $"The month {year}-{month:00} of this custody is closed. Nothing more can be recorded in it; ask finance.");
-
-    public static ProblemHttpResult NoMonthFor(DateOnly date) =>
-        Conflict(PeriodClosed, $"This custody has no month for {date:yyyy-MM-dd}. Use a date in the current month, or ask finance.");
-
-    public static ProblemHttpResult NotSettleable(string title) => Conflict(PeriodNotSettleable, title);
-
-    public static ProblemHttpResult PolicyRefuses(string policy) =>
-        Conflict(PolicyNotAllowed, $"The company policy for money left at month end is {policy}. That action is not allowed.");
-
-    public static ProblemHttpResult AllocationAlreadyAsked() =>
-        Conflict(AllocationExists, "This month's allocation was already authorized. Cancel it in Finance first to authorize another amount.");
 
     public static ProblemHttpResult WrongStatus(string title) => Conflict(InvalidStatus, title);
 
@@ -109,7 +90,7 @@ internal static class OfficeProblems
         Conflict(ExecutiveRequired, "This expense needs two approvals and one of them must be the Executive's.");
 
     public static ProblemHttpResult NotEnoughCash(decimal balance, decimal amount) =>
-        Conflict(InsufficientBalance, $"The month's remaining balance ({balance:0.00}) is less than {amount:0.00}.");
+        Conflict(InsufficientBalance, $"The custody's recorded balance ({balance:0.00}) is less than {amount:0.00}. Fund the custody first.");
 
     public static ProblemHttpResult WaitingForPrice(int exceptionId) =>
         Conflict(PriceDecisionPending, $"The price is waiting for the Executive's decision in Price Control (case {exceptionId}).");

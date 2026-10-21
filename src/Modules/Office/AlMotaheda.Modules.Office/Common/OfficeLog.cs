@@ -67,24 +67,6 @@ internal sealed partial class OfficeLog(ILogger<OfficeLog> logger)
     [LoggerMessage(EventId = 12071, Level = LogLevel.Information, Message = "User {ActorId} recorded cash return {ReturnId} on custody {CustodyId}")]
     public partial void CashReturned(int actorId, int custodyId, int returnId);
 
-    [LoggerMessage(EventId = 12091, Level = LogLevel.Information, Message = "Custody {CustodyId} opened month {Year}-{Month} (period {PeriodId})")]
-    public partial void PeriodOpened(int custodyId, int periodId, int year, int month);
-
-    [LoggerMessage(EventId = 12092, Level = LogLevel.Information, Message = "Period {PeriodId} of custody {CustodyId} moved to {Status}")]
-    public partial void PeriodMoved(int custodyId, int periodId, string status);
-
-    [LoggerMessage(EventId = 12093, Level = LogLevel.Information, Message = "User {ActorId} settled period {PeriodId} ({Settlement})")]
-    public partial void PeriodSettled(int actorId, int periodId, string settlement);
-
-    [LoggerMessage(EventId = 12094, Level = LogLevel.Information, Message = "User {ActorId} authorized the allocation of period {PeriodId} (funding request {FundingId})")]
-    public partial void AllocationAuthorized(int actorId, int periodId, int fundingId);
-
-    [LoggerMessage(EventId = 12095, Level = LogLevel.Warning, Message = "Period {PeriodId}: the monthly allocation was not requested automatically: {Reason}")]
-    public partial void AllocationNotRequested(int periodId, string reason);
-
-    [LoggerMessage(EventId = 12096, Level = LogLevel.Error, Message = "The office month check failed")]
-    public partial void PeriodCheckFailed(Exception exception);
-
     [LoggerMessage(EventId = 12081, Level = LogLevel.Warning, Message = "User {ActorId} was refused {Action}: {Reason}")]
     public partial void ActionRefused(int actorId, string action, string reason);
 
