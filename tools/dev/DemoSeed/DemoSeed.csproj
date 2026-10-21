@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Development-only demo data for manual testing. Not part of the solution and never deployed.
+    It drives the running API over HTTP as each demo user, so every rule, approval and ledger posting is the
+    backend's own. See docs/local-demo.md.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>AlMotaheda.DemoSeed</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>
