@@ -8,6 +8,9 @@ internal sealed class DocumentConfiguration : IEntityTypeConfiguration<Document>
     /// <summary>Each stored file belongs to exactly one row.</summary>
     public const string StorageKeyIndex = "UX_Document_StorageKey";
 
+    /// <summary>One document per uploader and idempotency key: a repeated offline upload returns the first one.</summary>
+    public const string IdempotencyKeyIndex = "UX_Document_UploadedBy_IdempotencyKey";
+
     /// <summary>The foreign key to <c>projects.Project</c>. Added by hand in the migration: Projects owns that table.</summary>
     public const string ProjectForeignKey = "FK_Document_Project_ProjectId";
 
@@ -56,6 +59,10 @@ internal sealed class DocumentConfiguration : IEntityTypeConfiguration<Document>
         builder.Property(document => document.RowVersion).IsRowVersion();
 
         builder.HasIndex(document => document.StorageKey).IsUnique().HasDatabaseName(StorageKeyIndex);
+        builder.HasIndex(document => new { document.UploadedBy, document.IdempotencyKey })
+            .IsUnique()
+            .HasFilter("[IdempotencyKey] IS NOT NULL")
+            .HasDatabaseName(IdempotencyKeyIndex);
 
         // The archive screen: one project, newest first, with or without a category. Deleted rows are never listed.
         builder.HasIndex(document => new { document.ProjectId, document.Category, document.UploadedAt }, "IX_Document_ProjectId_Category_UploadedAt")

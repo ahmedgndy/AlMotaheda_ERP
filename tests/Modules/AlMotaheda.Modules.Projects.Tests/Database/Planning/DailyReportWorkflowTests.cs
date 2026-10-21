@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using AlMotaheda.Modules.Access.Tests.Database;
+using Microsoft.EntityFrameworkCore;
 using static AlMotaheda.Modules.Access.Tests.Database.AccessApi;
 using static AlMotaheda.Modules.Projects.Tests.Database.Core.CoreApi;
 using static AlMotaheda.Modules.Projects.Tests.Database.Planning.PlanningApi;
@@ -79,6 +80,68 @@ public sealed class DailyReportWorkflowTests(SqlServerFixture database)
 
         var list = await api.GetOkAsync(cast.Accountant, $"{reports}?status=Reviewed");
         Assert.Equal(1, list.GetProperty("totalCount").GetInt32());
+    }
+
+    [DatabaseFact]
+    public async Task A_report_sent_again_from_the_offline_queue_is_stored_once()
+    {
+        await using var api = await ProjectsApi.StartAsync(database);
+        var cast = await api.CastAsync("BDR-DAY-OFF");
+        var reports = $"/api/projects/{cast.ProjectId}/daily-reports";
+        var key = Guid.NewGuid().ToString();
+        var writtenAt = DateTime.UtcNow.AddHours(-5);
+        var body = new { reportDate = Date(CompanyToday), issues = "Written with no signal on site", idempotencyKey = key, writtenAt };
+
+        var first = await ExpectAsync(await api.PostAsync(cast.Engineer, reports, body), HttpStatusCode.Created);
+        Assert.Equal(writtenAt, first.GetProperty("writtenAt").GetDateTime().ToUniversalTime(), TimeSpan.FromMilliseconds(5));
+
+        // The answer was lost; the phone sends the same report again: the first one comes back, nothing new is stored.
+        var again = await ExpectAsync(await api.PostAsync(cast.Engineer, reports, body), HttpStatusCode.OK);
+        Assert.Equal(first.Id(), again.Id());
+        var list = await api.GetOkAsync(cast.Engineer, reports);
+        Assert.Equal(1, list.GetProperty("items").GetArrayLength());
+
+        // The same key for another day is a different report: refused, so nothing is overwritten.
+        var reused = await api.PostAsync(cast.Engineer, reports, new { reportDate = Date(CompanyToday.AddDays(-1)), issues = "Other day", idempotencyKey = key });
+        Assert.Equal(HttpStatusCode.Conflict, reused.StatusCode);
+        Assert.Equal("idempotency_key_reused", await CodeOf(reused));
+
+        // Without a key the old rule stays: one report per author, project and day.
+        var twice = await api.PostAsync(cast.Engineer, reports, new { reportDate = Date(CompanyToday), issues = "Second try without a key" });
+        Assert.Equal(HttpStatusCode.Conflict, twice.StatusCode);
+        Assert.Equal("report_exists", await CodeOf(twice));
+
+        // Wrong values are refused with field errors.
+        var bad = await api.PostAsync(cast.Engineer, reports,
+            new { reportDate = Date(CompanyToday.AddDays(-2)), issues = "x", idempotencyKey = "abc", writtenAt = DateTime.UtcNow.AddDays(-40) });
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+        var fields = (await Json(bad)).GetProperty("errors").EnumerateObject().Select(field => field.Name).Order(StringComparer.Ordinal).ToList();
+        Assert.Equal(["idempotencyKey", "writtenAt"], fields);
+    }
+
+    [DatabaseFact]
+    public async Task A_repeat_of_a_stored_report_comes_back_even_when_its_day_is_now_too_old()
+    {
+        await using var api = await ProjectsApi.StartAsync(database);
+        var cast = await api.CastAsync("BDR-DAY-003");
+        var reports = $"/api/projects/{cast.ProjectId}/daily-reports";
+        var key = Guid.NewGuid().ToString();
+        var stored = await ExpectAsync(
+            await api.PostAsync(cast.Engineer, reports, new { reportDate = Date(CompanyToday.AddDays(-1)), issues = "Sent from site", idempotencyKey = key }),
+            HttpStatusCode.Created);
+
+        // The answer was lost and the phone only retries ten days later: the stored report comes back (QA review M3),
+        // not "the date is too old", which would leave the phone's copy and its photos stuck.
+        var tenDaysAgo = CompanyToday.AddDays(-10);
+        await api.QueryAsync(db => db.DailyReports.Where(report => report.Id == stored.Id()).ExecuteUpdateAsync(set => set.SetProperty(report => report.ReportDate, tenDaysAgo)));
+        var late = await ExpectAsync(
+            await api.PostAsync(cast.Engineer, reports, new { reportDate = Date(tenDaysAgo), issues = "Sent from site", idempotencyKey = key }),
+            HttpStatusCode.OK);
+        Assert.Equal(stored.Id(), late.Id());
+
+        // A new report for that day is still refused.
+        var fresh = await api.PostAsync(cast.Engineer, reports, new { reportDate = Date(tenDaysAgo.AddDays(-1)), issues = "Too old", idempotencyKey = Guid.NewGuid().ToString() });
+        Assert.Equal(HttpStatusCode.BadRequest, fresh.StatusCode);
     }
 
     [DatabaseFact]

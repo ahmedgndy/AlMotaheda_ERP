@@ -76,7 +76,7 @@ internal sealed class ArchiveApi : IAsyncDisposable
 
     /// <summary>Posts an upload form; <paramref name="fields"/> replaces the default title and category.</summary>
     public Task<HttpResponseMessage> PostUploadAsync(
-        Session session, int projectId, string fileName, byte[] bytes, Dictionary<string, string>? fields = null)
+        Session session, int projectId, string fileName, byte[] bytes, Dictionary<string, string>? fields = null, string? idempotencyKey = null)
     {
         var form = new MultipartFormDataContent();
         foreach (var (name, value) in fields ?? new Dictionary<string, string> { ["title"] = "Payment certificate 7", ["category"] = "PaymentCertificate" })
@@ -88,6 +88,11 @@ internal sealed class ArchiveApi : IAsyncDisposable
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"/api/projects/{projectId}/documents") { Content = form };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
+        if (idempotencyKey is not null)
+        {
+            request.Headers.Add("Idempotency-Key", idempotencyKey);
+        }
+
         return Access.App.Client.SendAsync(request);
     }
 

@@ -75,6 +75,12 @@ internal static class PlanningProblems
             PriceDateTaken,
             "An approved price of this item already starts on this date. Choose another effective date.");
 
+    public static ProblemHttpResult ReportKeyUsedElsewhere() =>
+        ApiProblem.Create(
+            StatusCodes.Status409Conflict,
+            WorkspaceProblems.IdempotencyKeyReused,
+            "This idempotency key was already used for another report. Make a new key for a new report.");
+
     public static ProblemHttpResult ReportAlreadyFiled() =>
         ApiProblem.Create(
             StatusCodes.Status409Conflict,

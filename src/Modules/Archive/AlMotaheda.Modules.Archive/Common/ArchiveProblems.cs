@@ -14,6 +14,7 @@ internal static class ArchiveProblems
     public const string FileTypeNotAllowed = "file_type_not_allowed";
     public const string FileExtensionMismatch = "file_extension_mismatch";
     public const string StorageUnavailable = "storage_unavailable";
+    public const string IdempotencyKeyReused = "idempotency_key_reused";
 
     /// <summary>The form field that carries the file, and the field file errors are listed under.</summary>
     public const string FileField = "file";
@@ -60,6 +61,13 @@ internal static class ArchiveProblems
 
     /// <summary>The document doesn't exist, belongs to another project, or was deleted.</summary>
     public static ProblemHttpResult DocumentNotFound() => ApiProblem.NotFoundResult("The document was not found.");
+
+    /// <summary>409: the upload's <c>Idempotency-Key</c> already belongs to another document of this user.</summary>
+    public static ProblemHttpResult KeyUsedElsewhere() =>
+        ApiProblem.Create(
+            StatusCodes.Status409Conflict,
+            IdempotencyKeyReused,
+            "This idempotency key was already used for another document. Make a new key for a new upload.");
 
     public static ProblemHttpResult CompletedProject() =>
         ApiProblem.Create(StatusCodes.Status409Conflict, ProjectCompleted, "A completed project can only be changed by an Executive.");

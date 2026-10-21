@@ -32,7 +32,7 @@ internal sealed class UploadForm
     public const int MaxFieldLength = 4000;
 
     /// <summary>The form fields the upload reads. Field names are case-insensitive.</summary>
-    public static readonly IReadOnlyList<string> FieldNames = ["title", "category", "description", "documentDate", "entityType", "entityId"];
+    public static readonly IReadOnlyList<string> FieldNames = ["title", "category", "description", "documentDate", "entityType", "entityId", "capturedAt"];
 
     private const int MaxBoundaryLength = 70;
 

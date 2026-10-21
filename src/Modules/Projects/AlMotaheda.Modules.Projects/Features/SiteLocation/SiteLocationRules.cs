@@ -43,8 +43,10 @@ internal static class SiteLocationRules
             TimeZoneInfo.ConvertTimeToUtc(date.ToDateTime(options.End, DateTimeKind.Unspecified), zone));
     }
 
+    /// <summary>True when positions are kept and silence is watched now: always with <see cref="SiteLocationOptions.TrackAllDay"/>.</summary>
     public static bool InWorkingHours(DateTime utcNow, TimeZoneInfo zone, SiteLocationOptions options) =>
-        WorkingHours(utcNow, zone, options) is { } hours && utcNow >= hours.StartUtc && utcNow < hours.EndUtc;
+        options.TrackAllDay
+        || (WorkingHours(utcNow, zone, options) is { } hours && utcNow >= hours.StartUtc && utcNow < hours.EndUtc);
 
     /// <summary>
     /// Since when the phone has been silent, counting only today's working hours: the last position, or the moment
@@ -53,6 +55,12 @@ internal static class SiteLocationRules
     /// </summary>
     public static DateTime? SilentSince(DateTime? lastPingAt, DateTime turnedOnAt, DateTime utcNow, TimeZoneInfo zone, SiteLocationOptions options)
     {
+        if (options.TrackAllDay)
+        {
+            // Watched around the clock: silent since the last position, or since tracking started.
+            return lastPingAt is { } latest && latest > turnedOnAt ? latest : turnedOnAt;
+        }
+
         if (WorkingHours(utcNow, zone, options) is not { } hours || utcNow < hours.StartUtc || utcNow >= hours.EndUtc)
         {
             return null;
@@ -64,4 +72,25 @@ internal static class SiteLocationRules
 
     public static bool IsUnavailable(DateTime? silentSince, DateTime utcNow, SiteLocationOptions options) =>
         silentSince is { } since && utcNow - since >= TimeSpan.FromMinutes(options.UnavailableAfterMinutes);
+
+    /// <summary>
+    /// A position or heartbeat is live when it reached the server soon after the phone took it. Only live ones may
+    /// open or close alerts, so a queue sent hours later can't raise an alert about the past as if it were now.
+    /// </summary>
+    public static bool IsLive(DateTime recordedAt, DateTime utcNow, SiteLocationOptions options) =>
+        utcNow - recordedAt <= TimeSpan.FromMinutes(options.LiveWindowMinutes);
+
+    /// <summary>
+    /// "Outside the site" for one project counts only when the position is clearly outside that site and not inside
+    /// another project site of the same engineer: an engineer of two projects at the other site is at work.
+    /// </summary>
+    public static bool CountsAsOutside(bool? insideThisSite, bool insideAnotherSite) => insideThisSite == false && !insideAnotherSite;
+
+    /// <summary>Low battery: at or below the threshold and not charging.</summary>
+    public static bool IsLowBattery(int? percent, bool? charging, SiteLocationOptions options) =>
+        percent is { } level && level <= options.LowBatteryPercent && charging != true;
+
+    /// <summary>The low-battery alert ends when the phone charges or climbs back to the recovered level.</summary>
+    public static bool IsBatteryRecovered(int? percent, bool? charging, SiteLocationOptions options) =>
+        charging == true || (percent is { } level && level >= options.BatteryRecoveredPercent);
 }

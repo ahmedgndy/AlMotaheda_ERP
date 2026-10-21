@@ -92,6 +92,34 @@ first), and only during working hours. Only the project's active manager and Exe
 - Positions (`LocationPing`) and the sharing rows are not audited (personal data, every few minutes); alerts are.
   Positions older than `KeepDays` are deleted hourly.
 
+### Automatic tracking on the company phone (owner's brief of 2026-10-17, evening)
+
+No daily start button. The engineer accepts the tracking policy once on the phone; tracking then turns on for
+every project where they are an active site engineer, and the phone uploads its queue of positions and heartbeats.
+
+| Endpoint | Who | Notes |
+|---|---|---|
+| `GET /api/site-location/me?deviceId=` | anyone signed in | `{ subject, policyVersion, accepted, device, projects, settings, inTrackingHours, viewers }` |
+| `PUT /api/site-location/me/policy` `{ deviceId, platform, appVersion, policyVersion }` | anyone signed in | records the acceptance on that phone (`LocationDevice`) and turns sharing on for the caller's site-engineer projects; 400 for an old `policyVersion` |
+| `POST /api/site-location/me/batch` `{ deviceId, appVersion, points[{id, recordedAt, latitude, longitude, accuracyMeters}], heartbeats[{recordedAt, batteryPercent, charging, trackingState, permission, gpsEnabled, pendingPoints}] }` | the phone that accepted the current policy | 409 `tracking_policy_not_accepted` otherwise; answers `{ accepted, duplicates, rejected[{id, reason}], projects, nextInSeconds, serverTime }` |
+| `GET /api/projects/{id}/site-location/alerts?days=7` | project manager, Executive | alert episodes (one per outage, not per recipient) |
+
+- **Capture time and idempotency.** Each position keeps the phone's `recordedAt`; a queue sent twice stores each
+  position once (unique `UserId, ClientPointId, ProjectId`). Positions older than `MaxLateDays` or in the future are
+  refused one by one (`tooOld`, `future`), never the whole batch.
+- **Live or late.** Only positions and heartbeats that arrive within `LiveMinutes` (default `UnavailableAfterMinutes`)
+  of being taken open or close alerts, with the phone's time as the alert's time. A queue sent hours later fills the
+  history and "last seen" but raises no alert about the past; an old position keeps an outage open, a live one ends it.
+- **Two sites.** "Outside the site" counts for a project only when the position is clearly outside it and not inside
+  another project site of the same engineer.
+- **Low battery.** A live heartbeat at or below `LowBatteryPercent`, not charging, opens one `LowBatteryAlert` per
+  recipient (Platform notifies `LowBattery`); charging or `BatteryRecoveredPercent` closes it (no notification).
+- **All day.** `TrackAllDay` (default true) keeps positions and watches silence at every hour; false goes back to the
+  working days and hours.
+- The team view adds each engineer's `device` (policy accepted at, last heartbeat, battery, tracking state,
+  permission, GPS, positions waiting on the phone): only what the phone reported, with its time.
+- The per-project `PUT …/me` and `POST …/me/positions` stay for older app versions.
+
 ## Errors
 
 | Status | Code | When |
@@ -117,7 +145,9 @@ first), and only during working hours. Only the project's active manager and Exe
 
 Section `SiteLocation`: `HeartbeatMinutes` (5), `UnavailableAfterMinutes` (15), `OutsidePingsBeforeAlert` (2),
 `KeepDays` (90), `CheckEverySeconds` (60), `WorkDays` (Saturday to Thursday), `WorkStart` (08:00), `WorkEnd` (17:00),
-`MonitorEnabled` (true). Company time zone: `Projects:TimeZone`. Checked at startup.
+`MonitorEnabled` (true), `TrackAllDay` (true), `PolicyVersion` (1), `SampleSeconds` (60), `MinDistanceMeters` (25),
+`LiveMinutes` (empty = `UnavailableAfterMinutes`), `MaxLateDays` (7), `MaxBatchPoints` (500), `LowBatteryPercent` (15),
+`BatteryRecoveredPercent` (25). Company time zone: `Projects:TimeZone`. Checked at startup.
 
 | Setting | Default | Notes |
 |---|---|---|

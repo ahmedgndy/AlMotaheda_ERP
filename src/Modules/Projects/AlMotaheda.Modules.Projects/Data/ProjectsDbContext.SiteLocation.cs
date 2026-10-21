@@ -8,4 +8,5 @@ internal sealed partial class ProjectsDbContext
     public DbSet<LocationSharing> LocationSharings => Set<LocationSharing>();
     public DbSet<LocationPing> LocationPings => Set<LocationPing>();
     public DbSet<LocationAlert> LocationAlerts => Set<LocationAlert>();
+    public DbSet<LocationDevice> LocationDevices => Set<LocationDevice>();
 }

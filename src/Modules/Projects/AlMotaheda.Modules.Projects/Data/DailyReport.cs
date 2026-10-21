@@ -42,6 +42,15 @@ internal sealed class DailyReport
 
     public DateTime CreatedAt { get; set; }
 
+    /// <summary>
+    /// Optional key the app makes for one report, so a report written offline and sent again after a lost answer is
+    /// stored once: the same author and key return the first report. Unique per author when set.
+    /// </summary>
+    public Guid? IdempotencyKey { get; set; }
+
+    /// <summary>When the author wrote the report on their phone (UTC), if the app sent it later from its offline queue.</summary>
+    public DateTime? WrittenAt { get; set; }
+
     /// <summary>The last time the author sent the report: on creation, and again after each edit.</summary>
     public DateTime SubmittedAt { get; set; }
 

@@ -107,6 +107,9 @@ internal sealed class DailyReportConfiguration : IEntityTypeConfiguration<DailyR
     /// <summary>One report per author, project and day. A lost race is answered with 409 <c>report_exists</c>.</summary>
     public const string AuthorDayIndex = "UX_DailyReport_Project_Date_Author";
 
+    /// <summary>One report per author and idempotency key: a repeated offline send returns the first report.</summary>
+    public const string IdempotencyKeyIndex = "UX_DailyReport_Author_IdempotencyKey";
+
     /// <summary>The foreign key to <c>access.User</c>. Added by hand in the migration: Access owns that table.</summary>
     public const string AuthorForeignKey = "FK_DailyReport_User_AuthorUserId";
 
@@ -140,6 +143,9 @@ internal sealed class DailyReportConfiguration : IEntityTypeConfiguration<DailyR
         builder.Property(report => report.RowVersion).IsRowVersion();
 
         builder.HasIndex(report => new { report.ProjectId, report.ReportDate, report.AuthorUserId }, AuthorDayIndex).IsUnique();
+        builder.HasIndex(report => new { report.AuthorUserId, report.IdempotencyKey }, IdempotencyKeyIndex)
+            .IsUnique()
+            .HasFilter("[IdempotencyKey] IS NOT NULL");
 
         // The review queue of a project.
         builder.HasIndex(report => new { report.ProjectId, report.Status }, "IX_DailyReport_Project_Status");

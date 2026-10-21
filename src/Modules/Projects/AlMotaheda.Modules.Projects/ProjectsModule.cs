@@ -78,6 +78,7 @@ public sealed class ProjectsModule : IModule
         services.AddOptions<SiteLocationOptions>().Bind(configuration.GetSection(SiteLocationOptions.SectionName)).ValidateOnStart();
         services.AddSingleton<IValidateOptions<SiteLocationOptions>, SiteLocationOptionsValidator>();
         services.AddScoped<SiteLocationAlerts>();
+        services.AddScoped<SiteLocationTracker>();
 
         services.AddHostedService<ProjectsStartup>();
         services.AddHostedService<SiteLocationWorker>();
@@ -108,6 +109,7 @@ public sealed class ProjectsModule : IModule
         ReportingFeatures.Map(projects);
         Features.Custody.CustodyEndpoints.Map(projects);
         SiteLocationEndpoints.Map(projects);
+        TrackingEndpoints.Map(api);
         GetWorkInbox.Map(api);
         Features.Overview.PersonalOverview.Map(api);
     }

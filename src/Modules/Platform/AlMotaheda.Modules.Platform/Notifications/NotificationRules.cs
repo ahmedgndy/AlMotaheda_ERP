@@ -49,6 +49,7 @@ internal static class NotificationTypes
     public const string OfficeLowBalance = "OfficeLowBalance";
     public const string OfficeCashDiscrepancy = "OfficeCashDiscrepancy";
     public const string OfficeSpendRequested = "OfficeSpendRequested";
+    public const string LowBattery = "LowBattery";
 }
 
 /// <summary>A notification to store: who gets it, its type and its title in both languages.</summary>
@@ -122,6 +123,7 @@ internal static class NotificationRules
         ["OfficeLowBalanceAlert"] = ("office custody", "عهدة المكتب"),
         ["OfficeDiscrepancyAlert"] = ("cash count", "جرد النقدية"),
         ["OfficeSpendRequestedAlert"] = ("office repair or purchase request", "طلب صيانة أو شراء للمكتب"),
+        ["LowBatteryAlert"] = ("location alert", "تنبيه الموقع"),
     };
 
     /// <summary>StatusAfter <c>null</c> = the record was just added.</summary>
@@ -259,6 +261,8 @@ internal static class NotificationRules
         new("OfficeLowBalanceAlert", null, "RecipientUserId", NotificationTypes.OfficeLowBalance),
         new("OfficeDiscrepancyAlert", null, "RecipientUserId", NotificationTypes.OfficeCashDiscrepancy),
         new("OfficeSpendRequestedAlert", null, "RecipientUserId", NotificationTypes.OfficeSpendRequested),
+        // The phone said its battery is low while it could still report. Its recovery shows on the map only.
+        new("LowBatteryAlert", null, "RecipientUserId", NotificationTypes.LowBattery),
     ];
 
     /// <summary>The notifications one changed record causes. <paramref name="actorUserId"/> made the change.</summary>
@@ -352,6 +356,7 @@ internal static class NotificationRules
         NotificationTypes.OfficeLowBalance => ("The office custody balance is low", "رصيد عهدة المكتب منخفض"),
         NotificationTypes.OfficeCashDiscrepancy => ("A cash count does not match the custody balance", "جرد النقدية لا يطابق رصيد العهدة"),
         NotificationTypes.OfficeSpendRequested => ("An office repair or purchase request is waiting for review", "طلب صيانة أو شراء للمكتب بانتظار المراجعة"),
+        NotificationTypes.LowBattery => ("A site engineer's phone battery is low", "بطارية هاتف مهندس الموقع منخفضة"),
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown notification type."),
     };
 }

@@ -31,6 +31,9 @@ namespace AlMotaheda.Modules.Archive.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime?>("CapturedAt")
+                        .HasColumnType("datetime2(3)");
+
                     b.Property<string>("Category")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -62,6 +65,9 @@ namespace AlMotaheda.Modules.Archive.Data.Migrations
                         .HasMaxLength(255)
                         .IsUnicode(true)
                         .HasColumnType("nvarchar(255)");
+
+                    b.Property<Guid?>("IdempotencyKey")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Kind")
                         .IsRequired()
@@ -111,6 +117,11 @@ namespace AlMotaheda.Modules.Archive.Data.Migrations
                     b.HasIndex("StorageKey")
                         .IsUnique()
                         .HasDatabaseName("UX_Document_StorageKey");
+
+                    b.HasIndex("UploadedBy", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Document_UploadedBy_IdempotencyKey")
+                        .HasFilter("[IdempotencyKey] IS NOT NULL");
 
                     b.HasIndex(new[] { "ProjectId", "Category", "UploadedAt" }, "IX_Document_ProjectId_Category_UploadedAt")
                         .HasFilter("[DeletedAt] IS NULL");

@@ -280,5 +280,16 @@ public sealed class NotificationRulesTests
         var draft = Assert.Single(NotificationRules.For(approved, Reviewer));
 
         Assert.Equal((Recorder, NotificationTypes.RecordApproved, "تم اعتماد تعديل قيمة عقد الباطن"), (draft.RecipientUserId, draft.Type, draft.TitleAr));
+    [Fact]
+    public void A_low_battery_alert_tells_its_recipient_once_and_its_recovery_only_shows_on_the_map()
+    {
+        const int engineer = 33;
+        (string, int)[] people = [("EngineerUserId", engineer), ("RecipientUserId", Reviewer)];
+
+        var open = Assert.Single(NotificationRules.For(Change("LowBatteryAlert", "Added", null, "Open", people), null));
+
+        Assert.Equal((Reviewer, NotificationTypes.LowBattery), (open.RecipientUserId, open.Type));
+        Assert.Equal("A site engineer's phone battery is low", open.TitleEn);
+        Assert.Empty(NotificationRules.For(Change("LowBatteryAlert", "Modified", "Open", "Recovered", people), engineer));
     }
 }
