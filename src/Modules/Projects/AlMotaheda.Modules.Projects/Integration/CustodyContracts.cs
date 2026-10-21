@@ -273,7 +273,11 @@ internal sealed class ProjectCustodyLedgerSource(
     public async Task<CustodyLedgerFigures> FiguresAsync(int referenceId, int? holderUserId, CancellationToken cancellationToken)
     {
         var figures = CustodyBalance.Compute((await CustodyQueries.MovementsAsync(db, referenceId, holderUserId, cancellationToken)).Select(row => row.Movement));
-        return new CustodyLedgerFigures(figures.Balance, figures.SpentPending);
+
+        // Finance's figures: posted = what posted movements leave (received − returned − approved spending ± adjustments),
+        // pending = cash spent on records not reviewed yet; Finance's available is posted − pending − reserved. The
+        // project's own Balance already subtracts the pending spending, so it is added back here or it counts twice.
+        return new CustodyLedgerFigures(figures.Balance + figures.SpentPending, figures.SpentPending);
     }
 
     public Task ReceiveAsync(CustodyLedgerWrite write, SharedTransaction transaction, CancellationToken cancellationToken) =>

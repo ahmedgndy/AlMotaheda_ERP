@@ -221,6 +221,14 @@ public sealed class TreasuryChainTests(SqlServerFixture database)
         Assert.Equal((0m, 0), (supported.GetProperty("unsupported").GetDecimal(), supported.GetProperty("unsupportedCount").GetInt32()));
         Assert.True(Assert.Single((await Get(api, cast.Executive, $"/api/custody-monitor/{engineerAccount}?{period}")).GetProperty("statement").EnumerateArray(), line => line.GetProperty("sourceType").GetString() == "ProjectExpense").GetProperty("hasEvidence").GetBoolean());
 
+        // A second cash purchase waits for review: the cash is gone (pending), so available drops once, not twice.
+        // Posted stays the received cash less approved spending (regression: posted used to subtract pending too).
+        await Send(api, cast.Engineer, HttpMethod.Post, $"/api/projects/{cast.ProjectId}/expenses",
+            CoreApi.ExpenseBody(200m, "Custody", changes: new() { ["expenseDate"] = Iso(today) }), HttpStatusCode.Created);
+        var withPending = Assert.Single((await Get(api, cast.Executive, $"/api/custody-monitor?{period}")).GetProperty("items").EnumerateArray(), item => item.GetProperty("accountId").GetInt32() == engineerAccount);
+        Assert.Equal((1_700m, 200m, 1_500m), (withPending.GetProperty("posted").GetDecimal(), withPending.GetProperty("pending").GetDecimal(), withPending.GetProperty("available").GetDecimal()));
+        Assert.Equal(1_500m, (await Account(api, cast.Executive, engineerAccount)).GetProperty("available").GetDecimal());
+
         // The home page is the engineer's own: the manager's page shows no custody, and the engineer's labor section counts their sheets.
         Assert.Empty((await Get(api, cast.Manager, "/api/me/overview")).GetProperty("custody").EnumerateArray());
         var worker = await WorkforceApi.HireAsync(api, cast.Executive, cast.ProjectId, WorkforceApi.Plumber, "Saad", dailyRate: 400m);

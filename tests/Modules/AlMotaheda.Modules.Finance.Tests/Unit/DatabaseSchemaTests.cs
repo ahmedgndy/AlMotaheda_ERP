@@ -55,7 +55,7 @@ public sealed class DatabaseSchemaTests
     [InlineData("CREATE UNIQUE INDEX [UX_CustodyMovement_Account_Source] ON [finance].[CustodyMovement] ([AccountId], [SourceType], [SourceId])")]
     [InlineData("CREATE UNIQUE INDEX [UX_CustodyMovement_Reverses] ON [finance].[CustodyMovement] ([ReversesMovementId]) WHERE [ReversesMovementId] IS NOT NULL")]
     [InlineData("CONSTRAINT [CK_CustodyTransfer_Status] CHECK ([Status] IN ('Requested', 'Approved', 'Disbursed', 'Received', 'Rejected', 'Cancelled', 'Reversed'))")]
-    [InlineData("CONSTRAINT [CK_CustodyTransfer_Purpose] CHECK ([Purpose] IN ('CustodyAdvance', 'CustodyReturn', 'OfficeCustodyAdvance'))")]
+    [InlineData("CONSTRAINT [CK_CustodyTransfer_Purpose] CHECK ([Purpose] IN ('CustodyAdvance', 'CustodyReturn'))")]
     [InlineData("CONSTRAINT [CK_CustodyTransfer_Amount] CHECK ([Amount] > 0)")]
     [InlineData("CREATE UNIQUE INDEX [UX_CustodyTransfer_IdempotencyKey] ON [finance].[CustodyTransfer] ([IdempotencyKey])")]
     [InlineData("[Number] AS CONCAT('CT-', REPLICATE('0', 6 - LEN([Id])), [Id]) PERSISTED")]
