@@ -39,6 +39,9 @@ public sealed class OfficeModule : IModule
         OfficeFeatures.AddServices(services, configuration);
 
         services.AddHostedService<OfficeStartup>();
+
+        // After the startup (migrations): opens each new month and asks Finance for the standing allocations.
+        services.AddHostedService<Features.Periods.OfficePeriodWorker>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints)

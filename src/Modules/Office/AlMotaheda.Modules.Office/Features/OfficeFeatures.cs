@@ -5,6 +5,7 @@ using AlMotaheda.Modules.Office.Features.CashCounts;
 using AlMotaheda.Modules.Office.Features.Custody;
 using AlMotaheda.Modules.Office.Features.Expenses;
 using AlMotaheda.Modules.Office.Features.Funding;
+using AlMotaheda.Modules.Office.Features.Periods;
 using AlMotaheda.Modules.Office.Features.Reports;
 using AlMotaheda.Modules.Office.Features.SpendRequests;
 using AlMotaheda.Modules.Office.Storage;
@@ -37,6 +38,7 @@ internal static class OfficeFeatures
     {
         OfficeOverviewEndpoints.Map(api);
         OfficeCustodyEndpoints.Map(api);
+        OfficePeriodEndpoints.Map(api);
         OfficeAttachmentEndpoints.Map(api);
         OfficePriceEndpoints.Map(api);
         OfficeExpenseEndpoints.Map(api);

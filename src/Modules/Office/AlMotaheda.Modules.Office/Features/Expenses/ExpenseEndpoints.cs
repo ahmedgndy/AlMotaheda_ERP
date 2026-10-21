@@ -8,6 +8,7 @@ using AlMotaheda.Modules.Office.Data.Configurations;
 using AlMotaheda.Modules.Office.Features.Alerts;
 using AlMotaheda.Modules.Office.Features.Attachments;
 using AlMotaheda.Modules.Office.Features.Ledger;
+using AlMotaheda.Modules.Office.Features.Periods;
 using AlMotaheda.Modules.Projects.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -264,9 +265,17 @@ internal static class OfficeExpenseEndpoints
             return attachmentRefusal;
         }
 
+        // The expense is deducted in the month of its date: the current month, or a finished month not settled yet.
+        var (period, periodRefusal) = await CustodyPeriods.ForDateAsync(db, custody, fields.ExpenseDate, clock.Today, clock.UtcNow, alerts, log, cancellationToken);
+        if (periodRefusal is not null)
+        {
+            return periodRefusal;
+        }
+
         var expense = new OfficeExpense
         {
             CustodyId = custody.Id,
+            PeriodId = period!.Id,
             Category = fields.Category,
             Description = fields.Description,
             Unit = fields.Unit,
@@ -276,7 +285,7 @@ internal static class OfficeExpenseEndpoints
             SubmittedAt = clock.UtcNow,
         };
 
-        var refusal = await ExpenseSubmission.PrepareAsync(db, expense, fields, custody, attachments, verdict, options, caller.UserId, cancellationToken);
+        var refusal = await ExpenseSubmission.PrepareAsync(db, expense, fields, custody, period, attachments, verdict, options, caller.UserId, cancellationToken);
         if (refusal is not null)
         {
             return refusal;
@@ -398,7 +407,14 @@ internal static class OfficeExpenseEndpoints
         await priceControl.WithdrawExceptionsAsync(PriceExceptionSources.OfficeExpense, expense.Id, caller.UserId, SharedTransaction.Of(db), cancellationToken);
         expense.PriceExceptionId = null;
 
-        var refusal = await ExpenseSubmission.PrepareAsync(db, expense, fields, custody, all, verdict, options, caller.UserId, cancellationToken);
+        var (period, periodRefusal) = await CustodyPeriods.ForDateAsync(db, custody, fields.ExpenseDate, clock.Today, clock.UtcNow, alerts, log, cancellationToken);
+        if (periodRefusal is not null)
+        {
+            return periodRefusal;
+        }
+
+        expense.PeriodId = period!.Id;
+        var refusal = await ExpenseSubmission.PrepareAsync(db, expense, fields, custody, period, all, verdict, options, caller.UserId, cancellationToken);
         if (refusal is not null)
         {
             return refusal;
@@ -677,7 +693,17 @@ internal static class OfficeExpenseEndpoints
         }
 
         var now = clock.UtcNow;
-        var entry = CustodyLedger.Add(db, custody!.Id, OfficeLedgerKind.Reversal, expense.Amount, clock.Today, OfficeLedgerSources.ExpenseReversal,
+
+        // The money comes back to the expense's month; once that month is settled and closed, to the current one.
+        var current = await CustodyPeriods.CurrentAsync(db, custody!, clock.Today, now, alerts, log, cancellationToken);
+        var own = await db.Periods.SingleAsync(period => period.Id == expense.PeriodId, cancellationToken);
+        var target = own.AcceptsRecords ? own : current;
+        if (target is null)
+        {
+            return OfficeProblems.MonthClosed(own.Year, own.Month);
+        }
+
+        var entry = CustodyLedger.Add(db, custody.Id, target.Id, OfficeLedgerKind.Reversal, expense.Amount, clock.Today, OfficeLedgerSources.ExpenseReversal,
             expense.Id, caller.UserId, now, reason, expense.InvoiceNo, expense.LedgerEntryId);
         try
         {
@@ -703,7 +729,7 @@ internal static class OfficeExpenseEndpoints
             return ApiProblem.ConcurrencyConflictResult();
         }
 
-        await CustodyLedger.CheckLowBalanceAsync(db, custody, await CustodyLedger.RecordedAsync(db, custody.Id, cancellationToken), alerts, log, now, cancellationToken);
+        await CustodyLedger.CheckLowBalanceAsync(db, custody, alerts, log, now, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         log.ExpenseReversed(caller.UserId, expense.Id);
         log.EntryPosted(caller.UserId, custody.Id, entry.Id, entry.Kind.ToString());
@@ -785,6 +811,7 @@ internal static class ExpenseSubmission
         OfficeExpense expense,
         ExpenseFields fields,
         OfficeCustody custody,
+        OfficeCustodyPeriod period,
         IReadOnlyList<OfficeAttachment> attachments,
         PriceVerdict? verdict,
         OfficeOptions options,
@@ -847,8 +874,8 @@ internal static class ExpenseSubmission
             }
         }
 
-        var balance = await CustodyLedger.BalanceAsync(db, custody, options.ReservePendingExpenses, cancellationToken);
-        if (fields.Amount > balance.Available)
+        var available = await CustodyLedger.AvailableAsync(db, period, options.ReservePendingExpenses, cancellationToken);
+        if (fields.Amount > available)
         {
             reasons.Add(OfficeReviewReasons.AboveAvailable);
         }

@@ -1,21 +1,23 @@
 using AlMotaheda.Modules.Office.Common;
 using AlMotaheda.Modules.Office.Data;
 using AlMotaheda.Modules.Office.Features.Alerts;
+using AlMotaheda.Modules.Office.Features.Periods;
 using Microsoft.EntityFrameworkCore;
 
 namespace AlMotaheda.Modules.Office.Features.Ledger;
 
 /// <summary>
-/// A custody's money, as every screen shows it. Only <see cref="Recorded"/> is real cash: the sum of posted ledger
-/// entries. The other amounts are what is on its way in or out, kept apart so nothing is counted before it happened.
+/// A custody's money over all its months, as finance sees it. Only <see cref="Recorded"/> is real cash: the sum of
+/// posted ledger entries. The other amounts are what is on its way in or out, kept apart so nothing is counted before
+/// it happened. The custodian's own screen shows the current month instead (<see cref="OfficePeriodFigures"/>).
 /// </summary>
-/// <param name="Recorded">The sum of every posted ledger entry: what the custodian should hold.</param>
+/// <param name="Recorded">The sum of every posted ledger entry: what the custodian should hold (unsettled months included).</param>
 /// <param name="PendingExpenses">Expenses recorded but not posted yet (in review, or approved and waiting).</param>
 /// <param name="FundingRequested">Funding asked for and not reviewed yet.</param>
 /// <param name="FundingApproved">Funding agreed, waiting for Finance to pay it out.</param>
 /// <param name="FundingDisbursed">Paid out by Finance, waiting for the custodian to confirm receiving it.</param>
 /// <param name="Commitments">Approved repair and purchase requests not done yet (their estimates).</param>
-/// <param name="Available">What may still be spent: recorded, less pending expenses (when the policy says so) and commitments.</param>
+/// <param name="Available">What may still be spent this month: the month's remaining, less its pending expenses (when the policy says so) and commitments.</param>
 internal sealed record OfficeCustodyBalance(
     decimal Recorded,
     decimal PendingExpenses,
@@ -25,7 +27,8 @@ internal sealed record OfficeCustodyBalance(
     decimal Commitments,
     decimal Available,
     decimal LowBalanceThreshold,
-    bool IsLow);
+    bool IsLow,
+    decimal CurrentMonthRemaining);
 
 /// <summary>
 /// The only code that writes the ledger. Every posting runs inside the caller's transaction, under the custody's
@@ -75,12 +78,16 @@ internal static class CustodyLedger
             .Select(group => new { group.Key, Sum = group.Sum(spend => spend.EstimatedAmount!.Value) })
             .ToDictionaryAsync(row => row.Key, row => row.Sum, cancellationToken);
 
+        var open = await CustodyPeriods.OpenOfAsync(db, ids, cancellationToken);
+        var months = await CustodyPeriods.FiguresAsync(db, open.Values.Select(period => period.Id).ToList(), cancellationToken);
+
         return custodies.ToDictionary(custody => custody.Id, custody =>
         {
             var own = funding.Where(request => request.CustodyId == custody.Id).ToList();
             var balance = recorded.GetValueOrDefault(custody.Id);
             var waiting = pending.GetValueOrDefault(custody.Id);
             var committed = commitments.GetValueOrDefault(custody.Id);
+            var month = open.TryGetValue(custody.Id, out var current) ? months[current.Id] : OfficePeriodFigures.Zero;
             return new OfficeCustodyBalance(
                 balance,
                 waiting,
@@ -88,16 +95,37 @@ internal static class CustodyLedger
                 own.Where(request => request.Status == OfficeFundingStatus.Approved).Sum(request => request.ApprovedAmount ?? 0m),
                 own.Where(request => request.Status == OfficeFundingStatus.Disbursed).Sum(request => request.DisbursedAmount ?? 0m),
                 committed,
-                balance - (reservePending ? waiting : 0m) - committed,
+                month.Remaining - (reservePending ? month.PendingAmount : 0m) - committed,
                 custody.LowBalanceThreshold,
-                custody.LowBalanceThreshold > 0 && balance < custody.LowBalanceThreshold);
+                IsLow(custody, month),
+                month.Remaining);
         });
+    }
+
+    /// <summary>Below the threshold in a month that received money (a new month waiting for its allocation is not "low").</summary>
+    public static bool IsLow(OfficeCustody custody, OfficePeriodFigures month) =>
+        custody.LowBalanceThreshold > 0 && month.Allocated + month.FundingReceived + month.CarriedIn > 0 && month.Remaining < custody.LowBalanceThreshold;
+
+    /// <summary>
+    /// What may still be spent in a month: its remaining, less its pending expenses (when the policy reserves them)
+    /// and, in the current month, the approved repair and purchase estimates.
+    /// </summary>
+    public static async Task<decimal> AvailableAsync(
+        OfficeDbContext db, OfficeCustodyPeriod period, bool reservePending, CancellationToken cancellationToken)
+    {
+        var figures = (await CustodyPeriods.FiguresAsync(db, [period.Id], cancellationToken))[period.Id];
+        var committed = period.Status == OfficePeriodStatus.Open
+            ? await db.SpendRequests.Where(spend => spend.CustodyId == period.CustodyId && spend.Status == OfficeSpendStatus.Approved && spend.EstimatedAmount != null)
+                .SumAsync(spend => (decimal?)spend.EstimatedAmount, cancellationToken) ?? 0m
+            : 0m;
+        return figures.Remaining - (reservePending ? figures.PendingAmount : 0m) - committed;
     }
 
     /// <summary>Adds one movement (saved with the caller's next save). The unique source index refuses a second posting.</summary>
     public static OfficeLedgerEntry Add(
         OfficeDbContext db,
         int custodyId,
+        int periodId,
         OfficeLedgerKind kind,
         decimal amount,
         DateOnly entryDate,
@@ -112,6 +140,7 @@ internal static class CustodyLedger
         var entry = new OfficeLedgerEntry
         {
             CustodyId = custodyId,
+            PeriodId = periodId,
             Kind = kind,
             Amount = amount,
             EntryDate = entryDate,
@@ -129,8 +158,9 @@ internal static class CustodyLedger
 
     /// <summary>
     /// Posts the approved expenses of a custody that are ready (every approval in, price case approved when there is
-    /// one), oldest first, while the recorded balance covers them. An expense the cash doesn't cover waits for the
-    /// next funding. Must run under the custody lock; saves its changes. Returns the posted expenses.
+    /// one), oldest first, each in its own month while that month's remaining balance covers it. An expense the
+    /// month's cash doesn't cover waits for the next funding. Must run under the custody lock; saves its changes.
+    /// Returns the posted expenses.
     /// </summary>
     /// <param name="priceCleared">Whether an expense's price case (if any) is approved; asked only for expenses with a case.</param>
     public static async Task<IReadOnlyList<OfficeExpense>> PostReadyAsync(
@@ -144,30 +174,47 @@ internal static class CustodyLedger
         OfficeLog log,
         CancellationToken cancellationToken)
     {
-        var balance = await RecordedAsync(db, custody.Id, cancellationToken);
+        var ready = candidates
+            .Where(expense => expense.Status == OfficeExpenseStatus.Approved && expense.PostingStatus == OfficePostingStatus.NotPosted)
+            .OrderBy(expense => expense.SubmittedAt).ThenBy(expense => expense.Id)
+            .ToList();
+        var periodIds = ready.Select(expense => expense.PeriodId).Distinct().ToList();
+        var closed = await db.Periods.Where(period => periodIds.Contains(period.Id) && period.Status == OfficePeriodStatus.Closed)
+            .Select(period => period.Id).ToListAsync(cancellationToken);
+        var balances = new Dictionary<int, decimal>();
         var posted = new List<OfficeExpense>();
-        foreach (var expense in candidates
-                     .Where(expense => expense.Status == OfficeExpenseStatus.Approved && expense.PostingStatus == OfficePostingStatus.NotPosted)
-                     .OrderBy(expense => expense.SubmittedAt).ThenBy(expense => expense.Id))
+        foreach (var expense in ready)
         {
             if (expense.PriceExceptionId is not null && !priceCleared(expense))
             {
                 continue;
             }
 
-            if (expense.Amount > balance)
+            // A closed month never changes (it can't close while one of its expenses waits, so this is a safety net).
+            if (closed.Contains(expense.PeriodId))
             {
                 continue;
             }
 
-            var entry = Add(db, custody.Id, OfficeLedgerKind.Expense, -expense.Amount, expense.ExpenseDate, OfficeLedgerSources.Expense, expense.Id,
-                actorUserId, now, reference: expense.InvoiceNo);
+            if (!balances.TryGetValue(expense.PeriodId, out var balance))
+            {
+                balance = await CustodyPeriods.RemainingAsync(db, expense.PeriodId, cancellationToken);
+            }
+
+            if (expense.Amount > balance)
+            {
+                balances[expense.PeriodId] = balance;
+                continue;
+            }
+
+            var entry = Add(db, custody.Id, expense.PeriodId, OfficeLedgerKind.Expense, -expense.Amount, expense.ExpenseDate, OfficeLedgerSources.Expense,
+                expense.Id, actorUserId, now, reference: expense.InvoiceNo);
             await db.SaveChangesAsync(cancellationToken);
 
             expense.PostingStatus = OfficePostingStatus.Posted;
             expense.LedgerEntryId = entry.Id;
             expense.PostedAt = now;
-            balance -= expense.Amount;
+            balances[expense.PeriodId] = balance - expense.Amount;
             posted.Add(expense);
             log.EntryPosted(actorUserId, custody.Id, entry.Id, entry.Kind.ToString());
 
@@ -180,25 +227,32 @@ internal static class CustodyLedger
         await db.SaveChangesAsync(cancellationToken);
         if (posted.Count > 0)
         {
-            await CheckLowBalanceAsync(db, custody, balance, alerts, log, now, cancellationToken);
+            await CheckLowBalanceAsync(db, custody, alerts, log, now, cancellationToken);
         }
 
         return posted;
     }
 
     /// <summary>
-    /// Warns the custodian and the reviewers once when the recorded balance falls below the threshold, and re-arms
-    /// the warning when it is back above. Must run under the custody lock; saves its changes.
+    /// Warns the custodian and the reviewers once when the current month's remaining balance falls below the
+    /// threshold, and re-arms the warning when it is back above (a new month re-arms it once funded). Must run under
+    /// the custody lock; saves its changes.
     /// </summary>
     public static async Task CheckLowBalanceAsync(
-        OfficeDbContext db, OfficeCustody custody, decimal recorded, OfficeAlerts alerts, OfficeLog log, DateTime now, CancellationToken cancellationToken)
+        OfficeDbContext db, OfficeCustody custody, OfficeAlerts alerts, OfficeLog log, DateTime now, CancellationToken cancellationToken)
     {
         if (custody.LowBalanceThreshold <= 0)
         {
             return;
         }
 
-        if (recorded < custody.LowBalanceThreshold && custody.LowBalanceWarnedAt is null)
+        var current = await db.Periods.AsNoTracking()
+            .Where(period => period.CustodyId == custody.Id && period.Status == OfficePeriodStatus.Open)
+            .Select(period => (int?)period.Id).FirstOrDefaultAsync(cancellationToken);
+        var month = current is { } periodId ? (await CustodyPeriods.FiguresAsync(db, [periodId], cancellationToken))[periodId] : OfficePeriodFigures.Zero;
+        var low = IsLow(custody, month);
+
+        if (low && custody.LowBalanceWarnedAt is null)
         {
             custody.LowBalanceWarnedAt = now;
             var recipients = (await alerts.ReviewersAsync(null, cancellationToken)).Append(custody.HolderUserId).Distinct().ToList();
@@ -206,7 +260,7 @@ internal static class CustodyLedger
             await db.SaveChangesAsync(cancellationToken);
             log.LowBalance(custody.Id, recipients.Count);
         }
-        else if (recorded >= custody.LowBalanceThreshold && custody.LowBalanceWarnedAt is not null)
+        else if (!low && custody.LowBalanceWarnedAt is not null)
         {
             custody.LowBalanceWarnedAt = null;
             await db.SaveChangesAsync(cancellationToken);

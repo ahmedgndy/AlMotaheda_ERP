@@ -8,6 +8,7 @@ using AlMotaheda.Modules.Office.Data.Configurations;
 using AlMotaheda.Modules.Office.Features.Alerts;
 using AlMotaheda.Modules.Office.Features.Expenses;
 using AlMotaheda.Modules.Office.Features.Ledger;
+using AlMotaheda.Modules.Office.Features.Periods;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -17,6 +18,9 @@ using Microsoft.Extensions.Options;
 
 namespace AlMotaheda.Modules.Office.Features.Custody;
 
+/// <summary>The custody's current month and its figures (see <see cref="OfficePeriodFigures"/>).</summary>
+internal sealed record OfficeCustodyMonth(int PeriodId, int Year, int Month, string Status, decimal PlannedAllocation, OfficePeriodFigures Figures);
+
 internal sealed record OfficeCustodyView(
     int Id,
     string NameAr,
@@ -24,6 +28,10 @@ internal sealed record OfficeCustodyView(
     OfficePersonRef? Holder,
     string Status,
     OfficeCustodyBalance Balance,
+    OfficeCustodyMonth? CurrentMonth,
+    decimal MonthlyAllocation,
+    OfficePersonRef? MonthlyAllocationSetBy,
+    DateTime? MonthlyAllocationSetAt,
     string? Notes,
     DateTime CreatedAt,
     DateTime? StatusChangedAt,
@@ -32,7 +40,7 @@ internal sealed record OfficeCustodyView(
     string RowVersion);
 
 internal sealed record OfficeLedgerEntryView(
-    long Id, string Kind, decimal Amount, decimal RunningBalance, DateOnly EntryDate, string SourceType, int SourceId, long? ReversesEntryId,
+    long Id, int PeriodId, string Kind, decimal Amount, decimal RunningBalance, DateOnly EntryDate, string SourceType, int SourceId, long? ReversesEntryId,
     string? Reason, string? Reference, DateTime PostedAt, OfficePersonRef? PostedBy);
 
 /// <summary>
@@ -41,11 +49,12 @@ internal sealed record OfficeLedgerEntryView(
 /// </summary>
 internal static class OfficeCustodyEndpoints
 {
-    internal sealed record SaveRequest(string? NameAr, string? NameEn, int? HolderUserId, decimal? LowBalanceThreshold, string? Notes, string? RowVersion);
+    internal sealed record SaveRequest(
+        string? NameAr, string? NameEn, int? HolderUserId, decimal? LowBalanceThreshold, string? Notes, string? RowVersion, decimal? MonthlyAllocation = null);
 
     internal sealed record StatusRequest(string? Reason, string? RowVersion);
 
-    internal sealed record ReturnRequest(decimal? Amount, string? ReturnedOn, string? Reason, string? Reference, Guid? IdempotencyKey);
+    internal sealed record ReturnRequest(decimal? Amount, string? ReturnedOn, string? Reason, string? Reference, Guid? IdempotencyKey, int? PeriodId = null);
 
     internal sealed record CustodyList(IReadOnlyList<OfficeCustodyView> Items);
 
@@ -66,12 +75,12 @@ internal static class OfficeCustodyEndpoints
         api.MapPost("/office/custodies", CreateAsync)
             .RequirePermission(OfficePermissions.Module, PermissionAction.Approve)
             .WithName("CreateOfficeCustody")
-            .WithSummary("Open a custody for a custodian (office Approve). It starts at zero; fund it with a funding request");
+            .WithSummary("Open a custody for a custodian (office Approve), with its standing monthly allocation. Its first month opens at once");
 
         api.MapPut("/office/custodies/{custodyId:int}", UpdateAsync)
             .RequirePermission(OfficePermissions.Module, PermissionAction.Approve)
             .WithName("UpdateOfficeCustody")
-            .WithSummary("Rename a custody, change its low-balance threshold or hand it to another custodian (office Approve)");
+            .WithSummary("Rename a custody, change its low-balance threshold or standing monthly allocation, or hand it to another custodian (office Approve)");
 
         api.MapPost("/office/custodies/{custodyId:int}/suspend", (int custodyId, StatusRequest request, HttpContext httpContext, OfficeDbContext db,
                 IUserDirectory users, IOptions<OfficeOptions> settings, CompanyClock clock, OfficeLog log, CancellationToken cancellationToken) =>
@@ -106,13 +115,16 @@ internal static class OfficeCustodyEndpoints
     }
 
     internal static async Task<Results<Ok<CustodyList>, ProblemHttpResult>> ListAsync(
-        HttpContext httpContext, OfficeDbContext db, IUserDirectory users, IOptions<OfficeOptions> settings, CancellationToken cancellationToken,
-        bool includeClosed = false)
+        HttpContext httpContext, OfficeDbContext db, IUserDirectory users, IOptions<OfficeOptions> settings, OfficeAlerts alerts, CompanyClock clock, OfficeLog log,
+        CancellationToken cancellationToken, bool includeClosed = false)
     {
         if (OfficeCaller.From(httpContext.User) is not { } caller)
         {
             return ApiProblem.ForbiddenResult();
         }
+
+        await CustodyPeriods.RollIfNeededAsync(db, await Visible(db, caller).Select(custody => custody.Id).ToListAsync(cancellationToken), clock.Today, clock.UtcNow,
+            alerts, log, cancellationToken);
 
         var custodies = await Visible(db, caller)
             .Where(custody => includeClosed || custody.Status != OfficeCustodyStatus.Closed)
@@ -122,11 +134,17 @@ internal static class OfficeCustodyEndpoints
     }
 
     internal static async Task<Results<Ok<OfficeCustodyView>, ProblemHttpResult>> GetAsync(
-        int custodyId, HttpContext httpContext, OfficeDbContext db, IUserDirectory users, IOptions<OfficeOptions> settings, CancellationToken cancellationToken)
+        int custodyId, HttpContext httpContext, OfficeDbContext db, IUserDirectory users, IOptions<OfficeOptions> settings, OfficeAlerts alerts, CompanyClock clock,
+        OfficeLog log, CancellationToken cancellationToken)
     {
         if (OfficeCaller.From(httpContext.User) is not { } caller)
         {
             return ApiProblem.ForbiddenResult();
+        }
+
+        if (await Visible(db, caller).AnyAsync(custody => custody.Id == custodyId, cancellationToken))
+        {
+            await CustodyPeriods.RollIfNeededAsync(db, [custodyId], clock.Today, clock.UtcNow, alerts, log, cancellationToken);
         }
 
         var custody = await Visible(db, caller).SingleOrDefaultAsync(candidate => candidate.Id == custodyId, cancellationToken);
@@ -144,6 +162,7 @@ internal static class OfficeCustodyEndpoints
 
         var errors = new ValidationErrors();
         var (nameAr, nameEn, threshold, notes) = Fields(request, errors);
+        var allocation = OfficeInput.NonNegativeMoney(request.MonthlyAllocation, errors, "monthlyAllocation", "The monthly allocation");
         if (request.HolderUserId is null)
         {
             errors.Add("holderUserId", "Choose the custodian.");
@@ -165,11 +184,15 @@ internal static class OfficeCustodyEndpoints
             NameEn = nameEn!,
             HolderUserId = request.HolderUserId.Value,
             LowBalanceThreshold = threshold,
+            MonthlyAllocation = allocation,
+            MonthlyAllocationSetBy = allocation > 0 ? caller.UserId : null,
+            MonthlyAllocationSetAt = allocation > 0 ? clock.UtcNow : null,
             Notes = notes,
             CreatedAt = clock.UtcNow,
             CreatedBy = caller.UserId,
         };
         db.Custodies.Add(custody);
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         try
         {
             await db.SaveChangesAsync(cancellationToken);
@@ -181,13 +204,19 @@ internal static class OfficeCustodyEndpoints
             return OfficeProblems.Validation(errors);
         }
 
+        // Its first month starts now (the background check asks Finance for the allocation, when there is one).
+        var first = CustodyPeriods.New(custody, clock.Today.Year, clock.Today.Month, clock.UtcNow, caller.UserId);
+        db.Periods.Add(first);
+        await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         log.CustodyCreated(caller.UserId, custody.Id);
+        log.PeriodOpened(custody.Id, first.Id, first.Year, first.Month);
         return TypedResults.Created($"/api/office/custodies/{custody.Id}", (await ViewsAsync(db, users, [custody], settings.Value, cancellationToken))[0]);
     }
 
     internal static async Task<Results<Ok<OfficeCustodyView>, ValidationProblem, ProblemHttpResult>> UpdateAsync(
         int custodyId, SaveRequest request, HttpContext httpContext, OfficeDbContext db, IUserDirectory users, IOptions<OfficeOptions> settings,
-        OfficeLog log, CancellationToken cancellationToken)
+        CompanyClock clock, OfficeLog log, CancellationToken cancellationToken)
     {
         if (OfficeCaller.From(httpContext.User) is not { } caller)
         {
@@ -196,6 +225,9 @@ internal static class OfficeCustodyEndpoints
 
         var errors = new ValidationErrors();
         var (nameAr, nameEn, threshold, notes) = Fields(request, errors);
+        decimal? allocation = request.MonthlyAllocation is null
+            ? null
+            : OfficeInput.NonNegativeMoney(request.MonthlyAllocation, errors, "monthlyAllocation", "The monthly allocation");
         var rowVersion = RowVersions.Parse(request.RowVersion, errors);
         if (errors.HasErrors)
         {
@@ -211,6 +243,31 @@ internal static class OfficeCustodyEndpoints
         if (custody.Status == OfficeCustodyStatus.Closed)
         {
             return OfficeProblems.Inactive(custody.Status.ToString());
+        }
+
+        // The custodian never sets their own allocation (they can't reach this endpoint; this is a second check).
+        if (custody.HolderUserId == caller.UserId)
+        {
+            return OfficeProblems.ReviewerIsSubmitter();
+        }
+
+        if (allocation is { } standing && standing != custody.MonthlyAllocation)
+        {
+            custody.MonthlyAllocation = standing;
+            custody.MonthlyAllocationSetBy = caller.UserId;
+            custody.MonthlyAllocationSetAt = clock.UtcNow;
+
+            // The current month follows the new amount while its allocation was not asked from Finance yet.
+            var open = await db.Periods.Where(period => period.CustodyId == custody.Id && period.Status == OfficePeriodStatus.Open).ToListAsync(cancellationToken);
+            foreach (var period in open)
+            {
+                if (!await db.FundingRequests.AnyAsync(funding => funding.PeriodId == period.Id && funding.Status != OfficeFundingStatus.Rejected
+                                                                  && funding.Status != OfficeFundingStatus.Cancelled, cancellationToken))
+                {
+                    period.PlannedAllocation = standing;
+                    period.AllocationAutoCheckedAt = null;
+                }
+            }
         }
 
         if (request.HolderUserId is { } holder && holder != custody.HolderUserId)
@@ -327,6 +384,15 @@ internal static class OfficeCustodyEndpoints
         custody.StatusChangedAt = clock.UtcNow;
         custody.StatusChangedBy = caller.UserId;
         custody.StatusReason = reason;
+        if (target == OfficeCustodyStatus.Closed)
+        {
+            // Its months close too: the balance is zero and nothing waits, so there is nothing to settle.
+            foreach (var period in await db.Periods.Where(period => period.CustodyId == custody.Id && period.Status != OfficePeriodStatus.Closed).ToListAsync(cancellationToken))
+            {
+                CustodyPeriods.Close(period, OfficePeriodSettlement.NothingLeft, 0m, caller.UserId, reason, clock.UtcNow);
+            }
+        }
+
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         log.CustodyMoved(caller.UserId, custody.Id, target.ToString());
@@ -364,10 +430,12 @@ internal static class OfficeCustodyEndpoints
         var entries = await inRange.OrderBy(entry => entry.EntryDate).ThenBy(entry => entry.Id).ToListAsync(cancellationToken);
         var running = opening;
         var withBalance = entries.Select(entry => (Entry: entry, Balance: running += entry.Amount)).ToList();
-        var people = await users.FindAsync(entries.Select(entry => entry.PostedBy).Distinct().ToList(), cancellationToken);
+        // Who posted a movement and Finance's references are finance's records: the custodian sees the movement only.
+        var people = caller.SeesAll ? await users.FindAsync(entries.Select(entry => entry.PostedBy).Distinct().ToList(), cancellationToken) : null;
         var items = withBalance.AsEnumerable().Reverse().Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(row => new OfficeLedgerEntryView(row.Entry.Id, row.Entry.Kind.ToString(), row.Entry.Amount, row.Balance, row.Entry.EntryDate, row.Entry.SourceType,
-                row.Entry.SourceId, row.Entry.ReversesEntryId, row.Entry.Reason, row.Entry.Reference, row.Entry.PostedAt, OfficePersonRef.From(row.Entry.PostedBy, people)))
+            .Select(row => new OfficeLedgerEntryView(row.Entry.Id, row.Entry.PeriodId, row.Entry.Kind.ToString(), row.Entry.Amount, row.Balance, row.Entry.EntryDate,
+                row.Entry.SourceType, row.Entry.SourceId, row.Entry.ReversesEntryId, row.Entry.Reason, caller.SeesAll ? row.Entry.Reference : null,
+                row.Entry.PostedAt, people is null ? null : OfficePersonRef.From(row.Entry.PostedBy, people)))
             .ToList();
         return TypedResults.Ok(new LedgerPage(items, entries.Count, page, pageSize, opening, running));
     }
@@ -425,16 +493,32 @@ internal static class OfficeCustodyEndpoints
             return OfficeProblems.Inactive(custody.Status.ToString());
         }
 
-        var balance = await CustodyLedger.RecordedAsync(db, custody.Id, cancellationToken);
+        var now = clock.UtcNow;
+        var current = await CustodyPeriods.CurrentAsync(db, custody, clock.Today, now, alerts, log, cancellationToken);
+        var period = request.PeriodId is { } periodId
+            ? await db.Periods.SingleOrDefaultAsync(candidate => candidate.Id == periodId && candidate.CustodyId == custody.Id, cancellationToken)
+            : current;
+        if (period is null)
+        {
+            return OfficeProblems.PeriodNotFound();
+        }
+
+        if (!period.AcceptsRecords)
+        {
+            return OfficeProblems.MonthClosed(period.Year, period.Month);
+        }
+
+        // Cash is returned from one month: never more than that month has left.
+        var balance = await CustodyPeriods.RemainingAsync(db, period.Id, cancellationToken);
         if (amount > balance)
         {
             return OfficeProblems.NotEnoughCash(balance, amount!.Value);
         }
 
-        var now = clock.UtcNow;
         var cashReturn = new OfficeCashReturn
         {
             CustodyId = custody.Id,
+            PeriodId = period.Id,
             Amount = amount!.Value,
             ReturnedOn = returnedOn,
             Reason = reason!,
@@ -446,10 +530,10 @@ internal static class OfficeCustodyEndpoints
         db.CashReturns.Add(cashReturn);
         await db.SaveChangesAsync(cancellationToken);
 
-        var entry = CustodyLedger.Add(db, custody.Id, OfficeLedgerKind.Return, -cashReturn.Amount, returnedOn, OfficeLedgerSources.CashReturn, cashReturn.Id,
-            caller.UserId, now, reason, reference);
+        var entry = CustodyLedger.Add(db, custody.Id, period.Id, OfficeLedgerKind.Return, -cashReturn.Amount, returnedOn, OfficeLedgerSources.CashReturn,
+            cashReturn.Id, caller.UserId, now, reason, reference);
         await db.SaveChangesAsync(cancellationToken);
-        await CustodyLedger.CheckLowBalanceAsync(db, custody, balance - cashReturn.Amount, alerts, log, now, cancellationToken);
+        await CustodyLedger.CheckLowBalanceAsync(db, custody, alerts, log, now, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         log.CashReturned(caller.UserId, custody.Id, cashReturn.Id);
         log.EntryPosted(caller.UserId, custody.Id, entry.Id, entry.Kind.ToString());
@@ -464,9 +548,18 @@ internal static class OfficeCustodyEndpoints
         OfficeDbContext db, IUserDirectory users, IReadOnlyList<OfficeCustody> custodies, OfficeOptions options, CancellationToken cancellationToken)
     {
         var balances = await CustodyLedger.BalancesAsync(db, custodies, options.ReservePendingExpenses, cancellationToken);
-        var people = await users.FindAsync(custodies.SelectMany(custody => new[] { custody.HolderUserId, custody.StatusChangedBy ?? 0 }).Where(id => id != 0).Distinct().ToList(), cancellationToken);
+        var open = await CustodyPeriods.OpenOfAsync(db, custodies.Select(custody => custody.Id).ToList(), cancellationToken);
+        var months = await CustodyPeriods.FiguresAsync(db, open.Values.Select(period => period.Id).ToList(), cancellationToken);
+        var people = await users.FindAsync(
+            custodies.SelectMany(custody => new[] { custody.HolderUserId, custody.StatusChangedBy ?? 0, custody.MonthlyAllocationSetBy ?? 0 })
+                .Where(id => id != 0).Distinct().ToList(),
+            cancellationToken);
         return custodies.Select(custody => new OfficeCustodyView(
                 custody.Id, custody.NameAr, custody.NameEn, OfficePersonRef.From(custody.HolderUserId, people), custody.Status.ToString(), balances[custody.Id],
+                open.TryGetValue(custody.Id, out var month)
+                    ? new OfficeCustodyMonth(month.Id, month.Year, month.Month, month.Status.ToString(), month.PlannedAllocation, months[month.Id])
+                    : null,
+                custody.MonthlyAllocation, OfficePersonRef.From(custody.MonthlyAllocationSetBy, people), custody.MonthlyAllocationSetAt,
                 custody.Notes, custody.CreatedAt, custody.StatusChangedAt, OfficePersonRef.From(custody.StatusChangedBy, people), custody.StatusReason,
                 RowVersions.Format(custody.RowVersion)))
             .ToList();
@@ -506,7 +599,7 @@ internal static class OfficeCustodyEndpoints
     private static async Task<OfficeLedgerEntryView> EntryViewAsync(IUserDirectory users, OfficeLedgerEntry entry, CancellationToken cancellationToken)
     {
         var people = await users.FindAsync([entry.PostedBy], cancellationToken);
-        return new OfficeLedgerEntryView(entry.Id, entry.Kind.ToString(), entry.Amount, 0m, entry.EntryDate, entry.SourceType, entry.SourceId, entry.ReversesEntryId,
-            entry.Reason, entry.Reference, entry.PostedAt, OfficePersonRef.From(entry.PostedBy, people));
+        return new OfficeLedgerEntryView(entry.Id, entry.PeriodId, entry.Kind.ToString(), entry.Amount, 0m, entry.EntryDate, entry.SourceType, entry.SourceId,
+            entry.ReversesEntryId, entry.Reason, entry.Reference, entry.PostedAt, OfficePersonRef.From(entry.PostedBy, people));
     }
 }

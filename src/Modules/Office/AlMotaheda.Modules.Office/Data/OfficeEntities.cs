@@ -18,8 +18,17 @@ internal sealed class OfficeCustody
 
     public OfficeCustodyStatus Status { get; set; } = OfficeCustodyStatus.Active;
 
-    /// <summary>Below this recorded balance the custodian and finance are warned (0 = no warning).</summary>
+    /// <summary>Below this remaining balance of the month the custodian and finance are warned (0 = no warning).</summary>
     public decimal LowBalanceThreshold { get; set; }
+
+    /// <summary>
+    /// The standing monthly allocation finance authorized (0 = none): every new month starts by asking Finance to pay
+    /// this amount to the custodian (<see cref="OfficeCustodyPeriod"/>). Changed only by a reviewer, who is recorded.
+    /// </summary>
+    public decimal MonthlyAllocation { get; set; }
+
+    public int? MonthlyAllocationSetBy { get; set; }
+    public DateTime? MonthlyAllocationSetAt { get; set; }
 
     /// <summary>When the last low-balance warning went out; cleared when the balance is back above the threshold.</summary>
     public DateTime? LowBalanceWarnedAt { get; set; }
@@ -66,9 +75,12 @@ internal sealed class OfficeLedgerEntry
 
     public int CustodyId { get; set; }
 
+    /// <summary>The month the movement counts in. A month's balance is the sum of its own entries only.</summary>
+    public int PeriodId { get; set; }
+
     public OfficeLedgerKind Kind { get; set; }
 
-    /// <summary>Signed: + into the custody (funding, reversal of an expense), − out of it (expense, return).</summary>
+    /// <summary>Signed: + into the custody (allocation, funding, carried in, reversal), − out of it (expense, return, carried out).</summary>
     public decimal Amount { get; set; }
 
     /// <summary>The business date (the expense's date, the day the funds were received).</summary>
@@ -91,7 +103,7 @@ internal sealed class OfficeLedgerEntry
 
 internal enum OfficeLedgerKind
 {
-    /// <summary>Funds the custodian confirmed receiving (from a paid funding request).</summary>
+    /// <summary>Extra funds (a replenishment) the custodian confirmed receiving from a paid funding request.</summary>
     Funding,
 
     /// <summary>An approved office expense paid from the custody.</summary>
@@ -105,6 +117,15 @@ internal enum OfficeLedgerKind
 
     /// <summary>A reviewed cash-count difference posted with its reason.</summary>
     Adjustment,
+
+    /// <summary>The month's allocation, received by the custodian from its paid funding request.</summary>
+    Allocation,
+
+    /// <summary>What a finished month had left, taken out of it by an authorized carry-forward.</summary>
+    CarryForwardOut,
+
+    /// <summary>The same amount, brought into the next month by that carry-forward.</summary>
+    CarryForwardIn,
 }
 
 /// <summary>The records a ledger entry can come from (unique per record).</summary>
@@ -125,7 +146,11 @@ internal static class OfficeLedgerSources
     /// <summary>A reviewer's adjustment posted from Finance's central custody page.</summary>
     public const string FinanceAdjustment = "CustodyAdjustment";
 
-    public static IReadOnlyList<string> All { get; } = [FundingRequest, Expense, ExpenseReversal, CashReturn, CashCount, FinanceTransfer, FinanceTransferReversal, FinanceAdjustment];
+    /// <summary>A carry-forward's two entries: both point to the finished month (its id), so it happens once.</summary>
+    public const string CarryOut = "OfficePeriodCarryOut";
+    public const string CarryIn = "OfficePeriodCarryIn";
+
+    public static IReadOnlyList<string> All { get; } = [FundingRequest, Expense, ExpenseReversal, CashReturn, CashCount, CarryOut, CarryIn, FinanceTransfer, FinanceTransferReversal, FinanceAdjustment];
 }
 
 /// <summary>
@@ -136,6 +161,10 @@ internal sealed class OfficeCashReturn
 {
     public int Id { get; set; }
     public int CustodyId { get; set; }
+
+    /// <summary>The month the cash is taken from (the current one, or a finished month being settled).</summary>
+    public int PeriodId { get; set; }
+
     public decimal Amount { get; set; }
     public DateOnly ReturnedOn { get; set; }
     public required string Reason { get; set; }
@@ -154,6 +183,15 @@ internal sealed class OfficeFundingRequest
 {
     public int Id { get; set; }
     public int CustodyId { get; set; }
+
+    /// <summary>A month's allocation, or extra funds (a replenishment) during the month.</summary>
+    public OfficeFundingKind Kind { get; set; } = OfficeFundingKind.Replenishment;
+
+    /// <summary>
+    /// The month an allocation is for (it is posted there when received). A replenishment has none: it counts in the
+    /// month it is received.
+    /// </summary>
+    public int? PeriodId { get; set; }
 
     public decimal RequestedAmount { get; set; }
     public required string Reason { get; set; }
@@ -209,6 +247,15 @@ internal sealed class OfficeFundingRequest
     public void MoveTo(OfficeFundingStatus target) => _status = Flow.Move(_status, target);
 }
 
+internal enum OfficeFundingKind
+{
+    /// <summary>Extra cash asked during a month ("طلب تغذية العهدة").</summary>
+    Replenishment,
+
+    /// <summary>The month's allocation, authorized by finance ("العهدة الشهرية").</summary>
+    MonthlyAllocation,
+}
+
 internal enum OfficeFundingStatus
 {
     Submitted,
@@ -258,6 +305,10 @@ internal sealed class OfficeExpense
     public decimal Amount { get; set; }
 
     public DateOnly ExpenseDate { get; set; }
+
+    /// <summary>The month of <see cref="ExpenseDate"/>: the month whose cash paid it, where it is deducted.</summary>
+    public int PeriodId { get; set; }
+
     public Guid IdempotencyKey { get; set; }
 
     /// <summary>The repair or purchase request this expense completes (one cost, one deduction).</summary>
@@ -653,8 +704,102 @@ internal sealed class OfficeDiscrepancyAlert : OfficeAlert;
 
 internal sealed class OfficeSpendRequestedAlert : OfficeAlert;
 
+/// <summary>A new month started (to the custodian; to finance when its allocation still needs authorizing).</summary>
+internal sealed class OfficePeriodOpenedAlert : OfficeAlert;
+
+/// <summary>A month ended with money left or records waiting: finance settles it (to the reviewers).</summary>
+internal sealed class OfficePeriodEndedAlert : OfficeAlert;
+
 /// <summary>The custody itself as an alert source (a low balance).</summary>
 internal static class OfficeAlertSources
 {
     public const string Custody = "OfficeCustody";
+    public const string Period = "OfficeCustodyPeriod";
+}
+
+/// <summary>
+/// One month of a custody ("العهدة الشهرية"). Each month starts from zero spending: its balance is the sum of its own
+/// ledger entries (allocation + funding received + carried in − posted expenses − cash returned …). A new month never
+/// deletes or rewrites an earlier one: earlier months stay readable, and a finished month's leftover money is settled
+/// only by an explicit, authorized return or carry-forward (<see cref="OfficePeriodSettlement"/>).
+/// </summary>
+internal sealed class OfficeCustodyPeriod
+{
+    public int Id { get; set; }
+    public int CustodyId { get; set; }
+
+    public int Year { get; set; }
+    public int Month { get; set; }
+    public DateOnly StartsOn { get; set; }
+    public DateOnly EndsOn { get; set; }
+
+    private OfficePeriodStatus _status = OfficePeriodStatus.Open;
+
+    public OfficePeriodStatus Status { get => _status; init => _status = value; }
+
+    /// <summary>The custody's standing allocation when the month opened (a plan: nothing is posted until it is paid and received).</summary>
+    public decimal PlannedAllocation { get; set; }
+
+    /// <summary>When the background check looked at asking Finance for the planned allocation (once per month).</summary>
+    public DateTime? AllocationAutoCheckedAt { get; set; }
+
+    /// <summary>When the month was opened, and by whom (<c>null</c>: automatically, at the start of the month).</summary>
+    public DateTime OpenedAt { get; set; }
+    public int? OpenedBy { get; set; }
+
+    /// <summary>When the month was over and stopped being the current one.</summary>
+    public DateTime? EndedAt { get; set; }
+
+    /// <summary>How a finished month was closed: its leftover returned, carried forward, or nothing left.</summary>
+    public OfficePeriodSettlement? Settlement { get; set; }
+    public decimal? SettledAmount { get; set; }
+    public DateTime? ClosedAt { get; set; }
+
+    /// <summary><c>null</c> when it closed by itself (nothing left and nothing waiting).</summary>
+    public int? ClosedBy { get; set; }
+    public string? ClosingNote { get; set; }
+
+    public byte[] RowVersion { get; set; } = [];
+
+    private static readonly StatusFlow<OfficePeriodStatus> Flow = new(
+        (OfficePeriodStatus.Open, OfficePeriodStatus.Closing),
+        (OfficePeriodStatus.Closing, OfficePeriodStatus.Closed),
+        // A custody closed for good closes its current month too (its balance is zero then).
+        (OfficePeriodStatus.Open, OfficePeriodStatus.Closed));
+
+    public bool CanMoveTo(OfficePeriodStatus target) => Flow.Allows(_status, target);
+
+    public void MoveTo(OfficePeriodStatus target) => _status = Flow.Move(_status, target);
+
+    /// <summary>Records may still be added or posted: the current month, or a finished month not settled yet.</summary>
+    public bool AcceptsRecords => _status != OfficePeriodStatus.Closed;
+
+    public bool Contains(DateOnly date) => date >= StartsOn && date <= EndsOn;
+}
+
+internal enum OfficePeriodStatus
+{
+    /// <summary>The current month.</summary>
+    Open,
+
+    /// <summary>
+    /// The month is over. Its late receipts, reviews and postings still land in it; finance settles what is left
+    /// (returned or carried forward, per the company policy) and it then closes.
+    /// </summary>
+    Closing,
+
+    /// <summary>Settled: nothing left and nothing waiting. Read-only history.</summary>
+    Closed,
+}
+
+internal enum OfficePeriodSettlement
+{
+    /// <summary>Nothing was left and nothing waited.</summary>
+    NothingLeft,
+
+    /// <summary>The leftover cash was handed back to the company.</summary>
+    Returned,
+
+    /// <summary>The leftover was moved into the next month by two linked entries.</summary>
+    CarriedForward,
 }
