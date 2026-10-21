@@ -76,9 +76,10 @@ internal static class UpdateRolePermissions
 
         if (removedIds.Count > 0)
         {
-            await db.RolePermissions
+            // Removed through the change tracker, not a bulk delete, so the audit trail keeps every removed permission.
+            db.RolePermissions.RemoveRange(await db.RolePermissions
                 .Where(link => link.RoleId == role.Id && removedIds.Contains(link.PermissionId))
-                .ExecuteDeleteAsync(cancellationToken);
+                .ToListAsync(cancellationToken));
         }
 
         db.RolePermissions.AddRange(addedIds.Select(permissionId => new RolePermission

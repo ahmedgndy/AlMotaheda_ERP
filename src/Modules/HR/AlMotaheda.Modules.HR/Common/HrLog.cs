@@ -58,6 +58,21 @@ internal sealed partial class HrLog(ILogger<HrLog> logger)
     [LoggerMessage(EventId = 9071, Level = LogLevel.Information, Message = "User {ActorId} referred employee {EmployeeId} to HR (referral {ReferralId}, {SourceType} {SourceId})")]
     public partial void Referred(int actorId, int employeeId, int referralId, string sourceType, int sourceId);
 
+    [LoggerMessage(EventId = 9081, Level = LogLevel.Information, Message = "User {ActorId} submitted HR request {RequestId} ({Type}) for employee {EmployeeId}")]
+    public partial void RequestSubmitted(int actorId, int requestId, string type, int employeeId);
+
+    [LoggerMessage(EventId = 9082, Level = LogLevel.Information, Message = "User {ActorId} moved HR request {RequestId} to {Status}")]
+    public partial void RequestMoved(int actorId, int requestId, string status);
+
+    [LoggerMessage(EventId = 9083, Level = LogLevel.Information, Message = "User {ActorId} wrote on HR request {RequestId}")]
+    public partial void RequestMessage(int actorId, int requestId);
+
+    [LoggerMessage(EventId = 9084, Level = LogLevel.Information, Message = "User {ActorId} uploaded HR attachment {AttachmentId} ({SizeBytes} bytes)")]
+    public partial void AttachmentUploaded(int actorId, int attachmentId, long sizeBytes);
+
+    [LoggerMessage(EventId = 9085, Level = LogLevel.Warning, Message = "User {ActorId} was refused {Action} on HR request {RequestId}: {Reason}")]
+    public partial void RequestRefused(int actorId, string action, int requestId, string reason);
+
     [LoggerMessage(EventId = 9072, Level = LogLevel.Information, Message = "User {ActorId} moved referral {ReferralId} to {Status} ({Outcome})")]
     public partial void ReferralMoved(int actorId, int referralId, string status, string? outcome);
 }

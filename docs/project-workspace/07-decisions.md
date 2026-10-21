@@ -34,6 +34,13 @@
 | T7 | A fuel claim gated by price control opens a `PriceException` only when the vehicle is on a project; off-project it is `Escalated` to an Executive | A price exception belongs to a project (table and inbox); the Executive still decides either way |
 | T8 | Claim evidence is stored by a Fleet file store (`Fleet:Storage:RootPath`), typed from the bytes, served only through the API | The Archive module's documents are project-scoped with their own approval; a claim photo is a private attachment of the claim |
 | T9 | An HR referral closes with `NoAction`, `Warning` or `DeductionApplied`; only the last raises a `PayrollInput` deduction, through HR's own rules, approved with the salary sheet | Nothing is deducted automatically; Fleet never writes payroll |
+| T10 | "Financial Manager" in the brief is the existing Executive role (`executive`): it decides transfers, payment requests, price proposals and disputes, reads the audit trail and the central custody page. No new role | The owner's note: there is no Financial Manager role; the approver is the Executive, the Accountant initiates. One identity, no duplicate |
+| T11 | One person's home page (`GET /api/me/overview`) is composed by Projects from each module's `IPersonalOverviewSource` section (Finance: fundings and transfers; Workforce: sheets and settlements; HR: requests and cases) | Modules keep their data and permissions; the app calls one endpoint; nothing of another person is shown |
+| T12 | The daily labor cost record is the Workforce `DailySheet` (workers, days, overtime, rates copied, cost per project item, approval). No second "daily labor report"; the Projects daily site report stays the site narrative with no money | The brief: reuse, never duplicate; a sheet is work and cost, a settlement is the payment |
+| T13 | The work inbox carries company-wide records (custody transfers, payment requests, price proposals, HR requests) with no project; every module answers for its own permissions | One approval queue (section 18) instead of one per module |
+| T14 | Evidence is answered by the Archive (`IRecordDocuments`): a custody expense with no document linked is "unsupported" on the central custody page and in the statement; nothing is blocked, nothing is hidden | The brief: flag, route, never silently reconcile; the Archive already holds the documents |
+| T15 | A reviewer's custody adjustment is a ledger transaction the holder is told of and may dispute; a reviewer resolves by keeping it or undoing it with an opposite adjustment. Never a payroll deduction | The brief: no balance overwrite, every change reconstructible, deductions only through HR |
+| T16 | A new price item's first range is approved only when a database-checked Executive creates it; otherwise it is a pending proposal like any later change. Permission removals are audited through the change tracker; the audit table refuses updates and deletes by trigger | Section 14 and 17: no one's own number becomes the reference without the Executive; the trail is complete and immutable |
 
 ## 2. Open business questions (need an answer from the company)
 
@@ -52,6 +59,10 @@
 7. **Vehicle claims above an amount.** Should a claim above some amount need the Executive
    (`Fleet__ClaimExecutiveApprovalAbove`, shipped as 0: the accountant approves every claim)?
 8. **Vehicle GPS.** Which tracking provider, if any? Until one is integrated the location screens say so.
+9. **Evidence policy.** Which custody expenses must have a document before they count as reconciled (today: flagged
+   as unsupported on the central custody page, never blocked)? Should an approval be refused without one?
+10. **HR requests.** Which request types should HR act on automatically once approved (a leave approval is still a
+    decision HR applies through payroll inputs by hand today)?
 6. **Who approves subcontract work.** Only roles with `subcontractors` Approve can (by default the Executive).
    The prototype also lets the Accountant approve manpower lines. Grant the permission to the Accountant role?
 7. **Who records equipment costs.** `equipment` Create or Edit (Executive, Manager by default). Should site

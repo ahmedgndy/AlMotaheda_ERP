@@ -112,6 +112,7 @@ internal static class LiveScopes
         // HR: assignments and referrals.
         ["EmployeeAssignment"] = new(["EmployeeAssignments", "Employees"], false, [Hr]),
         ["HrReferral"] = new(["HrReferrals"], false, [Hr]),
+        ["HrRequest"] = new(["HrRequests"], false, [Hr]),
     };
 
     /// <summary>Records that only add detail to a parent that changes in the same save; they send nothing alone.</summary>
@@ -122,7 +123,7 @@ internal static class LiveScopes
         "PurchaseOrderRevision", "GoodsReceiptLine", "SupplierInvoiceLine", "SalarySheetLine", "BudgetLine", "VoidedEquipmentCostPayment",
         "ReportRun", "RefreshToken", "UserSignInState", "PriceAboveRangeAlert", "CostRecordedAlert", "PriceExceptionAlert",
         "PayrollSettlementLine", "PayrollSettlementAllocation", "SettlementAlert",
-        "CustodyTransferEvent", "CustodyTransferAlert", "PayrollBatchAllocation", "VehicleExpenseFlag", "VehicleExpenseAlert", "FleetAttachment",
+        "CustodyTransferEvent", "CustodyTransferAlert", "HrRequestAlert", "HrRequestMessage", "HrRequestAttachment", "PayrollBatchAllocation", "VehicleExpenseFlag", "VehicleExpenseAlert", "FleetAttachment",
     };
 
     /// <summary>The signals one changed record sends.</summary>

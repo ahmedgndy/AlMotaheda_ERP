@@ -65,7 +65,18 @@ public sealed class CoreQueryTests
         {
             Assert.Contains("[VoidedAt] IS NULL", sql);
         }
+
+        if (paymentState is PaymentStates.Paid or PaymentStates.PartiallyPaid)
+        {
+            // Paid and partly paid are measured against the corrected amount, so the filter itself reads the
+            // adjustments table, over and above the row projection that always does.
+            var unfiltered = ExpenseQueries.Filtered(db, 1, filter with { PaymentState = null }).ToQueryString();
+            Assert.True(Count(sql, "[projects].[ExpenseAdjustment]") > Count(unfiltered, "[projects].[ExpenseAdjustment]"),
+                "The payment-state filter must compare allocations with the corrected amount.");
+        }
     }
+
+    private static int Count(string text, string part) => text.Split(part).Length - 1;
 
     [Fact]
     public void Expense_rows_load_their_payments_in_the_same_query()

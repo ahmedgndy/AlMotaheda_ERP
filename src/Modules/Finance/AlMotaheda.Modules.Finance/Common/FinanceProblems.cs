@@ -98,6 +98,8 @@ internal static class FinanceProblems
     public static ProblemHttpResult ClosedBatch() =>
         Conflict(BatchClosed, "This payroll batch is closed.");
 
+    public static ProblemHttpResult AdjustmentNotFound() => ApiProblem.NotFoundResult("The adjustment was not found.");
+
     public static ProblemHttpResult OnlyTheHolder(string what) =>
         ApiProblem.ForbiddenResult($"Only the holder of this custody account, or a custody reviewer, can {what}.");
 

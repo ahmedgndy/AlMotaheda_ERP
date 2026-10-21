@@ -57,6 +57,14 @@ public sealed class HrApiSecurityTests
         { "GET", "/api/hr/referrals/1", "hr:V" },
         { "POST", "/api/hr/referrals/1/start-investigation", "hr:E" },
         { "POST", "/api/hr/referrals/1/close", "hr:A" },
+        { "GET", "/api/hr/requests", "hr:V" },
+        { "GET", "/api/hr/requests/1", "hr:V" },
+        { "POST", "/api/hr/requests/1/start-review", "hr:E" },
+        { "POST", "/api/hr/requests/1/request-info", "hr:E" },
+        { "POST", "/api/hr/requests/1/messages", "hr:E" },
+        { "POST", "/api/hr/requests/1/approve", "hr:A" },
+        { "POST", "/api/hr/requests/1/reject", "hr:A" },
+        { "POST", "/api/hr/requests/1/close", "hr:A" },
     };
 
     private static object Body => new { reason = "Because", rowVersion = RowVersion };

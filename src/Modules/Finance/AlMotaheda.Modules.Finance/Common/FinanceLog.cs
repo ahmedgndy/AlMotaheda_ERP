@@ -43,6 +43,12 @@ internal sealed partial class FinanceLog(ILogger<FinanceLog> logger)
     [LoggerMessage(EventId = 8042, Level = LogLevel.Information, Message = "User {ActorId} adjusted custody account {AccountId} (adjustment {AdjustmentId})")]
     public partial void CustodyAdjusted(int actorId, int accountId, int adjustmentId);
 
+    [LoggerMessage(EventId = 8062, Level = LogLevel.Information, Message = "User {ActorId} disputed adjustment {AdjustmentId} of custody account {AccountId}")]
+    public partial void CustodyAdjustmentDisputed(int actorId, int accountId, int adjustmentId);
+
+    [LoggerMessage(EventId = 8063, Level = LogLevel.Information, Message = "User {ActorId} resolved adjustment {AdjustmentId} of custody account {AccountId}: {Status}")]
+    public partial void CustodyAdjustmentResolved(int actorId, int accountId, int adjustmentId, string status);
+
     [LoggerMessage(EventId = 8043, Level = LogLevel.Information, Message = "User {ActorId} closed the period of custody account {AccountId} up to {PeriodEnd}")]
     public partial void PeriodClosed(int actorId, int accountId, DateOnly periodEnd);
 

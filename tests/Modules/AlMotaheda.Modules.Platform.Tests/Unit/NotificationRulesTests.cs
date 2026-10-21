@@ -197,6 +197,46 @@ public sealed class NotificationRulesTests
     }
 
     [Fact]
+    public void A_custody_adjustment_tells_the_holder_a_dispute_the_reviewer_and_the_resolution_the_holder()
+    {
+        const int holder = 61;
+        var posted = Assert.Single(NotificationRules.For(Change("CustodyAdjustment", "Added", null, "Posted", ("HolderUserId", holder), ("CreatedBy", Reviewer)), Reviewer));
+        Assert.Equal((holder, NotificationTypes.AdjustmentPosted), (posted.RecipientUserId, posted.Type));
+
+        var disputed = Assert.Single(NotificationRules.For(Change("CustodyAdjustment", "Modified", "Posted", "Disputed", ("HolderUserId", holder), ("CreatedBy", Reviewer)), holder));
+        Assert.Equal((Reviewer, NotificationTypes.AdjustmentDisputed), (disputed.RecipientUserId, disputed.Type));
+
+        foreach (var outcome in new[] { "Upheld", "Reversed" })
+        {
+            var resolved = Assert.Single(NotificationRules.For(Change("CustodyAdjustment", "Modified", "Disputed", outcome, ("HolderUserId", holder), ("CreatedBy", Reviewer), ("ResolvedBy", Reviewer)), Reviewer));
+            Assert.Equal((holder, NotificationTypes.AdjustmentResolved), (resolved.RecipientUserId, resolved.Type));
+        }
+
+        // A vehicle custody has no holder: nobody to tell, nothing invented.
+        Assert.Empty(NotificationRules.For(Change("CustodyAdjustment", "Added", null, "Posted", ("CreatedBy", Reviewer)), Reviewer));
+    }
+
+    [Fact]
+    public void An_hr_request_reaches_hr_through_its_alert_rows_and_the_employee_hears_questions_answers_and_the_decision()
+    {
+        const int employee = 71;
+        var alert = Assert.Single(NotificationRules.For(Change("HrRequestAlert", "Added", null, null, ("RecipientUserId", Reviewer)), employee));
+        Assert.Equal((Reviewer, NotificationTypes.HrRequestSubmitted, "طلب موارد بشرية بانتظارك"), (alert.RecipientUserId, alert.Type, alert.TitleAr));
+        Assert.Empty(NotificationRules.For(Change("HrRequest", "Added", null, "Submitted", ("SubmittedBy", employee)), employee));
+
+        var asked = Assert.Single(NotificationRules.For(Change("HrRequest", "Modified", "UnderReview", "NeedsInfo", ("SubmittedBy", employee), ("ReviewedBy", Reviewer)), Reviewer));
+        Assert.Equal((employee, NotificationTypes.HrRequestNeedsInfo), (asked.RecipientUserId, asked.Type));
+        foreach (var outcome in new[] { "Approved", "Rejected", "Closed" })
+        {
+            var decided = Assert.Single(NotificationRules.For(Change("HrRequest", "Modified", "UnderReview", outcome, ("SubmittedBy", employee), ("DecidedBy", Reviewer)), Reviewer));
+            Assert.Equal((employee, NotificationTypes.HrRequestDecided), (decided.RecipientUserId, decided.Type));
+        }
+
+        // The employee answering HR's question moves the request back to Submitted: HR hears through a fresh alert row, not a status rule.
+        Assert.Empty(NotificationRules.For(Change("HrRequest", "Modified", "NeedsInfo", "Submitted", ("SubmittedBy", employee)), employee));
+    }
+
+    [Fact]
     public void A_price_range_request_is_answered_to_its_requester()
     {
         var change = Change("PriceRange", "Modified", "Pending", "Approved", ("RequestedBy", Recorder), ("DecidedBy", Reviewer));

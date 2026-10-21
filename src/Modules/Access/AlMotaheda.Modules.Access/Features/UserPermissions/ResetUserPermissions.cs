@@ -64,7 +64,8 @@ internal static class ResetUserPermissions
         }
 
         var now = time.GetUtcNow().UtcDateTime;
-        await db.UserPermissionOverrides.Where(link => link.UserId == user.Id).ExecuteDeleteAsync(cancellationToken);
+        // Removed through the change tracker, not a bulk delete, so the audit trail keeps every removed override.
+        db.UserPermissionOverrides.RemoveRange(await db.UserPermissionOverrides.Where(link => link.UserId == user.Id).ToListAsync(cancellationToken));
 
         user.UpdatedAt = now;
         user.UpdatedBy = scope.ActorId;

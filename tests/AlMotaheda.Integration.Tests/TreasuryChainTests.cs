@@ -163,6 +163,74 @@ public sealed class TreasuryChainTests(SqlServerFixture database)
     }
 
     [DatabaseFact]
+    public async Task The_engineer_home_page_the_approval_queue_and_the_central_custody_page_read_the_same_ledgers()
+    {
+        await using var api = await ProjectsApi.StartAsync(database);
+        var cast = await WorkforceApi.CastAsync(api, "INT-HOME-01");
+        await OpenTreasuryAsync(api, cast.Executive, 1_000_000m);
+        var accountant = await OpenAccountAsync(api, cast.Accountant, cast.Accountant.UserId);
+        await FundedAsync(api, cast.Executive, cast.Accountant, accountant.IdOf(), 60_000m);
+        var today = WorkforceApi.Today(api);
+        var period = $"from={Iso(today.AddDays(-7))}&to={Iso(today)}";
+
+        // Section 12.A: the engineer asks Projects for a 2,000 funding; the home page shows the project, no balance yet, one pending funding. A request is not a transfer.
+        var asked = await Send(api, cast.Engineer, HttpMethod.Post, $"/api/projects/{cast.ProjectId}/custody/fundings",
+            new { amount = 2_000m, method = "Cash", requestedDate = Iso(today), notes = "Week's site cash", idempotencyKey = Guid.NewGuid().ToString() }, HttpStatusCode.Created);
+        var home = await Get(api, cast.Engineer, "/api/me/overview");
+        Assert.Equal(cast.ProjectId, Assert.Single(home.GetProperty("projects").EnumerateArray()).GetProperty("projectId").GetInt32());
+        Assert.Equal(0m, home.GetProperty("custodyBalanceTotal").GetDecimal());
+        var funding = Assert.Single(home.GetProperty("sections").EnumerateArray(), section => section.GetProperty("section").GetString() == "Funding");
+        Assert.Equal((1m, 2_000m), (funding.GetProperty("figures").GetProperty("pendingFundingCount").GetDecimal(), funding.GetProperty("figures").GetProperty("pendingFundingAmount").GetDecimal()));
+        Assert.Equal(asked.GetProperty("id").GetInt32(), Assert.Single(funding.GetProperty("items").EnumerateArray()).GetProperty("recordId").GetInt32());
+
+        // Section 18: the request is in the Executive's queue (payments Approve), with no project needed for company-wide items; the manager (payments View) sees no payment requests to decide.
+        var queue = await Get(api, cast.Executive, "/api/inbox");
+        Assert.Contains(queue.GetProperty("items").EnumerateArray(), item => item.GetProperty("recordType").GetString() == "PaymentRequest" && item.GetProperty("recordId").GetInt32() == asked.GetProperty("id").GetInt32());
+        Assert.DoesNotContain((await Get(api, cast.Manager, "/api/inbox")).GetProperty("items").EnumerateArray(), item => item.GetProperty("recordType").GetString() == "PaymentRequest");
+
+        // The Accountant hands 2,000 from their custody instead; while it is only requested the engineer's queue is empty, once disbursed it says "cash to receive".
+        var transfer = await Send(api, cast.Accountant, HttpMethod.Post, "/api/custody-transfers", new
+        {
+            amount = 2_000m, purpose = "CustodyAdvance", source = new { kind = "Custody", accountId = accountant.IdOf() },
+            destination = new { kind = "Custody", accountKind = "EngineerProject", holderUserId = cast.Engineer.UserId, referenceId = cast.ProjectId }, idempotencyKey = Guid.NewGuid().ToString(),
+        }, HttpStatusCode.Created);
+        Assert.Contains((await Get(api, cast.Executive, "/api/inbox")).GetProperty("items").EnumerateArray(), item => item.GetProperty("recordType").GetString() == "CustodyTransfer" && item.GetProperty("reason").GetString() == "Review" && item.GetProperty("projectId").GetInt32() == cast.ProjectId);
+        Assert.DoesNotContain((await Get(api, cast.Engineer, "/api/inbox")).GetProperty("items").EnumerateArray(), item => item.GetProperty("recordType").GetString() == "CustodyTransfer");
+        transfer = await Stepped(api, cast.Executive, transfer, "approve");
+        transfer = await Stepped(api, cast.Accountant, transfer, "disburse");
+        Assert.Contains((await Get(api, cast.Engineer, "/api/inbox")).GetProperty("items").EnumerateArray(), item => item.GetProperty("recordType").GetString() == "CustodyTransfer" && item.GetProperty("reason").GetString() == "Requested");
+        await Stepped(api, cast.Engineer, transfer, "receive");
+        var engineerAccount = transfer.GetProperty("destinationAccountId").GetInt32();
+        Assert.Equal(2_000m, (await Get(api, cast.Engineer, "/api/me/overview")).GetProperty("custodyBalanceTotal").GetDecimal());
+
+        // The engineer buys 300 of cement in cash with no receipt filed, and the Accountant (projects Approve) approves it: spent, but unsupported until a document is linked.
+        var expense = await CoreApi.RecordApprovedAsync(api, cast.Engineer, cast.Accountant, cast.ProjectId, CoreApi.ExpenseBody(300m, "Custody", changes: new() { ["expenseDate"] = Iso(today) }));
+        var monitor = await Get(api, cast.Executive, $"/api/custody-monitor?{period}");
+        var row = Assert.Single(monitor.GetProperty("items").EnumerateArray(), item => item.GetProperty("accountId").GetInt32() == engineerAccount);
+        Assert.Equal((1_700m, 2_000m, 300m, 300m, 1, "engineer", cast.ProjectId), (row.GetProperty("posted").GetDecimal(), row.GetProperty("receivedInPeriod").GetDecimal(), row.GetProperty("spentInPeriod").GetDecimal(),
+            row.GetProperty("unsupported").GetDecimal(), row.GetProperty("unsupportedCount").GetInt32(), row.GetProperty("holderRole").GetString(), row.GetProperty("projectId").GetInt32()));
+        var detail = await Get(api, cast.Executive, $"/api/custody-monitor/{engineerAccount}?{period}");
+        var expenseLine = Assert.Single(detail.GetProperty("statement").EnumerateArray(), line => line.GetProperty("sourceType").GetString() == "ProjectExpense");
+        Assert.Equal((-300m, false), (expenseLine.GetProperty("amount").GetDecimal(), expenseLine.GetProperty("hasEvidence").GetBoolean()));
+        var accountantRow = Assert.Single(monitor.GetProperty("items").EnumerateArray(), item => item.GetProperty("accountId").GetInt32() == accountant.IdOf());
+        Assert.Equal((58_000m, 2_000m, 0m), (accountantRow.GetProperty("posted").GetDecimal(), accountantRow.GetProperty("transferredOutInPeriod").GetDecimal(), accountantRow.GetProperty("spentInPeriod").GetDecimal()));
+
+        // The receipt is filed in the Archive against the expense: supported now; the page and the statement agree.
+        await UploadReceiptAsync(api, cast.Engineer, cast.ProjectId, CoreApi.Id(expense));
+        var supported = Assert.Single((await Get(api, cast.Executive, $"/api/custody-monitor?{period}")).GetProperty("items").EnumerateArray(), item => item.GetProperty("accountId").GetInt32() == engineerAccount);
+        Assert.Equal((0m, 0), (supported.GetProperty("unsupported").GetDecimal(), supported.GetProperty("unsupportedCount").GetInt32()));
+        Assert.True(Assert.Single((await Get(api, cast.Executive, $"/api/custody-monitor/{engineerAccount}?{period}")).GetProperty("statement").EnumerateArray(), line => line.GetProperty("sourceType").GetString() == "ProjectExpense").GetProperty("hasEvidence").GetBoolean());
+
+        // The home page is the engineer's own: the manager's page shows no custody, and the engineer's labor section counts their sheets.
+        Assert.Empty((await Get(api, cast.Manager, "/api/me/overview")).GetProperty("custody").EnumerateArray());
+        var worker = await WorkforceApi.HireAsync(api, cast.Executive, cast.ProjectId, WorkforceApi.Plumber, "Saad", dailyRate: 400m);
+        await WorkforceApi.RecordApprovedSheetAsync(api, cast, cast.ProjectId, today.AddDays(-1), WorkforceApi.Line(worker, 1m));
+        var labor = Assert.Single((await Get(api, cast.Engineer, "/api/me/overview")).GetProperty("sections").EnumerateArray(), section => section.GetProperty("section").GetString() == "Labor");
+        Assert.Equal(1m, labor.GetProperty("figures").GetProperty("sheetsApprovedThisWeek").GetDecimal());
+        Assert.Equal(0m, (await Get(api, cast.Accountant, $"/api/projects/{cast.ProjectId}/labor/summary")).GetProperty("paid").GetDecimal());
+    }
+
+    [DatabaseFact]
     public async Task A_payroll_batch_distributes_no_more_than_its_allocation_or_than_workforce_says_is_owed()
     {
         await using var api = await ProjectsApi.StartAsync(database);
@@ -343,6 +411,23 @@ public sealed class TreasuryChainTests(SqlServerFixture database)
 
     private static async Task<JsonElement> ProjectCustody(ProjectsApi api, Session session, int projectId, int holderUserId) =>
         (await Get(api, session, $"/api/projects/{projectId}/custody/{holderUserId}")).GetProperty("custody");
+
+    /// <summary>Files a receipt photo in the project archive against the expense (the Archive's upload form).</summary>
+    private static async Task UploadReceiptAsync(ProjectsApi api, Session session, int projectId, int expenseId)
+    {
+        using var content = new MultipartFormDataContent();
+        content.Add(new StringContent("Cement receipt"), "title");
+        content.Add(new StringContent("Receipt"), "category");
+        content.Add(new StringContent("Expense"), "entityType");
+        content.Add(new StringContent(expenseId.ToString(CultureInfo.InvariantCulture)), "entityId");
+        var file = new ByteArrayContent([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, .. new byte[40], 0xFF, 0xD9]);
+        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/jpeg");
+        content.Add(file, "file", "receipt.jpg");
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/projects/{projectId}/documents") { Content = content };
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", session.AccessToken);
+        var response = await api.Access.App.Client.SendAsync(request);
+        await AccessApi.EnsureStatus(response, HttpStatusCode.Created);
+    }
 
     private static List<JsonElement> Rows(JsonElement report) => report.GetProperty("rows").EnumerateArray().Select(row => row.GetProperty("cells")).ToList();
 

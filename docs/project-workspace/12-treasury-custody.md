@@ -289,3 +289,64 @@ violations, HR assignments and referrals, the GPS status page (truthful "no prov
   disbursements); a project's or vehicle's own entries are governed by their modules.
 - The payroll batch of kind `Salaries` reads the sheet's entitlement from HR but its distribution is one transfer;
   the sheet itself is still paid through the existing salary payment request.
+
+## 10. Sections 12 to 18 of the second brief (engineer, accountant, approvals, central page, audit)
+
+Decisions T10 to T16 in `07-decisions.md`. What exists and what was added:
+
+**Engineer account (12).** `GET /api/me/overview` (any signed-in user; Projects composes it): the projects the
+caller is on (`memberships` responsibility), their cash custody on each project (received, returned, spent approved,
+spent pending, balance, pending count), their purchases and expenses waiting for review, the latest custody
+movements, and each module's section through `IPersonalOverviewSource`: `Funding` (Finance: custody funding requests
+and transfers, pending amounts: a request is never a transfer), `Labor` (Workforce: daily sheets by status, weekly
+settlements pending/confirmed), `Hr` (HR: own requests by status, cases about them). The daily labor cost record is
+the Workforce `DailySheet` (T12); the weekly settlement is the Workforce `PayrollSettlement`, confirmed by the
+Accountant, which alone marks wages paid; a settlement above the custody balance is refused under policy Block
+(409 `custody_insufficient`) or recorded with a negative balance under Warn.
+
+**HR requests (12.D).** `hr.HrRequest` (`HRQ-`; types AttendanceCorrection, Leave, Permission,
+OvertimeClarification, PayrollQuestion, CaseResponse, Other; statuses Submitted → UnderReview → NeedsInfo →
+Submitted, and Approved / Rejected / Closed with a note), `HrRequestMessage` (the thread), `HrRequestAttachment`
+(evidence in the shared private store under `Hr:Storage:RootPath`, typed from the bytes), `HrRequestAlert` (who was
+told). Self-service: `GET/POST /api/hr/my/requests`, `GET /api/hr/my/requests/{id}`, `POST …/messages`,
+`POST /api/hr/my/attachments`, `GET /api/hr/my/referrals` (the subject, status and outcome of cases about them;
+never the referrer's notes). HR: `GET /api/hr/requests` (hr View), `/start-review`, `/request-info`, `/messages`
+(hr Edit), `/approve`, `/reject`, `/close` (hr Approve, never one's own). `GET /api/hr/attachments/{id}/content`
+for the uploader or HR. A login not linked to an employee gets 404 `not_an_employee`. An approved request changes no
+payroll by itself.
+
+**Accountant supervision (13).** `FIN-ACTIVITY` report (finance See money): every payment request, custody transfer,
+adjustment and cash count of a period with who initiated it, who decided, the evidence reference and the link. The
+Accountant initiates (requests, transfers, cash counts) and never decides: payments Approve and custody Approve are
+the Executive's by default and every decision endpoint re-checks the database. Transfers between custody holders
+post both sides only on receipt (section 2). The `Office` kind joins the registry when the Office module is merged.
+
+**Price proposals (14).** Already the Price Control design: a range is insert-only, proposed with a reason, approved
+or rejected by a database-checked Executive, never one's own; a pending range changes no calculation; the previous
+range stays. Added: a new item's first range is a proposal unless an Executive creates it (T16); pending proposals
+are in the Executive's inbox (`PriceRange`).
+
+**Central custody page (16).** `GET /api/custody-monitor?from&to&kind&status&holderUserId&projectId&attention`
+(custody See money or finance See money): one row per account with holder and role, posted, pending, reserved, in
+transit, available, owed (a negative balance), the period's received / returned / transferred out / spent, the
+unsupported spending (approved custody expenses with no Archive document, T14), open transfers, last entry, last
+period end; totals over the filtered set. `GET /api/custody-monitor/{accountId}` opens the unified statement (paged,
+newest first, `hasEvidence` per line), open transfers, adjustments, cash counts and period closes. Figures come from
+`ICustodyLedgerSource.ActivityAsync` / `StatementAsync` (Projects, Fleet) or Finance's movements.
+Adjustments (16.A): posted against the holder (`holderUserId`), with a `shortfall` when a debit went beyond the
+balance under Warn, told to the holder; `POST …/adjustments/{id}/dispute` (the holder, a note) and
+`POST …/adjustments/{id}/resolve` (custody Approve, never the holder: keep, or undo with an opposite adjustment
+pointing at the original). Never a payroll deduction (T15).
+
+**Audit (17).** Every module context but Platform's own tables goes through `AuditTrailInterceptor`; permission and
+role removals now go through the change tracker, so the removed grants are in the trail. `GET /api/audit-entries`
+(Executive) filters by module, entityType, entityKey, projectId, userId, from, to, and now `action` and
+`statusAfter`. The table is append-only at the database (`ProtectAuditTrail` trigger refuses UPDATE and DELETE).
+
+**Approval queues (18).** The work inbox carries company-wide items: custody transfers to decide (payments
+Approve), cash to confirm receiving (the holder), rejected transfers (the requester), payment requests to decide,
+price proposals (catalog Approve), HR requests (hr Edit) and questions back to the employee. Status vocabularies stay
+each flow's own (`StatusFlow`), with Requested/Submitted, Approved, Rejected, Disbursed/Received or Paid, Reversed.
+
+Settings added: `Hr:Storage:RootPath` (default `Archive:Storage:RootPath/hr-module`), `Hr:Storage:MaxMegabytes` (15).
+Migrations added: HR `HrRequests`, Finance `CustodyAdjustmentDisputes`, Platform `ProtectAuditTrail`.

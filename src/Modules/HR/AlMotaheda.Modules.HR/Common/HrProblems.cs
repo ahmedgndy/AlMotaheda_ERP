@@ -39,6 +39,26 @@ internal static class HrProblems
     public static ProblemHttpResult SheetNotFound() => NotFound("salary sheet");
     public static ProblemHttpResult AssignmentNotFound() => NotFound("assignment");
     public static ProblemHttpResult ReferralNotFound() => NotFound("referral");
+    public static ProblemHttpResult RequestNotFound() => NotFound("request");
+    public static ProblemHttpResult AttachmentNotFound() => NotFound("attachment");
+
+    public const string NotAnEmployee = "not_an_employee";
+    public const string FileTypeNotAllowed = "file_type_not_allowed";
+    public const string FileTooLarge = "file_too_large";
+    public const string StorageUnavailable = "storage_unavailable";
+
+    /// <summary>The signed-in user is not linked to an employee record, so HR self-service has nothing to show them.</summary>
+    public static ProblemHttpResult NotEmployee() =>
+        ApiProblem.Create(StatusCodes.Status404NotFound, NotAnEmployee, "Your login is not linked to an employee record. Ask HR to link it.");
+
+    public static ProblemHttpResult FileNotAllowed() =>
+        ApiProblem.Create(StatusCodes.Status415UnsupportedMediaType, FileTypeNotAllowed, "Only a photo (JPEG, PNG, WebP, HEIC) or a PDF is accepted.");
+
+    public static ProblemHttpResult TooLarge(int maxMegabytes) =>
+        ApiProblem.Create(StatusCodes.Status413PayloadTooLarge, FileTooLarge, $"The file is larger than {maxMegabytes} MB.");
+
+    public static ProblemHttpResult StorageDown() =>
+        ApiProblem.Create(StatusCodes.Status503ServiceUnavailable, StorageUnavailable, "The evidence folder can't be written right now. Try again in a moment.");
     public static ProblemHttpResult ProjectNotFound() => ApiProblem.NotFoundResult("The project was not found.");
 
     public static ProblemHttpResult AssignedAlready() =>

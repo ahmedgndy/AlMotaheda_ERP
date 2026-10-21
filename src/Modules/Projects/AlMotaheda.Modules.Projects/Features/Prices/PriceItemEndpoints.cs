@@ -130,6 +130,7 @@ internal static class CreatePriceItem
         ProjectsDbContext db,
         IUserDirectory users,
         CompanyClock clock,
+        Security.ExecutiveGate executives,
         ProjectsLog log,
         CancellationToken cancellationToken)
     {
@@ -174,7 +175,10 @@ internal static class CreatePriceItem
             CreatedBy = userId,
         };
         fields.ApplyTo(item);
-        var first = range!.ToRange(PriceRangeStatus.Approved, userId, now, reason: null);
+        // The first reference range is a proposal like any other unless a database-checked Executive sets it (section 14):
+        // nobody's own number becomes the company's reference price without the Executive.
+        var byExecutive = await executives.CheckAsync(httpContext.User, "approve", cancellationToken) is null;
+        var first = range!.ToRange(byExecutive ? PriceRangeStatus.Approved : PriceRangeStatus.Pending, userId, now, reason: byExecutive ? null : "First reference range of a new price item");
         item.Ranges.Add(first);
         db.PriceItems.Add(item);
 

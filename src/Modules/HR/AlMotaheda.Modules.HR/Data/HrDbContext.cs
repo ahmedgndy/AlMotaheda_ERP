@@ -25,6 +25,11 @@ internal sealed class HrDbContext(DbContextOptions<HrDbContext> options) : DbCon
     public DbSet<EmployeeAssignment> EmployeeAssignments => Set<EmployeeAssignment>();
     public DbSet<HrReferral> Referrals => Set<HrReferral>();
 
+    public DbSet<HrRequest> Requests => Set<HrRequest>();
+    public DbSet<HrRequestMessage> RequestMessages => Set<HrRequestMessage>();
+    public DbSet<HrRequestAttachment> RequestAttachments => Set<HrRequestAttachment>();
+    public DbSet<HrRequestAlert> RequestAlerts => Set<HrRequestAlert>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(Schema);

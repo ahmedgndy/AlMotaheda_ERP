@@ -23,7 +23,8 @@ internal sealed record CashCountView(
 
 internal sealed record AdjustmentView(
     int Id, int AccountId, int? CashCountId, DateOnly EntryDate, decimal Amount, string Reason, string EvidenceReference, DateTime CreatedAt, PersonView? CreatedBy,
-    decimal BalanceAfter);
+    decimal BalanceAfter, string Status = "Posted", decimal Shortfall = 0, int? HolderUserId = null, DateTime? DisputedAt = null, string? DisputeNote = null,
+    DateTime? ResolvedAt = null, PersonView? ResolvedBy = null, string? ResolutionNote = null, int? ReversesAdjustmentId = null, string RowVersion = "");
 
 internal sealed record PeriodCloseView(int Id, int AccountId, DateOnly PeriodEnd, decimal ClosingBalance, decimal PendingAtClose, string? Notes, DateTime ClosedAt, PersonView? ClosedBy);
 
@@ -41,6 +42,11 @@ internal static class CustodyControlEndpoints
     internal sealed record AdjustmentRequest(decimal? Amount, string? EntryDate, string? Reason, string? EvidenceReference, int? CashCountId, string? IdempotencyKey);
 
     internal sealed record CloseRequest(string? PeriodEnd, string? Notes);
+
+    internal sealed record DisputeRequest(string? Note, string? RowVersion);
+
+    /// <param name="Reverse">True to undo the adjustment with an opposite one; false to keep it.</param>
+    internal sealed record ResolveRequest(string? Note, bool? Reverse, string? RowVersion);
 
     public static void Map(IEndpointRouteBuilder api)
     {
@@ -65,6 +71,16 @@ internal static class CustodyControlEndpoints
             .RequirePermission(FinancePermissions.Custody, PermissionAction.Approve)
             .WithName("AdjustCustodyBalance")
             .WithSummary("Post a reviewed adjustment with a reason and evidence (custody Approve; never the holder). 409 period_closed");
+
+        accounts.MapPost("/adjustments/{adjustmentId:int}/dispute", DisputeAsync)
+            .RequirePermission(FinancePermissions.Custody, PermissionAction.View)
+            .WithName("DisputeCustodyAdjustment")
+            .WithSummary("The holder explains or objects to an adjustment of their custody (a note is required): a reviewer decides. 409 invalid_status");
+
+        accounts.MapPost("/adjustments/{adjustmentId:int}/resolve", ResolveAsync)
+            .RequirePermission(FinancePermissions.Custody, PermissionAction.Approve)
+            .WithName("ResolveCustodyAdjustment")
+            .WithSummary("Resolve a disputed adjustment (custody Approve; never the holder): keep it, or undo it with an opposite adjustment pointing at it. 409 invalid_status");
 
         accounts.MapGet("/period-closes", ListClosesAsync)
             .RequirePermission(FinancePermissions.Custody, PermissionAction.View)
@@ -332,6 +348,7 @@ internal static class CustodyControlEndpoints
             IdempotencyKey = key,
             CreatedAt = clock.UtcNow,
             CreatedBy = caller.UserId,
+            HolderUserId = account.HolderUserId,
         };
         db.CustodyAdjustments.Add(adjustment);
         try
@@ -360,10 +377,184 @@ internal static class CustodyControlEndpoints
             return refused.Code == CustodyLedgerRefusedException.Busy ? FinanceProblems.CustodyIsBusy() : FinanceProblems.Conflict(refused.Code, refused.Message);
         }
 
+        // A debit beyond what the custody held (policy Warn) is recorded as a shortfall: shown to the reviewer and the holder, routed, never hidden.
+        var after = await ledgers.FiguresAsync(account, cancellationToken);
+        if (adjustment.Amount < 0 && after.Posted < 0)
+        {
+            adjustment.Shortfall = Math.Min(-after.Posted, -adjustment.Amount);
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
         await transaction.CommitAsync(cancellationToken);
         log.CustodyAdjusted(caller.UserId, accountId, adjustment.Id);
-        var after = await ledgers.FiguresAsync(account, cancellationToken);
         return TypedResults.Created($"/api/custody-accounts/{accountId}/adjustments", AdjustmentOf(adjustment, people, after.Posted));
+    }
+
+    /// <summary>The holder's explanation or objection: the adjustment stays posted and is marked for a reviewer.</summary>
+    internal static async Task<Results<Ok<AdjustmentView>, ValidationProblem, ProblemHttpResult>> DisputeAsync(
+        int accountId, int adjustmentId, DisputeRequest request, HttpContext httpContext, FinanceDbContext db, IUserDirectory users, CompanyClock clock, FinanceLog log, CancellationToken cancellationToken)
+    {
+        if (FinanceCaller.From(httpContext.User) is not { } caller)
+        {
+            return ApiProblem.ForbiddenResult();
+        }
+
+        var errors = new ValidationErrors();
+        var note = Input.RequiredText(request.Note, 1000, errors, "note", "The explanation");
+        var rowVersion = RowVersions.Parse(request.RowVersion, errors);
+        if (errors.HasErrors)
+        {
+            return FinanceProblems.Validation(errors);
+        }
+
+        var account = await db.CustodyAccounts.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == accountId, cancellationToken);
+        if (account is null || !CustodyAccountViews.MaySee(caller, account))
+        {
+            return FinanceProblems.CustodyAccountNotFound();
+        }
+
+        if (account.HolderUserId != caller.UserId)
+        {
+            return FinanceProblems.OnlyTheHolder("dispute an adjustment of it");
+        }
+
+        var adjustment = await db.CustodyAdjustments.SingleOrDefaultAsync(candidate => candidate.Id == adjustmentId && candidate.AccountId == accountId, cancellationToken);
+        if (adjustment is null)
+        {
+            return FinanceProblems.AdjustmentNotFound();
+        }
+
+        if (adjustment.Status != CustodyAdjustmentStatus.Posted)
+        {
+            return FinanceProblems.WrongStatus(adjustment.Status.ToString());
+        }
+
+        adjustment.Dispute(note!, clock.UtcNow);
+        db.Entry(adjustment).Property(candidate => candidate.RowVersion).OriginalValue = rowVersion!;
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return ApiProblem.ConcurrencyConflictResult();
+        }
+
+        log.CustodyAdjustmentDisputed(caller.UserId, accountId, adjustment.Id);
+        var people = await users.FindAsync([adjustment.CreatedBy], cancellationToken);
+        return TypedResults.Ok(AdjustmentOf(adjustment, people, null));
+    }
+
+    /// <summary>A reviewer's answer to a dispute: keep the adjustment, or undo it with an opposite adjustment that points at it.</summary>
+    internal static async Task<Results<Ok<AdjustmentView>, ValidationProblem, ProblemHttpResult>> ResolveAsync(
+        int accountId, int adjustmentId, ResolveRequest request, HttpContext httpContext, FinanceDbContext db, CustodyLedgers ledgers, IUserDirectory users,
+        IPermissionCheck permissions, CompanyClock clock, FinanceLog log, CancellationToken cancellationToken)
+    {
+        if (FinanceCaller.From(httpContext.User) is not { } caller)
+        {
+            return ApiProblem.ForbiddenResult();
+        }
+
+        var errors = new ValidationErrors();
+        var note = Input.RequiredText(request.Note, 1000, errors, "note", "The decision note");
+        if (request.Reverse is null)
+        {
+            errors.Add("reverse", "Say whether the adjustment is kept (false) or undone (true).");
+        }
+
+        var rowVersion = RowVersions.Parse(request.RowVersion, errors);
+        if (errors.HasErrors)
+        {
+            return FinanceProblems.Validation(errors);
+        }
+
+        if (!await caller.StillHoldsAsync(permissions, FinancePermissions.Custody, PermissionAction.Approve, cancellationToken))
+        {
+            return FinanceProblems.Revoked();
+        }
+
+        var account = await db.CustodyAccounts.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == accountId, cancellationToken);
+        if (account is null)
+        {
+            return FinanceProblems.CustodyAccountNotFound();
+        }
+
+        if (account.HolderUserId == caller.UserId)
+        {
+            return FinanceProblems.OwnRequest();
+        }
+
+        var adjustment = await db.CustodyAdjustments.SingleOrDefaultAsync(candidate => candidate.Id == adjustmentId && candidate.AccountId == accountId, cancellationToken);
+        if (adjustment is null)
+        {
+            return FinanceProblems.AdjustmentNotFound();
+        }
+
+        if (adjustment.Status != CustodyAdjustmentStatus.Disputed)
+        {
+            return FinanceProblems.WrongStatus(adjustment.Status.ToString());
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        if (!await CustodyLedgers.TryLockAsync(db, accountId, cancellationToken))
+        {
+            return FinanceProblems.CustodyIsBusy();
+        }
+
+        var now = clock.UtcNow;
+        adjustment.Resolve(caller.UserId, now, note!, request.Reverse!.Value);
+        db.Entry(adjustment).Property(candidate => candidate.RowVersion).OriginalValue = rowVersion!;
+        CustodyAdjustment? reversal = null;
+        if (request.Reverse.Value)
+        {
+            reversal = new CustodyAdjustment
+            {
+                AccountId = accountId,
+                HolderUserId = account.HolderUserId,
+                EntryDate = clock.Today,
+                Amount = -adjustment.Amount,
+                Reason = $"Reversal of adjustment {adjustment.Id} after the holder's dispute: {note}",
+                EvidenceReference = adjustment.EvidenceReference,
+                IdempotencyKey = Guid.NewGuid(),
+                CreatedAt = now,
+                CreatedBy = caller.UserId,
+                ReversesAdjustmentId = adjustment.Id,
+            };
+            db.CustodyAdjustments.Add(reversal);
+        }
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            if (reversal is not null)
+            {
+                var write = new CustodyLedgerWrite(account.ReferenceId ?? 0, account.HolderUserId, Math.Abs(reversal.Amount), reversal.EntryDate, CustodyLedgerSources.Adjustment, reversal.Id, reversal.EvidenceReference, reversal.Reason, caller.UserId);
+                if (reversal.Amount > 0)
+                {
+                    await ledgers.ReceiveAsync(account, CustodyMovementKind.Adjustment, write, null, SharedTransaction.Of(db), cancellationToken);
+                }
+                else
+                {
+                    await ledgers.WithdrawAsync(account, CustodyMovementKind.Adjustment, write, null, null, SharedTransaction.Of(db), cancellationToken);
+                }
+            }
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return ApiProblem.ConcurrencyConflictResult();
+        }
+        catch (CustodyLedgerRefusedException refused)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return refused.Code == CustodyLedgerRefusedException.Busy ? FinanceProblems.CustodyIsBusy() : FinanceProblems.Conflict(refused.Code, refused.Message);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        log.CustodyAdjustmentResolved(caller.UserId, accountId, adjustment.Id, adjustment.Status.ToString());
+        var people = await users.FindAsync([adjustment.CreatedBy, caller.UserId], cancellationToken);
+        var after = await ledgers.FiguresAsync(account, cancellationToken);
+        return TypedResults.Ok(AdjustmentOf(adjustment, people, after.Posted));
     }
 
     internal static async Task<Results<Ok<IReadOnlyList<PeriodCloseView>>, ProblemHttpResult>> ListClosesAsync(
@@ -469,7 +660,9 @@ internal static class CustodyControlEndpoints
 
     private static AdjustmentView AdjustmentOf(CustodyAdjustment adjustment, IReadOnlyDictionary<int, UserSummary> people, decimal? balanceAfter) => new(
         adjustment.Id, adjustment.AccountId, adjustment.CashCountId, adjustment.EntryDate, adjustment.Amount, adjustment.Reason, adjustment.EvidenceReference,
-        adjustment.CreatedAt, CustodyAccountViews.Person(adjustment.CreatedBy, people), balanceAfter ?? 0);
+        adjustment.CreatedAt, CustodyAccountViews.Person(adjustment.CreatedBy, people), balanceAfter ?? 0, adjustment.Status.ToString(), adjustment.Shortfall, adjustment.HolderUserId,
+        adjustment.DisputedAt, adjustment.DisputeNote, adjustment.ResolvedAt, CustodyAccountViews.Person(adjustment.ResolvedBy, people), adjustment.ResolutionNote,
+        adjustment.ReversesAdjustmentId, RowVersions.Format(adjustment.RowVersion));
 
     private static PeriodCloseView CloseView(CustodyPeriodClose close, IReadOnlyDictionary<int, UserSummary> people) => new(
         close.Id, close.AccountId, close.PeriodEnd, close.ClosingBalance, close.PendingAtClose, close.Notes, close.ClosedAt, CustodyAccountViews.Person(close.ClosedBy, people));

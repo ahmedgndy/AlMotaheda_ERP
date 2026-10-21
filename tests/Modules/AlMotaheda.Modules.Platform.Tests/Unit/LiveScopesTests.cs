@@ -53,6 +53,9 @@ public sealed class LiveScopesTests
         var claim = Signals(Change("VehicleExpense", 5, statusAfter: "Approved"));
         Assert.Contains("ProjectOverview", claim[0].Signal.Aggregates);
         Assert.Equal(["company:hr"], Signals(Change("HrReferral", null)).Select(signal => signal.Group));
+        Assert.Equal(["company:hr"], Signals(Change("HrRequest", null)).Select(signal => signal.Group));
+        Assert.Empty(LiveScopes.For(Change("HrRequestMessage", null), 1));
+        Assert.Empty(LiveScopes.For(Change("HrRequestAlert", null), 1));
     }
 
     [Fact]

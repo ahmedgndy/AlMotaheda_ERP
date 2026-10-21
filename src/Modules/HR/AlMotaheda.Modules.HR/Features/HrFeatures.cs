@@ -17,6 +17,7 @@ internal static class HrFeatures
     public static void Map(IEndpointRouteBuilder api)
     {
         ListDepartments.Map(api);
+        Requests.HrRequestEndpoints.Map(api);
         SaveDepartment.Map(api);
 
         ListEmployees.Map(api);

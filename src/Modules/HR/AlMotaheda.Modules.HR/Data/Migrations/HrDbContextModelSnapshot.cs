@@ -488,6 +488,250 @@ namespace AlMotaheda.Modules.HR.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.HR.Data.HrRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("DecidedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(1000)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Details")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly?>("FromDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasComputedColumnSql("CONCAT('HRQ-', REPLICATE('0', 6 - LEN([Id])), [Id])", true);
+
+                    b.Property<int?>("ReferralId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ReviewStartedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("ReviewedBy")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("SubmittedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("SubmittedBy")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly?>("ToDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_HrRequest_IdempotencyKey");
+
+                    b.HasIndex("Number")
+                        .IsUnique()
+                        .HasDatabaseName("UX_HrRequest_Number");
+
+                    b.HasIndex("ReferralId");
+
+                    b.HasIndex(new[] { "EmployeeId", "Status" }, "IX_HrRequest_Employee_Status");
+
+                    b.HasIndex(new[] { "Status", "SubmittedAt" }, "IX_HrRequest_Status_SubmittedAt");
+
+                    b.ToTable("HrRequest", "hr", t =>
+                        {
+                            t.HasCheckConstraint("CK_HrRequest_CaseResponse", "([Type] = 'CaseResponse' AND [ReferralId] IS NOT NULL) OR ([Type] <> 'CaseResponse' AND [ReferralId] IS NULL)");
+
+                            t.HasCheckConstraint("CK_HrRequest_Dates", "[FromDate] IS NULL OR [ToDate] IS NULL OR [ToDate] >= [FromDate]");
+
+                            t.HasCheckConstraint("CK_HrRequest_Decided", "([Status] IN ('Submitted', 'UnderReview', 'NeedsInfo') AND [DecidedAt] IS NULL AND [DecidedBy] IS NULL AND [DecisionNote] IS NULL) OR ([Status] IN ('Approved', 'Rejected', 'Closed') AND [DecidedAt] IS NOT NULL AND [DecidedBy] IS NOT NULL AND [DecisionNote] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_HrRequest_Status", "[Status] IN ('Submitted', 'UnderReview', 'NeedsInfo', 'Approved', 'Rejected', 'Closed')");
+
+                            t.HasCheckConstraint("CK_HrRequest_Type", "[Type] IN ('AttendanceCorrection', 'Leave', 'Permission', 'OvertimeClarification', 'PayrollQuestion', 'CaseResponse', 'Other')");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.HR.Data.HrRequestAlert", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("RecipientUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RequestId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestId", "RecipientUserId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_HrRequestAlert_Request_Recipient");
+
+                    b.ToTable("HrRequestAlert", "hr");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.HR.Data.HrRequestAttachment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("MessageId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RequestId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(60)");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("UploadedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_HrRequestAttachment_IdempotencyKey");
+
+                    b.HasIndex("StorageKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_HrRequestAttachment_StorageKey");
+
+                    b.HasIndex(new[] { "RequestId" }, "IX_HrRequestAttachment_Request");
+
+                    b.ToTable("HrRequestAttachment", "hr", t =>
+                        {
+                            t.HasCheckConstraint("CK_HrRequestAttachment_Sha256", "LEN([Sha256]) = 64 AND [Sha256] COLLATE Latin1_General_BIN NOT LIKE '%[^0-9a-f]%'");
+
+                            t.HasCheckConstraint("CK_HrRequestAttachment_Size", "[SizeBytes] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.HR.Data.HrRequestMessage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AuthorUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<bool>("FromHr")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("RequestId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "RequestId", "Id" }, "IX_HrRequestMessage_Request");
+
+                    b.ToTable("HrRequestMessage", "hr");
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.HR.Data.PayrollInput", b =>
                 {
                     b.Property<int>("Id")
@@ -814,6 +1058,52 @@ namespace AlMotaheda.Modules.HR.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.HR.Data.HrRequest", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.HR.Data.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("AlMotaheda.Modules.HR.Data.HrReferral", null)
+                        .WithMany()
+                        .HasForeignKey("ReferralId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.HR.Data.HrRequestAlert", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.HR.Data.HrRequest", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.HR.Data.HrRequestAttachment", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.HR.Data.HrRequest", "Request")
+                        .WithMany("Attachments")
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Request");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.HR.Data.HrRequestMessage", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.HR.Data.HrRequest", "Request")
+                        .WithMany("Messages")
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Request");
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.HR.Data.PayrollInput", b =>
                 {
                     b.HasOne("AlMotaheda.Modules.HR.Data.Employee", null)
@@ -845,6 +1135,13 @@ namespace AlMotaheda.Modules.HR.Data.Migrations
                         .HasForeignKey("EmployeeId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.HR.Data.HrRequest", b =>
+                {
+                    b.Navigation("Attachments");
+
+                    b.Navigation("Messages");
                 });
 
             modelBuilder.Entity("AlMotaheda.Modules.HR.Data.SalarySheet", b =>

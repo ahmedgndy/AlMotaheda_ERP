@@ -325,7 +325,21 @@ internal sealed class CustodyAdjustmentConfiguration : IEntityTypeConfiguration<
     public void Configure(EntityTypeBuilder<CustodyAdjustment> builder)
     {
         builder.ToTable(nameof(CustodyAdjustment), table =>
-            table.HasCheckConstraint("CK_CustodyAdjustment_Amount", "[Amount] <> 0"));
+        {
+            table.HasCheckConstraint("CK_CustodyAdjustment_Amount", "[Amount] <> 0");
+            table.HasCheckConstraint("CK_CustodyAdjustment_Status", $"[Status] IN ({SqlList.Of(Enum.GetNames<CustodyAdjustmentStatus>())})");
+            table.HasCheckConstraint("CK_CustodyAdjustment_Shortfall", "[Shortfall] >= 0");
+            table.HasCheckConstraint("CK_CustodyAdjustment_Dispute", "([Status] = 'Posted' AND [DisputedAt] IS NULL) OR ([Status] <> 'Posted' AND [DisputedAt] IS NOT NULL AND [DisputeNote] IS NOT NULL)");
+            table.HasCheckConstraint("CK_CustodyAdjustment_Resolved", "([Status] IN ('Posted', 'Disputed') AND [ResolvedAt] IS NULL AND [ResolvedBy] IS NULL) OR ([Status] IN ('Upheld', 'Reversed') AND [ResolvedAt] IS NOT NULL AND [ResolvedBy] IS NOT NULL AND [ResolutionNote] IS NOT NULL)");
+        });
+        builder.Property(adjustment => adjustment.Status).HasConversion<string>().HasMaxLength(20);
+        builder.Property(adjustment => adjustment.Shortfall).HasPrecision(18, 2);
+        builder.Property(adjustment => adjustment.DisputeNote).HasMaxLength(1000).IsUnicode();
+        builder.Property(adjustment => adjustment.ResolutionNote).HasMaxLength(1000).IsUnicode();
+        builder.Property(adjustment => adjustment.RowVersion).IsRowVersion();
+        builder.HasOne<CustodyAdjustment>().WithMany().HasForeignKey(adjustment => adjustment.ReversesAdjustmentId).OnDelete(DeleteBehavior.NoAction);
+        builder.HasIndex(adjustment => adjustment.ReversesAdjustmentId).IsUnique().HasFilter("[ReversesAdjustmentId] IS NOT NULL").HasDatabaseName("UX_CustodyAdjustment_Reverses");
+        builder.HasIndex(adjustment => new { adjustment.Status, adjustment.Id }, "IX_CustodyAdjustment_Status");
 
         builder.Property(adjustment => adjustment.Reason).HasMaxLength(ReasonMaxLength).IsUnicode();
         builder.Property(adjustment => adjustment.EvidenceReference).HasMaxLength(EvidenceMaxLength).IsUnicode();

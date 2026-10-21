@@ -45,6 +45,10 @@ public sealed class FinanceApiSecurityTests
         { "POST", "/api/custody-transfers/1/receive", "custody:V" },
         { "POST", "/api/custody-transfers/1/cancel", "custody:V" },
         { "POST", "/api/custody-transfers/1/reverse", "custody:A" },
+        { "GET", "/api/custody-monitor", "custody:F;finance:F" },
+        { "GET", "/api/custody-monitor/1", "custody:F;finance:F" },
+        { "POST", "/api/custody-accounts/1/adjustments/2/dispute", "custody:V" },
+        { "POST", "/api/custody-accounts/1/adjustments/2/resolve", "custody:A" },
         { "GET", "/api/payroll-batches", "custody:VF" },
         { "GET", "/api/payroll-batches/1", "custody:VF" },
         { "POST", "/api/payroll-batches", "custody:A" },
@@ -70,10 +74,13 @@ public sealed class FinanceApiSecurityTests
     public async Task Requests_without_the_permission_get_403(string method, string path, string permission)
     {
         await using var app = await TestApplication.StartAsync();
-        var (module, letter) = (permission.Split(':')[0], permission.Split(':')[1]);
-        var others = new string("VCEAF".Where(candidate => !letter.Contains(candidate)).ToArray());
-        var modules = new[] { "payments", "finance", "custody" }.Where(candidate => candidate != module).Select(candidate => (candidate, "VCEAF")).ToList();
-        var token = TestTokens.Create(role: "accountant", permissions: [(module, others), .. modules]);
+        // "module:letters;module:letters": every other letter of every named module, none of the letters the endpoint accepts.
+        var needs = permission.Split(';').Select(part => (Module: part.Split(':')[0], Letters: part.Split(':')[1])).ToList();
+        var grants = new[] { "payments", "finance", "custody" }
+            .Select(candidate => (candidate, new string("VCEAF".Where(letter => !needs.Any(need => need.Module == candidate && need.Letters.Contains(letter))).ToArray())))
+            .Where(grant => grant.Item2.Length > 0)
+            .ToList();
+        var token = TestTokens.Create(role: "accountant", permissions: [.. grants]);
 
         var response = await Send(app, method, path, token, method == "GET" ? null : Body(path));
 

@@ -150,6 +150,14 @@ namespace AlMotaheda.Modules.Finance.Data.Migrations
                     b.Property<int>("CreatedBy")
                         .HasColumnType("int");
 
+                    b.Property<string>("DisputeNote")
+                        .HasMaxLength(1000)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("DisputedAt")
+                        .HasColumnType("datetime2(3)");
+
                     b.Property<DateOnly>("EntryDate")
                         .HasColumnType("date");
 
@@ -158,6 +166,9 @@ namespace AlMotaheda.Modules.Finance.Data.Migrations
                         .HasMaxLength(200)
                         .IsUnicode(true)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("HolderUserId")
+                        .HasColumnType("int");
 
                     b.Property<Guid>("IdempotencyKey")
                         .HasColumnType("uniqueidentifier");
@@ -168,6 +179,35 @@ namespace AlMotaheda.Modules.Finance.Data.Migrations
                         .IsUnicode(true)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("ResolutionNote")
+                        .HasMaxLength(1000)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("ResolvedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ReversesAdjustmentId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<decimal>("Shortfall")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CashCountId");
@@ -176,11 +216,26 @@ namespace AlMotaheda.Modules.Finance.Data.Migrations
                         .IsUnique()
                         .HasDatabaseName("UX_CustodyAdjustment_IdempotencyKey");
 
+                    b.HasIndex("ReversesAdjustmentId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_CustodyAdjustment_Reverses")
+                        .HasFilter("[ReversesAdjustmentId] IS NOT NULL");
+
                     b.HasIndex(new[] { "AccountId", "EntryDate" }, "IX_CustodyAdjustment_Account_Date");
+
+                    b.HasIndex(new[] { "Status", "Id" }, "IX_CustodyAdjustment_Status");
 
                     b.ToTable("CustodyAdjustment", "finance", t =>
                         {
                             t.HasCheckConstraint("CK_CustodyAdjustment_Amount", "[Amount] <> 0");
+
+                            t.HasCheckConstraint("CK_CustodyAdjustment_Dispute", "([Status] = 'Posted' AND [DisputedAt] IS NULL) OR ([Status] <> 'Posted' AND [DisputedAt] IS NOT NULL AND [DisputeNote] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_CustodyAdjustment_Resolved", "([Status] IN ('Posted', 'Disputed') AND [ResolvedAt] IS NULL AND [ResolvedBy] IS NULL) OR ([Status] IN ('Upheld', 'Reversed') AND [ResolvedAt] IS NOT NULL AND [ResolvedBy] IS NOT NULL AND [ResolutionNote] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_CustodyAdjustment_Shortfall", "[Shortfall] >= 0");
+
+                            t.HasCheckConstraint("CK_CustodyAdjustment_Status", "[Status] IN ('Posted', 'Disputed', 'Upheld', 'Reversed')");
                         });
                 });
 
@@ -1273,6 +1328,11 @@ namespace AlMotaheda.Modules.Finance.Data.Migrations
                     b.HasOne("AlMotaheda.Modules.Finance.Data.CustodyCashCount", null)
                         .WithMany()
                         .HasForeignKey("CashCountId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("AlMotaheda.Modules.Finance.Data.CustodyAdjustment", null)
+                        .WithMany()
+                        .HasForeignKey("ReversesAdjustmentId")
                         .OnDelete(DeleteBehavior.NoAction);
                 });
 

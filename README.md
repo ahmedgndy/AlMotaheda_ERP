@@ -120,7 +120,12 @@ Details: [deploy/README.md](deploy/README.md).
 - `Fleet__Gps__Provider` is `None` until a vehicle tracking provider is integrated: the location endpoints then
   answer "not configured" and show no positions. `Fleet__Gps__RetentionDays` (90) applies once a provider exists.
 - `Fleet__Storage__RootPath` is where claim evidence (odometer photos, receipts) is kept; by default a
-  `fleet-module` folder under `Archive__Storage__RootPath`. Back it up with the archive.
+  `fleet-module` folder under `Archive__Storage__RootPath`. Back it up with the archive. `Hr__Storage__RootPath` is
+  the same for the evidence of employees' HR requests (default: an `hr-module` folder under the archive folder;
+  `Hr__Storage__MaxMegabytes`, default 15). When either follows the archive folder, the Archive module's startup
+  check covers it.
+- The audit trail table (`platform.AuditEntry`) is append-only at the database: the `ProtectAuditTrail` migration
+  adds a trigger that refuses every update and delete. Dropping that trigger is a DBA action, visible as such.
 - `Projects__TimeZone` is the company time zone (default `Africa/Cairo`). The server needs time zone data; on a
   minimal container image without it, install `tzdata` or set `UTC`.
 - Turn on `READ_COMMITTED_SNAPSHOT` for the database.

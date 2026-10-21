@@ -37,6 +37,12 @@ public sealed class HrModule : IModule
         services.AddScoped<IEmployeeDirectory, EmployeeDirectoryContract>();
         services.AddScoped<IHrReferrals, HrReferralsContract>();
         services.AddScoped<IReportSource, HrReports>();
+        services.AddScoped<Projects.Contracts.IPersonalOverviewSource, Integration.HrPersonalOverview>();
+        services.AddScoped<Projects.Contracts.IWorkInboxSource, Integration.HrInboxSource>();
+        services.AddOptions<Common.HrStorageOptions>().Bind(configuration.GetSection(Common.HrStorageOptions.SectionName)).ValidateOnStart();
+        services.AddSingleton<Microsoft.Extensions.Options.IPostConfigureOptions<Common.HrStorageOptions>, Common.HrStorageOptionsSetup>();
+        services.AddSingleton<Microsoft.Extensions.Options.IValidateOptions<Common.HrStorageOptions>, Common.HrStorageOptionsValidator>();
+        services.AddSingleton<Storage.IHrFileStore, Storage.LocalHrFileStore>();
         HrFeatures.AddServices(services);
 
         services.AddHostedService<HrStartup>();

@@ -18,7 +18,7 @@ public sealed class DatabaseSchemaTests
         using var db = CreateContext();
 
         Assert.False(db.Database.HasPendingModelChanges(), "The model changed without a migration. Run dotnet ef migrations add.");
-        Assert.Equal(["InitialFinance", "ImportExistingPayments", "SalaryPayments", "CustodyFunding", "TreasuryAndCustody"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
+        Assert.Equal(["InitialFinance", "ImportExistingPayments", "SalaryPayments", "CustodyFunding", "TreasuryAndCustody", "CustodyAdjustmentDisputes"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
     }
 
     [Theory]
@@ -63,6 +63,9 @@ public sealed class DatabaseSchemaTests
     [InlineData("CREATE UNIQUE INDEX [UX_PayrollBatchAllocation_Batch_Project] ON [finance].[PayrollBatchAllocation] ([BatchId], [ProjectId])")]
     [InlineData("CONSTRAINT [CK_CustodyCashCount_Difference] CHECK ([Difference] = [CountedAmount] - [BookBalance])")]
     [InlineData("CONSTRAINT [CK_CustodyAdjustment_Amount] CHECK ([Amount] <> 0)")]
+    [InlineData("CONSTRAINT [CK_CustodyAdjustment_Status] CHECK ([Status] IN ('Posted', 'Disputed', 'Upheld', 'Reversed'))")]
+    [InlineData("CONSTRAINT [CK_CustodyAdjustment_Shortfall] CHECK ([Shortfall] >= 0)")]
+    [InlineData("CREATE UNIQUE INDEX [UX_CustodyAdjustment_Reverses] ON [finance].[CustodyAdjustment] ([ReversesAdjustmentId]) WHERE [ReversesAdjustmentId] IS NOT NULL")]
     [InlineData("CREATE UNIQUE INDEX [UX_CustodyPeriodClose_Account_PeriodEnd] ON [finance].[CustodyPeriodClose] ([AccountId], [PeriodEnd])")]
     [InlineData("[OpeningBalance] decimal(18,2) NOT NULL")]
     public void The_create_script_contains(string expected)

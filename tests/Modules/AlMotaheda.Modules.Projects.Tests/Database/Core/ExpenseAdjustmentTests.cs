@@ -58,6 +58,49 @@ public sealed class ExpenseAdjustmentTests(SqlServerFixture database)
         Assert.Equal(0m, balance.Money("outstanding"));
     }
 
+    [DatabaseFact]
+    public async Task The_payment_state_filter_follows_the_corrected_amount()
+    {
+        await using var api = await ProjectsApi.StartAsync(database);
+        var cast = await api.CastAsync();
+        var cemex = await api.CreateSupplierAsync(cast.Executive, "Cemex");
+
+        // Over-charged: 1,000 recorded, 600 paid, then corrected down by 400. Fully paid once corrected.
+        var overcharged = await api.RecordApprovedAsync(cast.Engineer, cast.Accountant, cast.ProjectId, SupplyBody(cemex, 10m, 100m, "Credit"));
+        await api.PaidAsync(cast.Accountant, cast.ProjectId, cemex, 600m, (overcharged.Id(), 600m));
+        await ApprovedAdjustmentAsync(api, cast.Engineer, cast.Executive, cast.ProjectId, overcharged.Id(), -400m);
+
+        // Under-charged: 1,000 recorded and paid in full, then corrected up by 200. Partly paid once corrected.
+        var undercharged = await api.RecordApprovedAsync(cast.Engineer, cast.Accountant, cast.ProjectId, SupplyBody(cemex, 10m, 100m, "Credit"));
+        await api.PaidAsync(cast.Accountant, cast.ProjectId, cemex, 1_000m, (undercharged.Id(), 1_000m));
+        await ApprovedAdjustmentAsync(api, cast.Engineer, cast.Executive, cast.ProjectId, undercharged.Id(), 200m);
+
+        // The list filter and the state each row shows agree, both on the corrected amount.
+        var paid = await api.ListExpensesAsync(cast.Executive, cast.ProjectId, "&paymentState=Paid");
+        var paidRow = Assert.Single(paid.GetProperty("items").EnumerateArray());
+        Assert.Equal(overcharged.Id(), paidRow.Id());
+        Assert.Equal("Paid", paidRow.GetProperty("paymentState").GetString());
+
+        var partlyPaid = await api.ListExpensesAsync(cast.Executive, cast.ProjectId, "&paymentState=PartiallyPaid");
+        var partlyPaidRow = Assert.Single(partlyPaid.GetProperty("items").EnumerateArray());
+        Assert.Equal(undercharged.Id(), partlyPaidRow.Id());
+        Assert.Equal("PartiallyPaid", partlyPaidRow.GetProperty("paymentState").GetString());
+        Assert.Equal(200m, partlyPaidRow.Money("outstanding"));
+
+        Assert.Empty((await api.ListExpensesAsync(cast.Executive, cast.ProjectId, "&paymentState=Unpaid")).GetProperty("items").EnumerateArray());
+    }
+
+    private static async Task ApprovedAdjustmentAsync(ProjectsApi api, Session requester, Session executive, int projectId, int expenseId, decimal amount)
+    {
+        var asked = await AdjustAsync(api, requester, projectId, expenseId, amount);
+        await EnsureStatus(asked, HttpStatusCode.Created);
+        var adjustment = (await Json(asked)).GetProperty("adjustments").EnumerateArray()
+            .Single(candidate => candidate.GetProperty("status").GetString() == "Requested");
+        var approved = await api.SendAsync(HttpMethod.Post, $"/api/projects/{projectId}/expense-adjustments/{adjustment.Id()}/approve", executive,
+            new { rowVersion = adjustment.GetProperty("rowVersion").GetString() });
+        await EnsureStatus(approved, HttpStatusCode.OK);
+    }
+
     private static Task<HttpResponseMessage> AdjustAsync(ProjectsApi api, Session session, int projectId, int expenseId, decimal amount) =>
         api.SendAsync(HttpMethod.Post, $"/api/projects/{projectId}/expenses/{expenseId}/adjustments", session,
             new { amount, reason = "The supplier charged the same truck twice" });

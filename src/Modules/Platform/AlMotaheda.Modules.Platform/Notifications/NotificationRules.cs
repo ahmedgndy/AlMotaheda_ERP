@@ -33,6 +33,13 @@ internal static class NotificationTypes
     public const string ClaimEscalated = "ClaimEscalated";
     public const string HrReferred = "HrReferred";
     public const string HrReferralClosed = "HrReferralClosed";
+    public const string AdjustmentPosted = "AdjustmentPosted";
+    public const string AdjustmentDisputed = "AdjustmentDisputed";
+    public const string AdjustmentResolved = "AdjustmentResolved";
+    public const string HrRequestSubmitted = "HrRequestSubmitted";
+    public const string HrRequestNeedsInfo = "HrRequestNeedsInfo";
+    public const string HrRequestDecided = "HrRequestDecided";
+    public const string HrRequestAnswered = "HrRequestAnswered";
 }
 
 /// <summary>A notification to store: who gets it, its type and its title in both languages.</summary>
@@ -91,6 +98,9 @@ internal static class NotificationRules
         ["VehicleExpenseAlert"] = ("vehicle expense claim", "مطالبة مصروف المركبة"),
         ["VehicleViolation"] = ("vehicle violation", "مخالفة المركبة"),
         ["HrReferral"] = ("HR referral", "إحالة الموارد البشرية"),
+        ["HrRequest"] = ("HR request", "طلب الموارد البشرية"),
+        ["CustodyAdjustment"] = ("custody adjustment", "تسوية العهدة"),
+        ["HrRequestAlert"] = ("HR request", "طلب الموارد البشرية"),
         ["VehicleCustodyEntry"] = ("vehicle custody", "عهدة المركبة"),
     };
 
@@ -196,6 +206,21 @@ internal static class NotificationRules
 
         // HR referrals: whoever referred the case hears when HR closes it.
         new("HrReferral", "Closed", "ReferredBy", NotificationTypes.HrReferralClosed),
+
+        // A reviewer's adjustment of someone's custody: the holder is told; a dispute goes back to the reviewer; the resolution to the holder.
+        new("CustodyAdjustment", null, "HolderUserId", NotificationTypes.AdjustmentPosted),
+        new("CustodyAdjustment", "Disputed", "CreatedBy", NotificationTypes.AdjustmentDisputed),
+        new("CustodyAdjustment", "Upheld", "HolderUserId", NotificationTypes.AdjustmentResolved),
+        new("CustodyAdjustment", "Reversed", "HolderUserId", NotificationTypes.AdjustmentResolved),
+
+        // An employee's HR request: HR is told through the alert rows (a new request, or an answer to its question); the
+        // employee is told when HR asks for more and when it is decided or answered.
+        new("HrRequestAlert", null, "RecipientUserId", NotificationTypes.HrRequestSubmitted),
+        new("HrRequest", "NeedsInfo", "SubmittedBy", NotificationTypes.HrRequestNeedsInfo),
+        new("HrRequest", "Approved", "SubmittedBy", NotificationTypes.HrRequestDecided),
+        new("HrRequest", "Rejected", "SubmittedBy", NotificationTypes.HrRequestDecided),
+        new("HrRequest", "Closed", "SubmittedBy", NotificationTypes.HrRequestDecided),
+        new("HrRequestMessage", null, "RecipientUserId", NotificationTypes.HrRequestAnswered),
     ];
 
     /// <summary>The notifications one changed record causes. <paramref name="actorUserId"/> made the change.</summary>
@@ -275,6 +300,13 @@ internal static class NotificationRules
         NotificationTypes.ClaimEscalated => ("Your vehicle expense claim was escalated to an Executive", "تمت إحالة مطالبتك إلى الإدارة العليا"),
         NotificationTypes.HrReferred => ("A case was referred to HR", "تمت إحالة حالة إلى الموارد البشرية"),
         NotificationTypes.HrReferralClosed => ($"The {noun.En} you made was closed", $"تم إغلاق {noun.Ar} التي أحلتها"),
+        NotificationTypes.AdjustmentPosted => ("Your custody balance was adjusted by a reviewer", "تم تعديل رصيد عهدتك بتسوية من المراجع"),
+        NotificationTypes.AdjustmentDisputed => ("A holder disputed your custody adjustment", "اعترض أمين العهدة على تسويتك"),
+        NotificationTypes.AdjustmentResolved => ("Your dispute of a custody adjustment was decided", "تم البت في اعتراضك على تسوية العهدة"),
+        NotificationTypes.HrRequestSubmitted => ("An HR request is waiting for you", "طلب موارد بشرية بانتظارك"),
+        NotificationTypes.HrRequestNeedsInfo => ("HR asked you for more on your request", "طلبت الموارد البشرية معلومات إضافية عن طلبك"),
+        NotificationTypes.HrRequestDecided => ("Your HR request was decided", "تم البت في طلبك للموارد البشرية"),
+        NotificationTypes.HrRequestAnswered => ("Your HR request has a new answer", "هناك رد جديد على طلبك للموارد البشرية"),
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown notification type."),
     };
 }

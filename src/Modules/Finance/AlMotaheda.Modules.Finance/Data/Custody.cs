@@ -478,14 +478,20 @@ internal sealed class CustodyCashCount
 }
 
 /// <summary>
-/// A reviewed correction of a custody balance (after a cash count, a found error), with a mandatory reason and
-/// evidence, by a reviewer who is not the holder. Insert-only: the movement it posts is never edited.
+/// A reviewed correction of a custody balance (after a cash count, a found error, money spent without a receipt),
+/// with a mandatory reason and evidence, by a reviewer who is not the holder. Insert-only: the movement it posts is
+/// never edited; a wrong adjustment is undone by an opposite one that points at it. The holder is told and may
+/// dispute it with an explanation; a reviewer resolves the dispute, keeping or reversing it. Never a payroll
+/// deduction: that is HR's own flow.
 /// </summary>
 internal sealed class CustodyAdjustment
 {
     public int Id { get; set; }
 
     public int AccountId { get; set; }
+
+    /// <summary>The holder at the time, told of the adjustment (a vehicle custody has none).</summary>
+    public int? HolderUserId { get; set; }
 
     public int? CashCountId { get; set; }
 
@@ -498,10 +504,69 @@ internal sealed class CustodyAdjustment
 
     public string EvidenceReference { get; set; } = "";
 
+    /// <summary>How much of a debit went beyond what the custody held (policy Warn): shown, routed, never hidden.</summary>
+    public decimal Shortfall { get; set; }
+
     public Guid IdempotencyKey { get; set; }
+
+    private CustodyAdjustmentStatus _status = CustodyAdjustmentStatus.Posted;
+
+    public CustodyAdjustmentStatus Status { get => _status; init => _status = value; }
+
+    public DateTime? DisputedAt { get; set; }
+    public string? DisputeNote { get; set; }
+
+    public DateTime? ResolvedAt { get; set; }
+    public int? ResolvedBy { get; set; }
+    public string? ResolutionNote { get; set; }
+
+    /// <summary>The adjustment this one undoes, when it is the reversal of a disputed one.</summary>
+    public int? ReversesAdjustmentId { get; set; }
 
     public DateTime CreatedAt { get; set; }
     public int CreatedBy { get; set; }
+
+    public byte[] RowVersion { get; set; } = [];
+
+    public void Dispute(string note, DateTime now)
+    {
+        if (_status != CustodyAdjustmentStatus.Posted)
+        {
+            throw new InvalidOperationException("Only a posted adjustment can be disputed.");
+        }
+
+        _status = CustodyAdjustmentStatus.Disputed;
+        DisputedAt = now;
+        DisputeNote = note;
+    }
+
+    public void Resolve(int userId, DateTime now, string note, bool reversed)
+    {
+        if (_status != CustodyAdjustmentStatus.Disputed)
+        {
+            throw new InvalidOperationException("Only a disputed adjustment is resolved.");
+        }
+
+        _status = reversed ? CustodyAdjustmentStatus.Reversed : CustodyAdjustmentStatus.Upheld;
+        ResolvedAt = now;
+        ResolvedBy = userId;
+        ResolutionNote = note;
+    }
+}
+
+/// <summary>Stored by name.</summary>
+internal enum CustodyAdjustmentStatus
+{
+    Posted,
+
+    /// <summary>The holder explained or objected; a reviewer decides.</summary>
+    Disputed,
+
+    /// <summary>Reviewed after the dispute and kept.</summary>
+    Upheld,
+
+    /// <summary>Reviewed after the dispute and undone by an opposite adjustment.</summary>
+    Reversed,
 }
 
 /// <summary>

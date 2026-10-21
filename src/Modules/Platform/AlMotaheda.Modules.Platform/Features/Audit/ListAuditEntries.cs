@@ -23,8 +23,10 @@ namespace AlMotaheda.Modules.Platform.Features.Audit;
 /// </remarks>
 internal static class ListAuditEntries
 {
+    /// <param name="Action">Added, Modified or Deleted.</param>
+    /// <param name="StatusAfter">Entries whose change set a Status to this value (an approval, a rejection, a payment).</param>
     internal sealed record Filter(
-        string? Module, string? EntityType, string? EntityKey, int? ProjectId, int? UserId, DateTime? FromUtc, DateTime? ToUtc);
+        string? Module, string? EntityType, string? EntityKey, int? ProjectId, int? UserId, DateTime? FromUtc, DateTime? ToUtc, string? Action = null, string? StatusAfter = null);
 
     internal sealed record Row(
         long Id, DateTime OccurredAt, int? UserId, string Module, string EntityType, string EntityKey, string Action,
@@ -50,7 +52,7 @@ internal static class ListAuditEntries
         api.MapGet("/audit-entries", HandleAsync)
             .RequireRole(AccessRoles.Executive)
             .WithName(nameof(ListAuditEntries))
-            .WithSummary("List the audit trail, newest first (module, entityType, entityKey, projectId, userId, from, to; page, pageSize). Executive only");
+            .WithSummary("List the audit trail, newest first (module, entityType, entityKey, projectId, userId, from, to, action, statusAfter; page, pageSize). Executive only");
 
     internal static async Task<Results<Ok<Response>, ValidationProblem>> HandleAsync(
         PlatformDbContext db,
@@ -64,6 +66,8 @@ internal static class ListAuditEntries
         int? userId = null,
         string? from = null,
         string? to = null,
+        string? action = null,
+        string? statusAfter = null,
         int page = 1,
         int pageSize = Paging.DefaultPageSize)
     {
@@ -78,6 +82,18 @@ internal static class ListAuditEntries
         Input.OptionalText(module, AuditEntryConfiguration.ModuleMaxLength, errors, "module", "module");
         Input.OptionalText(entityType, AuditEntryConfiguration.EntityTypeMaxLength, errors, "entityType", "entityType");
         Input.OptionalText(entityKey, AuditEntryConfiguration.EntityKeyMaxLength, errors, "entityKey", "entityKey");
+        var cleanAction = Input.Clean(action);
+        if (cleanAction is not null && cleanAction is not ("Added" or "Modified" or "Deleted"))
+        {
+            errors.Add("action", "action must be Added, Modified or Deleted.");
+        }
+
+        var cleanStatus = Input.OptionalText(statusAfter, 40, errors, "statusAfter", "statusAfter");
+        if (cleanStatus is not null && !cleanStatus.All(char.IsLetterOrDigit))
+        {
+            errors.Add("statusAfter", "statusAfter is a status name.");
+        }
+
         Paging.Validate(page, pageSize, errors);
         if (errors.HasErrors)
         {
@@ -91,7 +107,9 @@ internal static class ListAuditEntries
             projectId,
             userId,
             fromDate is { } first ? clock.StartOfDayUtc(first) : null,
-            toDate is { } last ? clock.StartOfDayUtc(last.AddDays(1)) : null);
+            toDate is { } last ? clock.StartOfDayUtc(last.AddDays(1)) : null,
+            cleanAction,
+            cleanStatus);
 
         var query = Query(db, filter);
         var totalCount = await query.CountAsync(cancellationToken);
@@ -130,6 +148,20 @@ internal static class ListAuditEntries
         if (filter.EntityKey is { } key)
         {
             query = query.Where(entry => entry.EntityKey == key);
+        }
+
+        if (filter.Action is { } action)
+        {
+            query = query.Where(entry => entry.Action == action);
+        }
+
+        if (filter.StatusAfter is { } status)
+        {
+            // Changes is {"Field":[old,new]} JSON; a status set to the value ends its pair with ,"Value"] (or ["Value"] when added).
+            // In LIKE, "[" opens a character class, so the JSON bracket is written as [[].
+            var moved = $"%\"Status\":[[]%,\"{status}\"]%";
+            var added = $"%\"Status\":[[]\"{status}\"]%";
+            query = query.Where(entry => EF.Functions.Like(entry.Changes, moved) || EF.Functions.Like(entry.Changes, added));
         }
 
         if (filter.ProjectId is { } project)

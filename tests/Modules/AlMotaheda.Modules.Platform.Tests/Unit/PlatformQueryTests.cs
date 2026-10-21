@@ -41,4 +41,17 @@ public sealed class PlatformQueryTests
         Assert.Contains("[a].[OccurredAt] < @", sql);
         Assert.Contains("ORDER BY [a].[Id] DESC", sql);
     }
+
+    [Fact]
+    public void The_audit_trail_filters_by_action_and_by_the_status_a_change_set()
+    {
+        using var db = new PlatformDbContextDesignTimeFactory().CreateDbContext([]);
+        var filter = new ListAuditEntries.Filter(null, "CustodyTransfer", null, null, null, null, null, "Modified", "Approved");
+
+        var sql = ListAuditEntries.Query(db, filter).ToQueryString();
+
+        Assert.Contains("[Action] = @", sql);
+        Assert.Contains("[Changes] LIKE @", sql);
+        Assert.Contains("\"Status\":[", sql);
+    }
 }

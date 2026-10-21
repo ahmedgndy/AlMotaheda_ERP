@@ -110,7 +110,7 @@ internal static class UpdateUser
             // Executives can't have their own permissions (Q9), so a promotion clears them.
             if (fields.Role == RoleCodes.Executive)
             {
-                await db.UserPermissionOverrides.Where(link => link.UserId == user.Id).ExecuteDeleteAsync(cancellationToken);
+                db.UserPermissionOverrides.RemoveRange(await db.UserPermissionOverrides.Where(link => link.UserId == user.Id).ToListAsync(cancellationToken));
             }
         }
 

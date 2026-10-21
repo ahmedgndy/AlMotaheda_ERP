@@ -232,8 +232,10 @@ internal static class ExpenseQueries
                 || (expense.Supplier != null && (expense.Supplier.NameEn.Contains(text) || expense.Supplier.NameAr.Contains(text))));
         }
 
-        // The payment state only exists on approved records. Custody is paid at approval; credit by allocations.
-        // The subquery is written out in each branch: EF translates expressions, not calls to helper methods.
+        // The payment state only exists on approved records. Custody is paid at approval; credit by allocations
+        // measured against the corrected amount (the recorded amount plus its approved adjustments), the same figure
+        // ExpenseSettlement.PaymentState shows on each row. The subqueries are written out in each branch: EF
+        // translates expressions, not calls to helper methods.
         switch (filter.PaymentState)
         {
             case PaymentStates.Paid:
@@ -241,7 +243,9 @@ internal static class ExpenseQueries
                     && (expense.Channel == PaymentChannel.Custody
                         || db.SupplierPaymentAllocations
                             .Where(allocation => allocation.ExpenseId == expense.Id && allocation.Payment.VoidedAt == null)
-                            .Sum(allocation => allocation.Amount) >= expense.Amount));
+                            .Sum(allocation => allocation.Amount)
+                        >= expense.Amount + (expense.Adjustments.Where(adjustment => adjustment.Status == AdjustmentStatus.Approved)
+                            .Sum(adjustment => (decimal?)adjustment.Amount) ?? 0)));
                 break;
             case PaymentStates.PartiallyPaid:
                 query = query.Where(expense => expense.Status == ExpenseStatus.Approved && expense.Channel == PaymentChannel.Credit
@@ -250,7 +254,9 @@ internal static class ExpenseQueries
                         .Sum(allocation => allocation.Amount) > 0
                     && db.SupplierPaymentAllocations
                         .Where(allocation => allocation.ExpenseId == expense.Id && allocation.Payment.VoidedAt == null)
-                        .Sum(allocation => allocation.Amount) < expense.Amount);
+                        .Sum(allocation => allocation.Amount)
+                    < expense.Amount + (expense.Adjustments.Where(adjustment => adjustment.Status == AdjustmentStatus.Approved)
+                        .Sum(adjustment => (decimal?)adjustment.Amount) ?? 0));
                 break;
             case PaymentStates.Unpaid:
                 query = query.Where(expense => expense.Status == ExpenseStatus.Approved && expense.Channel == PaymentChannel.Credit

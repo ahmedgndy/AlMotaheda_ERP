@@ -97,9 +97,10 @@ internal static class SetUserModulePermissions
         var now = time.GetUtcNow().UtcDateTime;
         var modulePermissionIds = PermissionActions.All.Select(action => PermissionCatalog.PermissionId(module, action)).ToList();
 
-        await db.UserPermissionOverrides
+        // Removed through the change tracker, not a bulk delete, so the audit trail keeps every removed grant.
+        db.UserPermissionOverrides.RemoveRange(await db.UserPermissionOverrides
             .Where(link => link.UserId == user.Id && modulePermissionIds.Contains(link.PermissionId))
-            .ExecuteDeleteAsync(cancellationToken);
+            .ToListAsync(cancellationToken));
 
         // One row per action, granted or denied, so the role's setting no longer applies to this module.
         db.UserPermissionOverrides.AddRange(PermissionActions.All.Select(action => new UserPermissionOverride
