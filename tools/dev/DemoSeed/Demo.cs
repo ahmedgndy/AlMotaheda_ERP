@@ -67,6 +67,7 @@ internal sealed partial class Demo(
         await OfficeAsync();
         await HrAsync();
         await SiteAsync();
+        await PricesAndProcurementAsync();
     }
 
     private async Task AnchorAsync()

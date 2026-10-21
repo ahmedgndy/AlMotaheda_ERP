@@ -125,7 +125,7 @@ internal sealed partial class Demo
         {
             isProactive = false,
             recipientUserId = UserId(Cast.Engineer),
-            type = "Progress",
+            type = "DailyReport",
             priority = "High",
             title = "تقرير تقدم أسبوعي مصور (DEMO) / Weekly progress report with photos",
             description = "نسبة الإنجاز لكل بند، الصور، والمعوقات / Progress per item, photos and blockers",
@@ -175,7 +175,7 @@ internal sealed partial class Demo
             {
                 nameAr = "الدلتا للعزل (تجريبي)",
                 nameEn = "Delta Insulation (demo)",
-                specialty = "Waterproofing",
+                specialty = "Finishing",
                 contactName = "م. سامي رفعت",
                 phone = "0220000011",
                 notes = $"{Marker} demo subcontractor",
@@ -231,10 +231,10 @@ internal sealed partial class Demo
             Log.New("subcontract line: 1,800 m2 at 140");
         }
 
-        var measurements = (await ceo.GetAsync($"/api/projects/{ProjectId(Sites.NileTower)}/subcontract-measurements?contractId={contract.Id()}")) is { } list ? list.Items().ToList() : [];
+        var measurements = (await ceo.GetAsync($"{path}/{contract.Id()}")).Items("measurements").ToList();
         if (measurements.Count == 0)
         {
-            var measurement = await As(Cast.Engineer).PostAsync($"{path}/{contract.Id()}/measurements", new
+            var measurement = await As(Cast.Manager).PostAsync($"{path}/{contract.Id()}/measurements", new
             {
                 contractItemId = line.Id(),
                 measuredOn = Iso(today.AddDays(-5)),
@@ -242,7 +242,7 @@ internal sealed partial class Demo
                 note = $"{Marker} roof of block A measured with the subcontractor",
             });
             measurement = measurement["measurement"] ?? measurement;
-            await As(Cast.Accountant).PostAsync($"/api/projects/{ProjectId(Sites.NileTower)}/subcontract-measurements/{measurement.Id()}/approve", new { note = Marker, rowVersion = measurement.RowVersion() });
+            await As(Cast.Ceo).PostAsync($"/api/projects/{ProjectId(Sites.NileTower)}/subcontract-measurements/{measurement.Id()}/approve", new { note = Marker, rowVersion = measurement.RowVersion() });
             Log.New("subcontract measurement 420 m2: approved");
         }
         else
@@ -268,7 +268,7 @@ internal sealed partial class Demo
                 condition = "Good",
                 status = "InService",
                 notes = Marker,
-                rental = new { supplierId = _supplierIds["equipment"], rateBasis = "Daily", rate = 3500m, startDate = Iso(today.AddDays(-30)), notes = Marker },
+                rental = new { supplierId = _supplierIds["equipment"], rateBasis = "Day", rate = 3500m, startDate = Iso(today.AddDays(-30)), notes = Marker },
             });
             Log.New("equipment EQ-DEMO-01 (rented excavator)");
         }
@@ -288,12 +288,12 @@ internal sealed partial class Demo
         var costs = (await ceo.GetAsync($"{projectPath}/equipment-costs?pageSize=50")).Items().ToList();
         if (!costs.Any(row => row.Str("invoiceNo") == "NER-DEMO-410"))
         {
-            var cost = await As(Cast.Engineer).PostAsync($"{projectPath}/equipment-costs", new
+            var cost = await As(Cast.Manager).PostAsync($"{projectPath}/equipment-costs", new
             {
                 equipmentId = found.Id(),
                 costDate = Iso(today.AddDays(-7)),
                 type = "Rental",
-                basis = "Daily",
+                basis = "Day",
                 quantity = 6m,
                 rate = 3500m,
                 amount = 21000m,
