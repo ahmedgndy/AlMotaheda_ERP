@@ -164,3 +164,167 @@ internal sealed class CustodyFundingSource(
 
     private static string? Clip(string? text, int maxLength) => text is null || text.Length <= maxLength ? text : text[..maxLength];
 }
+
+/// <summary>
+/// The engineer's project custody as Finance's custody hierarchy sees it (<see cref="ICustodyLedgerSource"/>, kind
+/// EngineerProject): the money transferred down from the accountant, or back up, is written here as a funding or a
+/// return of the same <c>projects.CustodyEntry</c> ledger the purchases and weekly payroll draw from, in Finance's
+/// transaction and under the custody's lock. One ledger per custody: nothing is kept twice.
+/// </summary>
+internal sealed class ProjectCustodyLedgerSource(
+    DbContextOptions<ProjectsDbContext> options,
+    ProjectsDbContext db,
+    IOptions<ProjectsOptions> settings,
+    IEnumerable<IRecordDocuments> documents,
+    CompanyClock clock,
+    ProjectsLog log) : ICustodyLedgerSource
+{
+    public string Kind => CustodyAccountKinds.EngineerProject;
+
+    /// <summary>
+    /// The custody's period figures for the central custody page. Unsupported = approved purchases and expenses
+    /// paid from the custody with no document linked in the Archive (the Archive answers; without it nothing is
+    /// flagged). Wages are supported by their approved sheets and the settlement's review.
+    /// </summary>
+    public async Task<CustodyActivity> ActivityAsync(int referenceId, int? holderUserId, DateOnly from, DateOnly to, CancellationToken cancellationToken)
+    {
+        if (holderUserId is not { } holder)
+        {
+            return CustodyActivity.Empty;
+        }
+
+        var movements = (await CustodyQueries.MovementsAsync(db, referenceId, holder, cancellationToken)).Select(row => row.Movement).ToList();
+        var evidence = await EvidenceAsync(movements, cancellationToken);
+        var inPeriod = movements.Where(movement => !movement.Pending && movement.Date >= from && movement.Date <= to && movement.Status != nameof(CustodyEntryStatus.Released)).ToList();
+        var spent = inPeriod.Where(movement => movement.Kind is null or CustodyEntryKind.Payroll or CustodyEntryKind.AdjustmentOut).ToList();
+        var unsupported = spent.Where(movement => movement.Kind is null && !evidence.Contains((movement.SourceType, movement.SourceId))).ToList();
+        var pending = movements.Where(movement => movement.Pending).ToList();
+        return new CustodyActivity(
+            inPeriod.Where(movement => movement.Kind is CustodyEntryKind.Funding or CustodyEntryKind.AdjustmentIn).Sum(movement => movement.Amount),
+            inPeriod.Where(movement => movement.Kind == CustodyEntryKind.Return).Sum(movement => movement.Amount),
+            0m,
+            spent.Sum(movement => movement.Amount),
+            pending.Sum(movement => movement.Amount),
+            pending.Count,
+            unsupported.Sum(movement => movement.Amount),
+            unsupported.Count,
+            movements.Count == 0 ? null : movements.Max(movement => movement.Date));
+    }
+
+    public async Task<CustodyStatementPage> StatementAsync(int referenceId, int? holderUserId, DateOnly? from, DateOnly? to, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        if (holderUserId is not { } holder)
+        {
+            return new CustodyStatementPage([], 0);
+        }
+
+        var movements = (await CustodyQueries.MovementsAsync(db, referenceId, holder, cancellationToken)).Select(row => row.Movement)
+            .Where(movement => (from == null || movement.Date >= from) && (to == null || movement.Date <= to))
+            .OrderByDescending(movement => movement.Date).ThenByDescending(movement => movement.RecordedAt)
+            .ToList();
+        var pageRows = movements.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var evidence = await EvidenceAsync(pageRows, cancellationToken);
+        return new CustodyStatementPage(
+            pageRows.Select(movement => new CustodyStatementLine(
+                movement.Date, movement.Type, movement.Status, movement.Kind is { } kind && CustodyEntryKinds.IsCashIn(kind) ? movement.Amount : -movement.Amount,
+                movement.SourceType, movement.SourceId, null, movement.Description,
+                movement.Kind is not null || evidence.Contains((movement.SourceType, movement.SourceId)), movement.RecordedBy, referenceId)).ToList(),
+            movements.Count);
+    }
+
+    /// <summary>The (source type, id) pairs among the purchases and expenses that have a document in the Archive.</summary>
+    private async Task<HashSet<(string, int)>> EvidenceAsync(IReadOnlyList<Features.Custody.CustodyMovement> movements, CancellationToken cancellationToken)
+    {
+        var supported = new HashSet<(string, int)>();
+        var expenses = movements.Where(movement => movement.Kind is null && movement.SourceType == nameof(ProjectExpense)).Select(movement => movement.SourceId).Distinct().ToList();
+        if (expenses.Count == 0 || documents.FirstOrDefault() is not { } archive)
+        {
+            return supported;
+        }
+
+        foreach (var id in (await archive.CountAsync("Expense", expenses, cancellationToken)).Keys)
+        {
+            supported.Add((nameof(ProjectExpense), id));
+        }
+
+        return supported;
+    }
+
+    public async Task<CustodyTarget?> FindAsync(int referenceId, int? holderUserId, CancellationToken cancellationToken)
+    {
+        if (holderUserId is not { } holder)
+        {
+            return null;
+        }
+
+        var project = await db.Projects.AsNoTracking()
+            .Where(candidate => candidate.Id == referenceId)
+            .Select(candidate => new { candidate.Id, candidate.Code, candidate.NameAr, candidate.NameEn })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (project is null)
+        {
+            return null;
+        }
+
+        var member = await db.ProjectMembers.AsNoTracking().AnyAsync(row => row.ProjectId == referenceId && row.UserId == holder && row.EndDate == null, cancellationToken);
+        return member ? new CustodyTarget(project.Id, holder, $"{project.Code} {project.NameAr}", $"{project.Code} {project.NameEn}", project.Id) : null;
+    }
+
+    public async Task<CustodyLedgerFigures> FiguresAsync(int referenceId, int? holderUserId, CancellationToken cancellationToken)
+    {
+        var figures = CustodyBalance.Compute((await CustodyQueries.MovementsAsync(db, referenceId, holderUserId, cancellationToken)).Select(row => row.Movement));
+        return new CustodyLedgerFigures(figures.Balance, figures.SpentPending);
+    }
+
+    public Task ReceiveAsync(CustodyLedgerWrite write, SharedTransaction transaction, CancellationToken cancellationToken) =>
+        WriteAsync(write, cashIn: true, transaction, cancellationToken);
+
+    public Task WithdrawAsync(CustodyLedgerWrite write, SharedTransaction transaction, CancellationToken cancellationToken) =>
+        WriteAsync(write, cashIn: false, transaction, cancellationToken);
+
+    private async Task WriteAsync(CustodyLedgerWrite write, bool cashIn, SharedTransaction transaction, CancellationToken cancellationToken)
+    {
+        if (write.Amount <= 0 || write.HolderUserId is not { } holder)
+        {
+            throw new ArgumentOutOfRangeException(nameof(write), "A project custody movement is above zero and names its holder.");
+        }
+
+        await using var joined = await transaction.JoinAsync(options, ProjectsDatabase.Configure, joinedOptions => new ProjectsDbContext(joinedOptions), cancellationToken);
+        if (!await CustodyLock.TryAcquireAsync(joined, write.ReferenceId, holder, cancellationToken))
+        {
+            throw new CustodyLedgerRefusedException(CustodyLedgerRefusedException.Busy, "This custody is being updated by someone else. Try again in a moment.");
+        }
+
+        if (!cashIn && settings.Value.BlocksCustodyOverdraft)
+        {
+            var balance = await CustodyQueries.BalanceAsync(joined, write.ReferenceId, holder, cancellationToken);
+            if (write.Amount > balance)
+            {
+                throw new CustodyLedgerRefusedException(CustodyLedgerRefusedException.Insufficient, $"The custody holds {Math.Max(balance, 0):0.00}, less than {write.Amount:0.00}.");
+            }
+        }
+
+        var adjustment = write.SourceType == CustodyLedgerSources.Adjustment;
+        var entry = new CustodyEntry
+        {
+            ProjectId = write.ReferenceId,
+            HolderUserId = holder,
+            Kind = adjustment ? (cashIn ? CustodyEntryKind.AdjustmentIn : CustodyEntryKind.AdjustmentOut) : cashIn ? CustodyEntryKind.Funding : CustodyEntryKind.Return,
+            Amount = write.Amount,
+            EntryDate = write.EntryDate,
+            Method = PaymentMethods.Cash,
+            Reference = Clip(write.Reference, CustodyEntryConfiguration.ReferenceMaxLength),
+            Notes = Clip(write.Notes, CustodyEntryConfiguration.TextMaxLength),
+            Status = CustodyEntryStatus.Posted,
+            SourceType = write.SourceType,
+            SourceId = write.SourceId,
+            CreatedAt = clock.UtcNow,
+            CreatedBy = write.ActorUserId,
+        };
+        joined.CustodyEntries.Add(entry);
+        await joined.SaveChangesAsync(cancellationToken);
+        log.CustodyTransferWritten(write.ActorUserId, write.ReferenceId, entry.Id, holder, write.SourceType, write.SourceId, entry.Kind.ToString());
+    }
+
+    private static string? Clip(string? text, int maxLength) => text is null || text.Length <= maxLength ? text : text[..maxLength];
+}

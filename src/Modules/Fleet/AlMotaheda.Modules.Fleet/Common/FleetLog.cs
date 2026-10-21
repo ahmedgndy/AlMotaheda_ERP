@@ -55,4 +55,46 @@ internal sealed partial class FleetLog(ILogger<FleetLog> logger)
 
     [LoggerMessage(EventId = 5091, Level = LogLevel.Warning, Message = "User {ActorId} was refused {Action}: {Reason}")]
     public partial void ActionRefused(int? actorId, string action, string reason);
+
+    [LoggerMessage(EventId = 5101, Level = LogLevel.Information, Message = "User {ActorId} registered vehicle {VehicleId}")]
+    public partial void VehicleCreated(int actorId, int vehicleId);
+
+    [LoggerMessage(EventId = 5102, Level = LogLevel.Information, Message = "User {ActorId} updated vehicle {VehicleId}")]
+    public partial void VehicleUpdated(int actorId, int vehicleId);
+
+    [LoggerMessage(EventId = 5111, Level = LogLevel.Information, Message = "User {ActorId} assigned driver {DriverEmployeeId} to vehicle {VehicleId} (assignment {AssignmentId})")]
+    public partial void DriverAssigned(int actorId, int vehicleId, int driverEmployeeId, int assignmentId);
+
+    [LoggerMessage(EventId = 5112, Level = LogLevel.Information, Message = "User {ActorId} ended driver assignment {AssignmentId} of vehicle {VehicleId}")]
+    public partial void DriverAssignmentEnded(int actorId, int vehicleId, int assignmentId);
+
+    [LoggerMessage(EventId = 5121, Level = LogLevel.Information, Message = "User {ActorId} wrote vehicle custody entry {EntryId} ({Kind}) on vehicle {VehicleId} from {SourceType} {SourceId}")]
+    public partial void VehicleCustodyWritten(int actorId, int vehicleId, int entryId, string kind, string sourceType, int sourceId);
+
+    [LoggerMessage(EventId = 5131, Level = LogLevel.Information, Message = "User {ActorId} submitted vehicle expense {ExpenseId} ({Type}) on vehicle {VehicleId}, {FlagCount} flags, {AlertCount} alerts")]
+    public partial void ClaimSubmitted(int actorId, int vehicleId, int expenseId, string type, int flagCount, int alertCount);
+
+    [LoggerMessage(EventId = 5132, Level = LogLevel.Information, Message = "User {ActorId} reviewed vehicle expense {ExpenseId}: {Outcome}")]
+    public partial void ClaimReviewed(int actorId, int expenseId, string outcome);
+
+    [LoggerMessage(EventId = 5133, Level = LogLevel.Information, Message = "User {ActorId} referred vehicle expense {ExpenseId} to HR (referral {ReferralId})")]
+    public partial void ClaimReferred(int actorId, int expenseId, int referralId);
+
+    [LoggerMessage(EventId = 5141, Level = LogLevel.Information, Message = "User {ActorId} uploaded fleet attachment {AttachmentId} ({Purpose})")]
+    public partial void AttachmentUploaded(int actorId, int attachmentId, string purpose);
+
+    [LoggerMessage(EventId = 5142, Level = LogLevel.Warning, Message = "User {ActorId} upload refused: {Reason}")]
+    public partial void UploadRefused(int actorId, string reason);
+
+    [LoggerMessage(EventId = 5143, Level = LogLevel.Error, Message = "The fleet evidence store failed")]
+    public partial void StorageFailed(Exception exception);
+
+    [LoggerMessage(EventId = 5151, Level = LogLevel.Information, Message = "User {ActorId} recorded violation {ViolationId} on vehicle {VehicleId} (driver {DriverEmployeeId})")]
+    public partial void ViolationRecorded(int actorId, int vehicleId, int violationId, int? driverEmployeeId);
+
+    [LoggerMessage(EventId = 5152, Level = LogLevel.Information, Message = "User {ActorId} reviewed violation {ViolationId}: {Outcome}")]
+    public partial void ViolationReviewed(int actorId, int violationId, string outcome);
+
+    [LoggerMessage(EventId = 5153, Level = LogLevel.Information, Message = "User {ActorId} referred violation {ViolationId} to HR (referral {ReferralId})")]
+    public partial void ViolationReferred(int actorId, int violationId, int referralId);
 }

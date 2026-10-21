@@ -13,6 +13,19 @@ internal sealed class FinanceDbContext(DbContextOptions<FinanceDbContext> option
     public DbSet<PaymentRequestEvent> PaymentRequestEvents => Set<PaymentRequestEvent>();
     public DbSet<LedgerEntry> LedgerEntries => Set<LedgerEntry>();
 
+    // The treasury and the custody hierarchy (docs/project-workspace/12-treasury-custody.md).
+    public DbSet<TreasuryAccount> TreasuryAccounts => Set<TreasuryAccount>();
+    public DbSet<CustodyAccount> CustodyAccounts => Set<CustodyAccount>();
+    public DbSet<CustodyMovement> CustodyMovements => Set<CustodyMovement>();
+    public DbSet<CustodyTransfer> CustodyTransfers => Set<CustodyTransfer>();
+    public DbSet<CustodyTransferEvent> CustodyTransferEvents => Set<CustodyTransferEvent>();
+    public DbSet<CustodyTransferAlert> CustodyTransferAlerts => Set<CustodyTransferAlert>();
+    public DbSet<PayrollBatch> PayrollBatches => Set<PayrollBatch>();
+    public DbSet<PayrollBatchAllocation> PayrollBatchAllocations => Set<PayrollBatchAllocation>();
+    public DbSet<CustodyCashCount> CustodyCashCounts => Set<CustodyCashCount>();
+    public DbSet<CustodyAdjustment> CustodyAdjustments => Set<CustodyAdjustment>();
+    public DbSet<CustodyPeriodClose> CustodyPeriodCloses => Set<CustodyPeriodClose>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(Schema);

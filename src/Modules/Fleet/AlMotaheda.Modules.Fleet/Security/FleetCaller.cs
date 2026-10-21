@@ -34,6 +34,17 @@ internal sealed class FleetCaller
     /// <summary>Rates and amounts are shown only with equipment See money.</summary>
     public bool SeesMoney => Can(PermissionAction.SeeMoney);
 
+    /// <summary>An action on the <c>fleet</c> permission module (vehicles, drivers, violations, vehicle custody).</summary>
+    public bool CanFleet(PermissionAction action) => Principal.HasPermission(FleetPermissions.Fleet, action);
+
+    /// <summary>An action on the <c>fuel</c> permission module (vehicle expense claims).</summary>
+    public bool CanFuel(PermissionAction action) => Principal.HasPermission(FleetPermissions.Fuel, action);
+
+    /// <summary>Vehicle amounts (custody balances, claims) are shown with fleet or fuel See money.</summary>
+    public bool SeesVehicleMoney => CanFleet(PermissionAction.SeeMoney) || CanFuel(PermissionAction.SeeMoney);
+
+    public bool IsExecutive => Role == AccessRoles.Executive;
+
     /// <summary>The caller, or <c>null</c> for a token without a user id or role (never issued by Access).</summary>
     public static FleetCaller? From(ClaimsPrincipal principal) =>
         principal.GetUserId() is { } userId && principal.GetRoleCode() is { Length: > 0 } role
@@ -49,4 +60,10 @@ internal static class FleetPermissions
 
     /// <summary>Recording (Create) and voiding (Approve) the payment of a credit cost (decision G4).</summary>
     public const string PaymentsModule = "payments";
+
+    /// <summary>Vehicles, drivers, violations and vehicle custody (View, Create, Edit, Approve, See money).</summary>
+    public const string Fleet = "fleet";
+
+    /// <summary>Vehicle expense claims: Create (submit), Approve (review), See money.</summary>
+    public const string Fuel = "fuel";
 }

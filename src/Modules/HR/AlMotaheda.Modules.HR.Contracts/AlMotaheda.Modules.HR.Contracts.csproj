@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    What other modules may ask the HR module: who an employee is (IEmployeeDirectory, for drivers and assignments),
+    and a referral for investigation (IHrReferrals: a rejected vehicle claim, a violation). Interfaces, records and
+    code lists only. The HR module implements and registers these interfaces.
+  -->
+
+  <ItemGroup>
+    <!-- SharedTransaction: a referral is written in the referring module's transaction. -->
+    <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks.Data\AlMotaheda.BuildingBlocks.Data.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -38,7 +38,10 @@ internal sealed class FinanceReports(FinanceDbContext db, IVisibleProjects proje
                 new("periodEnd", "إلى", "To", ReportColumnTypes.Date),
                 new("moneyIn", "المقبوضات", "Money in", ReportColumnTypes.Money, Total: true),
                 new("moneyOut", "المدفوعات", "Money out", ReportColumnTypes.Money, Total: true),
-                new("net", "الصافي", "Net", ReportColumnTypes.Money, Total: true),
+                new("internalOut", "عهد مسلّمة (تحويل داخلي)", "Custody advances (internal)", ReportColumnTypes.Money, Total: true),
+                new("internalIn", "عهد مرتجعة (تحويل داخلي)", "Custody returns (internal)", ReportColumnTypes.Money, Total: true),
+                new("paidFromCustody", "مدفوع من العهد", "Paid from custodies", ReportColumnTypes.Money, Total: true),
+                new("net", "صافي حركة الخزينة", "Treasury net", ReportColumnTypes.Money, Total: true),
                 new("entries", "عدد الحركات", "Entries", ReportColumnTypes.Integer, Total: true),
             ]),
         new(Ledger, "دفتر الحركات", "Transaction ledger", ReportCategories.Finance, FinanceMoney,
@@ -49,10 +52,11 @@ internal sealed class FinanceReports(FinanceDbContext db, IVisibleProjects proje
                 new("entryId", "رقم الحركة", "Entry", ReportColumnTypes.Integer),
                 new("account", "الحساب", "Account", ReportColumnTypes.Text),
                 new("purpose", "الغرض", "Purpose", ReportColumnTypes.Text),
+                new("kind", "النوع", "Kind", ReportColumnTypes.Text),
                 new("counterpartyType", "نوع المستفيد", "Beneficiary type", ReportColumnTypes.Text),
                 new("counterparty", "المستفيد", "Beneficiary", ReportColumnTypes.Text),
                 new("projectId", "المشروع", "Project", ReportColumnTypes.Integer),
-                new("request", "طلب الصرف", "Payment request", ReportColumnTypes.Text),
+                new("request", "طلب الصرف / التحويل", "Payment request / transfer", ReportColumnTypes.Text),
                 new("reversal", "عكس قيد", "Reversal", ReportColumnTypes.Text),
                 new("amount", "المبلغ", "Amount", ReportColumnTypes.Money, Total: true),
             ]),
@@ -107,7 +111,7 @@ internal sealed class FinanceReports(FinanceDbContext db, IVisibleProjects proje
     private async Task<ReportData> CashAsync(ReportQuery query, IReadOnlySet<int>? visible, CancellationToken cancellationToken)
     {
         var entries = await ListLedgerEntries.Query(db, new ListLedgerEntries.Filter(query.Date("from"), query.Date("to"), query.Id("projectId"), null, null, null, visible))
-            .Select(entry => new { entry.EntryDate, entry.Amount })
+            .Select(entry => new { entry.EntryDate, entry.Amount, entry.Purpose, entry.Account })
             .ToListAsync(cancellationToken);
         var period = query.Text("period") ?? "Day";
 
@@ -116,8 +120,13 @@ internal sealed class FinanceReports(FinanceDbContext db, IVisibleProjects proje
             .OrderBy(group => group.Key)
             .Select(group =>
             {
-                // Money out is the payments less their reversals; there is no money in yet (no income records).
-                var moneyOut = -group.Sum(entry => entry.Amount);
+                // Payments are the money out of the treasury less their reversals; custody advances and returns are
+                // internal transfers, shown apart and never counted as expense; there is no money in yet (no income records).
+                var payments = group.Where(entry => !PaymentPurposes.IsInternalTransfer(entry.Purpose) && entry.Account != LedgerAccount.Custody);
+                var moneyOut = -payments.Sum(entry => entry.Amount);
+                var internalOut = -group.Where(entry => PaymentPurposes.IsInternalTransfer(entry.Purpose) && entry.Amount < 0).Sum(entry => entry.Amount);
+                var internalIn = group.Where(entry => PaymentPurposes.IsInternalTransfer(entry.Purpose) && entry.Amount > 0).Sum(entry => entry.Amount);
+                var fromCustody = -group.Where(entry => entry.Account == LedgerAccount.Custody).Sum(entry => entry.Amount);
                 return new ReportRow(new Dictionary<string, object?>
                 {
                     ["period"] = PeriodLabel(group.Key, period),
@@ -125,7 +134,10 @@ internal sealed class FinanceReports(FinanceDbContext db, IVisibleProjects proje
                     ["periodEnd"] = PeriodEnd(group.Key, period),
                     ["moneyIn"] = 0m,
                     ["moneyOut"] = moneyOut,
-                    ["net"] = -moneyOut,
+                    ["internalOut"] = internalOut,
+                    ["internalIn"] = internalIn,
+                    ["paidFromCustody"] = fromCustody,
+                    ["net"] = -moneyOut - internalOut + internalIn,
                     ["entries"] = group.Count(),
                 }, new ReportLink("report", Report: Ledger, Filters: new Dictionary<string, string>
                 {
@@ -135,7 +147,7 @@ internal sealed class FinanceReports(FinanceDbContext db, IVisibleProjects proje
             })
             .ToList();
 
-        return new ReportData(rows, "Money in is 0: client income is not recorded in the system yet. Weeks start on Saturday.");
+        return new ReportData(rows, "Money in is 0: client income is not recorded in the system yet. Internal transfers (custody advances and returns) move cash inside the company and are never an expense; payments out of a custody were already drawn from the treasury. Weeks start on Saturday.");
     }
 
     private async Task<ReportData> LedgerAsync(ReportQuery query, IReadOnlySet<int>? visible, CancellationToken cancellationToken)
@@ -143,10 +155,17 @@ internal sealed class FinanceReports(FinanceDbContext db, IVisibleProjects proje
         LedgerAccount? account = query.Text("account") is { } text ? Enum.Parse<LedgerAccount>(text) : null;
         var entries = await ListLedgerEntries.Query(db, new ListLedgerEntries.Filter(
                 query.Date("from"), query.Date("to"), query.Id("projectId"), account, query.Text("counterpartyType"), null, visible))
-            .Join(db.PaymentRequests, entry => entry.PaymentRequestId, request => request.Id, (entry, request) => new { entry, request.Number, request.SourceType })
+            .GroupJoin(db.PaymentRequests, entry => entry.PaymentRequestId, request => request.Id, (entry, requests) => new { entry, requests })
+            .SelectMany(row => row.requests.DefaultIfEmpty(), (row, request) => new { row.entry, Number = request != null ? request.Number : null, SourceType = request != null ? request.SourceType : row.entry.SourceType })
+            .GroupJoin(db.CustodyTransfers, row => row.entry.CustodyTransferId, transfer => transfer.Id, (row, transfers) => new { row.entry, row.Number, row.SourceType, transfers })
+            .SelectMany(row => row.transfers.DefaultIfEmpty(), (row, transfer) => new { row.entry, row.Number, row.SourceType, TransferNumber = transfer != null ? transfer.Number : null })
             .OrderBy(row => row.entry.EntryDate).ThenBy(row => row.entry.Id)
             .ToListAsync(cancellationToken);
-        var names = await PayeeNamesAsync(entries.Select(row => (row.SourceType, row.entry.CounterpartyId)), cancellationToken);
+        var names = await PayeeNamesAsync(entries.Where(row => row.entry.CounterpartyType != PayeeTypes.CustodyAccount).Select(row => (row.SourceType, row.entry.CounterpartyId)), cancellationToken);
+        var custodyIds = entries.Where(row => row.entry.CounterpartyType == PayeeTypes.CustodyAccount).Select(row => row.entry.CounterpartyId).Distinct().ToList();
+        var custodies = custodyIds.Count == 0
+            ? new Dictionary<int, string>()
+            : await db.CustodyAccounts.AsNoTracking().Where(account => custodyIds.Contains(account.Id)).ToDictionaryAsync(account => account.Id, account => $"{account.Number} {account.NameEn}", cancellationToken);
 
         return new ReportData(entries.Select(row => new ReportRow(new Dictionary<string, object?>
         {
@@ -154,13 +173,18 @@ internal sealed class FinanceReports(FinanceDbContext db, IVisibleProjects proje
             ["entryId"] = (int)row.entry.Id,
             ["account"] = row.entry.Account.ToString(),
             ["purpose"] = row.entry.Purpose,
+            ["kind"] = PaymentPurposes.IsInternalTransfer(row.entry.Purpose) ? "Internal transfer" : "Payment",
             ["counterpartyType"] = row.entry.CounterpartyType,
-            ["counterparty"] = names.GetValueOrDefault((row.SourceType, row.entry.CounterpartyId))?.NameEn ?? $"#{row.entry.CounterpartyId}",
+            ["counterparty"] = row.entry.CounterpartyType == PayeeTypes.CustodyAccount
+                ? custodies.GetValueOrDefault(row.entry.CounterpartyId) ?? $"#{row.entry.CounterpartyId}"
+                : names.GetValueOrDefault((row.SourceType, row.entry.CounterpartyId))?.NameEn ?? $"#{row.entry.CounterpartyId}",
             ["projectId"] = row.entry.ProjectId,
-            ["request"] = row.Number,
+            ["request"] = row.Number ?? row.TransferNumber,
             ["reversal"] = row.entry.ReversesEntryId is { } reversed ? $"#{reversed}" : null,
             ["amount"] = row.entry.Amount,
-        }, new ReportLink("paymentRequest", row.entry.PaymentRequestId, row.entry.ProjectId))).ToList());
+        }, row.entry.PaymentRequestId is { } requestId
+            ? new ReportLink("paymentRequest", requestId, row.entry.ProjectId)
+            : new ReportLink("custodyTransfer", row.entry.CustodyTransferId, row.entry.ProjectId))).ToList());
     }
 
     private async Task<ReportData> RequestsAsync(ReportQuery query, IReadOnlySet<int>? visible, CancellationToken cancellationToken)

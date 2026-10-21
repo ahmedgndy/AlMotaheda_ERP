@@ -46,8 +46,9 @@ internal static class CustodyMovementTypes
 /// <param name="Returned">Cash handed back to the company.</param>
 /// <param name="SpentApproved">Purchases and expenses approved, and payroll confirmed: used and accepted.</param>
 /// <param name="SpentPending">Purchases waiting for review and payroll waiting for confirmation: the cash is gone, the review is not done.</param>
-/// <param name="Balance">Received − Returned − SpentApproved − SpentPending: the cash the holder should have. Negative when the holder paid out of pocket.</param>
-internal sealed record CustodyFigures(decimal Received, decimal Returned, decimal SpentApproved, decimal SpentPending, decimal Balance, int PendingCount)
+/// <param name="Balance">Received − Returned − SpentApproved − SpentPending + Adjusted: the cash the holder should have. Negative when the holder paid out of pocket.</param>
+/// <param name="Adjusted">Reviewed adjustments, signed (after cash counts).</param>
+internal sealed record CustodyFigures(decimal Received, decimal Returned, decimal SpentApproved, decimal SpentPending, decimal Balance, int PendingCount, decimal Adjusted = 0)
 {
     public static CustodyFigures Empty { get; } = new(0, 0, 0, 0, 0, 0);
 }
@@ -64,7 +65,7 @@ internal static class CustodyBalance
 {
     public static CustodyFigures Compute(IEnumerable<CustodyMovement> movements)
     {
-        decimal received = 0, returned = 0, approved = 0, pending = 0;
+        decimal received = 0, returned = 0, approved = 0, pending = 0, adjusted = 0;
         var pendingCount = 0;
         foreach (var movement in movements)
         {
@@ -75,6 +76,12 @@ internal static class CustodyBalance
                     break;
                 case CustodyEntryKind.Return:
                     returned += movement.Amount;
+                    break;
+                case CustodyEntryKind.AdjustmentIn:
+                    adjusted += movement.Amount;
+                    break;
+                case CustodyEntryKind.AdjustmentOut:
+                    adjusted -= movement.Amount;
                     break;
                 default:
                     if (movement.Pending)
@@ -91,7 +98,7 @@ internal static class CustodyBalance
             }
         }
 
-        return new CustodyFigures(received, returned, approved, pending, received - returned - approved - pending, pendingCount);
+        return new CustodyFigures(received, returned, approved, pending, received - returned - approved - pending + adjusted, pendingCount, adjusted);
     }
 
     /// <summary>Running balance, oldest first: cash in is positive, cash out negative.</summary>
@@ -101,7 +108,7 @@ internal static class CustodyBalance
         var lines = new List<(CustodyMovement, decimal)>();
         foreach (var movement in movements.OrderBy(movement => movement.Date).ThenBy(movement => movement.RecordedAt).ThenBy(movement => movement.SourceId))
         {
-            balance += movement.Kind == CustodyEntryKind.Funding ? movement.Amount : -movement.Amount;
+            balance += movement.Kind is { } kind && CustodyEntryKinds.IsCashIn(kind) ? movement.Amount : -movement.Amount;
             lines.Add((movement, balance));
         }
 

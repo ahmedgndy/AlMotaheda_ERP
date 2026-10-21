@@ -12,7 +12,10 @@ internal static class LedgerPosting
     /// </summary>
     public static IReadOnlyList<LedgerEntry> Paid(PaymentRequest request, DateTime now, int confirmedBy)
     {
-        var account = PaymentMethods.GoesThroughBank(request.Method) ? LedgerAccount.Bank : LedgerAccount.Cash;
+        // Bank for transfers and cheques; cash from the treasury safe; or cash out of a custody already drawn from it.
+        var account = PaymentMethods.GoesThroughBank(request.Method)
+            ? LedgerAccount.Bank
+            : request.SourceCustodyAccountId is not null ? LedgerAccount.Custody : LedgerAccount.Cash;
 
         var byProject = request.Lines
             .GroupBy(line => line.ProjectId)
@@ -50,6 +53,7 @@ internal static class LedgerPosting
                 ProjectId = part.ProjectId,
                 Purpose = request.Purpose,
                 PaymentRequestId = request.Id,
+                CustodyAccountId = account == LedgerAccount.Custody ? request.SourceCustodyAccountId : null,
                 SourceType = request.SourceType,
                 SourcePaymentId = request.SourcePaymentId,
                 CreatedAt = now,
@@ -57,6 +61,26 @@ internal static class LedgerPosting
             })
             .ToList();
     }
+
+    /// <summary>
+    /// The treasury side of a custody transfer: money out of Bank or Cash to a custody account (an advance), or back
+    /// in from one (a return). Never a payment request, never an expense.
+    /// </summary>
+    public static LedgerEntry Transfer(CustodyTransfer transfer, LedgerAccount account, bool moneyOut, int counterpartyAccountId, DateOnly on, DateTime now, int actorUserId) =>
+        new()
+        {
+            EntryDate = on,
+            Account = account,
+            Amount = moneyOut ? -transfer.Amount : transfer.Amount,
+            CounterpartyType = PayeeTypes.CustodyAccount,
+            CounterpartyId = counterpartyAccountId,
+            ProjectId = transfer.ProjectId,
+            Purpose = transfer.Purpose,
+            CustodyTransferId = transfer.Id,
+            SourceType = PaymentSourceTypes.CustodyTransfer,
+            CreatedAt = now,
+            CreatedBy = actorUserId,
+        };
 
     /// <summary>Entries that cancel <paramref name="originals"/>, dated <paramref name="reversedOn"/>.</summary>
     public static IReadOnlyList<LedgerEntry> Reversal(IEnumerable<LedgerEntry> originals, DateOnly reversedOn, DateTime now, int reversedBy) =>
@@ -72,6 +96,8 @@ internal static class LedgerPosting
                 ProjectId = original.ProjectId,
                 Purpose = original.Purpose,
                 PaymentRequestId = original.PaymentRequestId,
+                CustodyTransferId = original.CustodyTransferId,
+                CustodyAccountId = original.CustodyAccountId,
                 SourceType = original.SourceType,
                 SourcePaymentId = original.SourcePaymentId,
                 ReversesEntryId = original.Id,

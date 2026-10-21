@@ -26,6 +26,16 @@ internal sealed class FleetDbContext(DbContextOptions<FleetDbContext> options) :
     /// <summary>Every voided payment of an equipment cost: written at the void, never changed.</summary>
     public DbSet<VoidedEquipmentCostPayment> VoidedEquipmentCostPayments => Set<VoidedEquipmentCostPayment>();
 
+    // Vehicles: the register extension, drivers over time, the operating custody, expense claims, violations, evidence.
+    public DbSet<Vehicle> Vehicles => Set<Vehicle>();
+    public DbSet<VehicleDriverAssignment> VehicleDriverAssignments => Set<VehicleDriverAssignment>();
+    public DbSet<VehicleCustodyEntry> VehicleCustodyEntries => Set<VehicleCustodyEntry>();
+    public DbSet<VehicleExpense> VehicleExpenses => Set<VehicleExpense>();
+    public DbSet<VehicleExpenseFlag> VehicleExpenseFlags => Set<VehicleExpenseFlag>();
+    public DbSet<VehicleExpenseAlert> VehicleExpenseAlerts => Set<VehicleExpenseAlert>();
+    public DbSet<FleetAttachment> Attachments => Set<FleetAttachment>();
+    public DbSet<VehicleViolation> VehicleViolations => Set<VehicleViolation>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(Schema);

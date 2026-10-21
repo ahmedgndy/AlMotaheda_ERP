@@ -1,7 +1,8 @@
 # Fleet module: site equipment
 
 Module `AlMotaheda.Modules.Fleet`, schema `fleet`, permission module `equipment` (and `payments`).
-Read `00-overview.md` first. Vehicles, fuel requests and GPS (the rest of the ERD's fleet sheet) are not built.
+Read `00-overview.md` first. Vehicles, their drivers and operating custody, expense claims, violations and the GPS
+abstraction (permission modules `fleet` and `fuel`) are in `12-treasury-custody.md`.
 
 ## 1. Tables
 

@@ -18,7 +18,8 @@ namespace AlMotaheda.Modules.Procurement.Tests.Database;
 [Collection(SqlServerCollection.Name)]
 public sealed class ProcurementFlowTests(SqlServerFixture database)
 {
-    private static string Today => DateTime.UtcNow.ToString("yyyy-MM-dd");
+    // The company's day (Cairo), as the server sees it; UTC lags it after midnight.
+    private static string Today => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Africa/Cairo")).ToString("yyyy-MM-dd");
 
     [DatabaseFact]
     public async Task A_requisition_goes_all_the_way_to_a_paid_supplier_cost_and_is_counted_once()

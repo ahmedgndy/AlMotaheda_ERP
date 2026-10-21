@@ -48,6 +48,15 @@ public sealed class HrApiSecurityTests
         { "POST", "/api/hr/salary-sheets/1/return", "hr:F" },
         { "POST", "/api/hr/salary-sheets/1/payment-request", "payments:C" },
         { "POST", "/api/hr/salary-sheets/1/payment-request", "hr:V" },
+        // Employees on projects, and the cases referred to HR.
+        { "GET", "/api/hr/employees/1/assignments", "hr:V" },
+        { "POST", "/api/hr/employees/1/assignments", "hr:E" },
+        { "POST", "/api/hr/employees/1/assignments/2/end", "hr:E" },
+        { "GET", "/api/hr/assignments?projectId=1", "hr:V" },
+        { "GET", "/api/hr/referrals", "hr:V" },
+        { "GET", "/api/hr/referrals/1", "hr:V" },
+        { "POST", "/api/hr/referrals/1/start-investigation", "hr:E" },
+        { "POST", "/api/hr/referrals/1/close", "hr:A" },
     };
 
     private static object Body => new { reason = "Because", rowVersion = RowVersion };
@@ -98,6 +107,9 @@ public sealed class HrApiSecurityTests
     [InlineData("POST", "/api/hr/salary-sheets/1/return", "{\"rowVersion\":\"AAAAAAAAB9E=\"}", new[] { "reason" })]
     [InlineData("POST", "/api/hr/salary-sheets/1/payment-request", "{\"method\":\"Gold\"}", new[] { "requestedDate", "method", "rowVersion" })]
     [InlineData("POST", "/api/hr/employees/1/end", "{}", new[] { "endDate", "reason", "rowVersion" })]
+    [InlineData("POST", "/api/hr/employees/1/assignments", "{\"role\":\"Pilot\",\"startDate\":\"2999-01-01\"}", new[] { "projectId", "role", "startDate" })]
+    [InlineData("POST", "/api/hr/referrals/1/close", "{\"outcome\":\"DeductionApplied\"}", new[] { "deduction", "note", "rowVersion" })]
+    [InlineData("POST", "/api/hr/referrals/1/close", "{\"outcome\":\"NoAction\",\"note\":\"x\",\"rowVersion\":\"AAAAAAAAB9E=\",\"deduction\":{\"amount\":1}}", new[] { "deduction" })]
     public async Task Bad_input_answers_400_with_every_field(string method, string path, string json, string[] fields)
     {
         await using var app = await TestApplication.StartAsync();

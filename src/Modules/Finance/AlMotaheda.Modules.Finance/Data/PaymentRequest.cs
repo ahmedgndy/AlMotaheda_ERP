@@ -51,6 +51,9 @@ internal sealed class PaymentRequest
     /// <summary>Made by the client for each payment form. The same key twice returns the same request.</summary>
     public Guid IdempotencyKey { get; private init; }
 
+    /// <summary>The custody account the cash comes from, when paid out of money already drawn from the treasury (method Cash only).</summary>
+    public int? SourceCustodyAccountId { get; private init; }
+
     public PaymentRequestStatus Status { get; private set; } = PaymentRequestStatus.Submitted;
 
     /// <summary><c>Request</c> for requests made in Finance; <c>Imported</c> for payments recorded before it existed.</summary>
@@ -95,10 +98,11 @@ internal sealed class PaymentRequest
     public static PaymentRequest Submit(
         string sourceType, string payeeType, int payeeId, int? projectId, string purpose, decimal amount, string method,
         DateOnly requestedDate, string? reference, string? notes, string? payload, Guid idempotencyKey, int createdBy, DateTime now,
-        IEnumerable<PaymentRequestLine> lines)
+        IEnumerable<PaymentRequestLine> lines, int? sourceCustodyAccountId = null)
     {
         var request = new PaymentRequest
         {
+            SourceCustodyAccountId = sourceCustodyAccountId,
             SourceType = sourceType,
             PayeeType = payeeType,
             PayeeId = payeeId,

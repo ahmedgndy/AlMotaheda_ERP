@@ -3,7 +3,15 @@
 Site equipment: the company's equipment register, rental terms, the assignment of machines to projects over time,
 and equipment costs (rental, fuel, maintenance, repair, transport, other) with approval and payment. The design is
 in `docs/project-workspace/05-fleet.md`; the shared rules are in `00-overview.md` and the decisions in
-`07-decisions.md` (G2, G4, G5, F1, F2). Vehicles, fuel requests and GPS are not built.
+`07-decisions.md` (G2, G4, G5, F1, F2). Vehicles, drivers, the vehicle operating custody, expense claims with
+evidence, violations, HR referrals and the GPS abstraction are described in `docs/project-workspace/12-treasury-custody.md`
+(permission modules `fleet` and `fuel`; tables `Vehicle`, `VehicleDriverAssignment`, `VehicleCustodyEntry`,
+`VehicleExpense`, `VehicleExpenseFlag`, `VehicleExpenseAlert`, `FleetAttachment`, `VehicleViolation`; code in
+`Features/Vehicles`, `Features/Claims`, `Features/Violations`, `Features/Attachments`, `Features/Gps`, `Storage`,
+and the `VehicleCustodyLedgerSource`, `VehicleExpensePriceExceptionSource` and `VehicleReports` integrations).
+Settings: `Fleet:ClaimExecutiveApprovalAbove`, `Fleet:MaxClaimAgeDays`, `Fleet:ImplausibleDistanceKmPerDay`,
+`Fleet:ImageMaxMegabytes`, `Fleet:DocumentMaxMegabytes`, `Fleet:Gps:Provider` (`None`: no provider shipped),
+`Fleet:Storage:RootPath`. **Apply the HR migrations before the Fleet migrations**: the driver keys point at `hr.Employee`.
 
 ## What it does
 

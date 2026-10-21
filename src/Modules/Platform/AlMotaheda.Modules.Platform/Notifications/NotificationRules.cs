@@ -25,6 +25,14 @@ internal static class NotificationTypes
     public const string RecordReversed = "RecordReversed";
     public const string PayrollSettled = "PayrollSettled";
     public const string CustodyChanged = "CustodyChanged";
+    public const string TransferRequested = "TransferRequested";
+    public const string TransferReceivable = "TransferReceivable";
+    public const string TransferReceived = "TransferReceived";
+    public const string ClaimSubmitted = "ClaimSubmitted";
+    public const string ClaimEvidenceRequested = "ClaimEvidenceRequested";
+    public const string ClaimEscalated = "ClaimEscalated";
+    public const string HrReferred = "HrReferred";
+    public const string HrReferralClosed = "HrReferralClosed";
 }
 
 /// <summary>A notification to store: who gets it, its type and its title in both languages.</summary>
@@ -77,6 +85,13 @@ internal static class NotificationRules
         ["SettlementAlert"] = ("weekly labor settlement", "تسوية العمالة الأسبوعية"),
         ["ContractVariation"] = ("subcontract value change", "تعديل قيمة عقد الباطن"),
         ["CustodyEntry"] = ("custody", "العهدة"),
+        ["CustodyTransfer"] = ("custody transfer", "تحويل العهدة"),
+        ["CustodyTransferAlert"] = ("custody transfer", "تحويل العهدة"),
+        ["VehicleExpense"] = ("vehicle expense claim", "مطالبة مصروف المركبة"),
+        ["VehicleExpenseAlert"] = ("vehicle expense claim", "مطالبة مصروف المركبة"),
+        ["VehicleViolation"] = ("vehicle violation", "مخالفة المركبة"),
+        ["HrReferral"] = ("HR referral", "إحالة الموارد البشرية"),
+        ["VehicleCustodyEntry"] = ("vehicle custody", "عهدة المركبة"),
     };
 
     /// <summary>StatusAfter <c>null</c> = the record was just added.</summary>
@@ -157,6 +172,30 @@ internal static class NotificationRules
 
         // Cash custody (Projects): the holder hears of every funding, return or wage payment someone else records.
         new("CustodyEntry", null, "HolderUserId", NotificationTypes.CustodyChanged),
+
+        // Custody transfers (Finance): the Executives hear of a request and the destination's holder of a disbursement
+        // (alert rows, saved with the transfer); the requester hears the decision, the receipt and a reversal.
+        new("CustodyTransferAlert", null, "RecipientUserId", NotificationTypes.TransferRequested),
+        new("CustodyTransfer", "Approved", "RequestedBy", NotificationTypes.RecordApproved),
+        new("CustodyTransfer", "Rejected", "RequestedBy", NotificationTypes.RecordRejected),
+        new("CustodyTransfer", "Received", "RequestedBy", NotificationTypes.TransferReceived),
+        new("CustodyTransfer", "Received", "DisbursedBy", NotificationTypes.TransferReceived),
+        new("CustodyTransfer", "Reversed", "RequestedBy", NotificationTypes.RecordReversed),
+
+        // Vehicle expense claims (Fleet): the accountants and the Executives hear of a new claim (alert rows); the
+        // submitter hears every review outcome. A posted claim's reversal is told to the submitter too.
+        new("VehicleExpenseAlert", null, "RecipientUserId", NotificationTypes.ClaimSubmitted),
+        new("VehicleExpense", "Approved", "CreatedBy", NotificationTypes.RecordApproved),
+        new("VehicleExpense", "Rejected", "CreatedBy", NotificationTypes.RecordRejected),
+        new("VehicleExpense", "EvidenceRequested", "CreatedBy", NotificationTypes.ClaimEvidenceRequested),
+        new("VehicleExpense", "Escalated", "CreatedBy", NotificationTypes.ClaimEscalated),
+
+        // Vehicle violations (Fleet): the recorder hears the review.
+        new("VehicleViolation", "Resolved", "CreatedBy", NotificationTypes.RecordReviewed),
+        new("VehicleViolation", "Dismissed", "CreatedBy", NotificationTypes.RecordReviewed),
+
+        // HR referrals: whoever referred the case hears when HR closes it.
+        new("HrReferral", "Closed", "ReferredBy", NotificationTypes.HrReferralClosed),
     ];
 
     /// <summary>The notifications one changed record causes. <paramref name="actorUserId"/> made the change.</summary>
@@ -228,6 +267,14 @@ internal static class NotificationRules
         NotificationTypes.RecordReversed => ($"Your {noun.En} was reversed", $"تم عكس {noun.Ar}"),
         NotificationTypes.PayrollSettled => ("A weekly labor settlement is waiting for review", "تسوية عمالة أسبوعية بانتظار المراجعة"),
         NotificationTypes.CustodyChanged => ("Your custody was updated", "تم تحديث عهدتك"),
+        NotificationTypes.TransferRequested => ("A custody transfer is waiting for your decision", "تحويل عهدة بانتظار قرارك"),
+        NotificationTypes.TransferReceivable => ("Cash was handed out to your custody: confirm receiving it", "تم صرف نقدية لعهدتك: أكّد الاستلام"),
+        NotificationTypes.TransferReceived => ($"The {noun.En} was received", $"تم استلام {noun.Ar}"),
+        NotificationTypes.ClaimSubmitted => ("A vehicle expense claim is waiting for review", "مطالبة مصروف مركبة بانتظار المراجعة"),
+        NotificationTypes.ClaimEvidenceRequested => ("More evidence was asked for your vehicle expense claim", "طُلبت مستندات إضافية لمطالبتك"),
+        NotificationTypes.ClaimEscalated => ("Your vehicle expense claim was escalated to an Executive", "تمت إحالة مطالبتك إلى الإدارة العليا"),
+        NotificationTypes.HrReferred => ("A case was referred to HR", "تمت إحالة حالة إلى الموارد البشرية"),
+        NotificationTypes.HrReferralClosed => ($"The {noun.En} you made was closed", $"تم إغلاق {noun.Ar} التي أحلتها"),
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown notification type."),
     };
 }

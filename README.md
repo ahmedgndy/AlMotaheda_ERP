@@ -101,8 +101,8 @@ Details: [deploy/README.md](deploy/README.md).
 - Set `Archive__Storage__RootPath` to a folder on persistent storage that is backed up. It is required in
   Production; the API refuses to start without it.
 - Apply migrations with the reviewed scripts or migration bundles before starting a new version: Platform first,
-  then Access, Projects, Workforce, Subcontractors, Fleet, Archive, HR, Procurement, Reports and Finance. Without the
-  Platform tables every save fails.
+  then Access, Projects, HR, Workforce, Subcontractors, Fleet, Archive, Procurement, Reports and Finance. HR comes
+  before Fleet since the vehicle tables point at `hr.Employee`. Without the Platform tables every save fails.
 - `Projects__PriceCheckPolicy` decides what a purchase, expense or supplier invoice line above its reference price
   range does: `ExecutiveApproval` (shipped in `appsettings.json`: saved as entered with a price exception for the
   Executive; nobody approves or pays it, and a supplier invoice stays on price hold, until the Executive decides),
@@ -111,6 +111,16 @@ Details: [deploy/README.md](deploy/README.md).
 - `Projects__CustodyBalanceCheck` decides what a payment out of a cash custody (a purchase, an expense or a weekly
   payroll) does when it is more than the custody holds: `Warn` (default: saved, the balance goes negative until it is
   funded) or `Block` (refused). See `docs/project-workspace/09-project-financial-workspace.md`.
+- `Finance__CustodyPeriodCarryForward` decides what closing a custody period needs: `CarryForward` (default: the
+  balance continues) or `RequireZeroBalance` (the custody must have been returned in full). See
+  `docs/project-workspace/12-treasury-custody.md`.
+- `Fleet__ClaimExecutiveApprovalAbove` (default `0`): a vehicle expense claim above this amount is approved by an
+  Executive only. `Fleet__MaxClaimAgeDays` (60), `Fleet__ImplausibleDistanceKmPerDay` (1000),
+  `Fleet__ImageMaxMegabytes` (15) and `Fleet__DocumentMaxMegabytes` (20) are the claim and evidence limits.
+- `Fleet__Gps__Provider` is `None` until a vehicle tracking provider is integrated: the location endpoints then
+  answer "not configured" and show no positions. `Fleet__Gps__RetentionDays` (90) applies once a provider exists.
+- `Fleet__Storage__RootPath` is where claim evidence (odometer photos, receipts) is kept; by default a
+  `fleet-module` folder under `Archive__Storage__RootPath`. Back it up with the archive.
 - `Projects__TimeZone` is the company time zone (default `Africa/Cairo`). The server needs time zone data; on a
   minimal container image without it, install `tzdata` or set `UTC`.
 - Turn on `READ_COMMITTED_SNAPSHOT` for the database.
@@ -159,6 +169,7 @@ History: Settings → Backup history (`GET /api/backups`).
 - [Project Workspace design](docs/project-workspace/00-overview.md) and its [decisions and open questions](docs/project-workspace/07-decisions.md)
 - [Project cost management](docs/project-workspace/08-cost-management.md): main items and sub-items, the work-item cost breakdown, price management and price checks, cost alerts
 - [Project financial workspace](docs/project-workspace/09-project-financial-workspace.md): subcontractor engagements per work item and variations, supply agreements and supplier accounts, cash custody, weekly labor settlements, the financial formulas
+- [Treasury, custody hierarchy, payroll funding, vehicles and vehicle expenses](docs/project-workspace/12-treasury-custody.md): the company treasury, custody accounts and transfers, payroll batches, vehicles with drivers and an operating custody, expense claims with evidence and price control, violations and HR referrals, the GPS abstraction (audit: [11-treasury-custody-audit.md](docs/project-workspace/11-treasury-custody-audit.md))
 - [Central Price Control](docs/project-workspace/10-price-control.md): configurable categories and units, price rules, the price exception a record above its range opens, the Executive's three decisions, the approval and payment gate on every path (site records, supplier payments, Procurement invoices), reports, offline rules
 - [Workforce module](src/Modules/Workforce/AlMotaheda.Modules.Workforce/README.md): workers, daily labor, allocation to items, worker payments
 - [Subcontractors module](src/Modules/Subcontractors/AlMotaheda.Modules.Subcontractors/README.md): companies, contracts, measured work, manpower, payments

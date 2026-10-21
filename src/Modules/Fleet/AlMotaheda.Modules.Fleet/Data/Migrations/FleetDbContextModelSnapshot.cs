@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AlMotaheda.Modules.Fleet.Data.Migrations
 {
     [DbContext(typeof(FleetDbContext))]
-    internal partial class FleetDbContextModelSnapshot : ModelSnapshot
+    partial class FleetDbContextModelSnapshot : ModelSnapshot
     {
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
@@ -117,7 +117,7 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
 
                     b.ToTable("Equipment", "fleet", t =>
                         {
-                            t.HasCheckConstraint("CK_Equipment_Category", "[Category] IN ('Tools', 'Medium', 'Heavy', 'Survey', 'Safety')");
+                            t.HasCheckConstraint("CK_Equipment_Category", "[Category] IN ('Tools', 'Medium', 'Heavy', 'Survey', 'Safety', 'Vehicle')");
 
                             t.HasCheckConstraint("CK_Equipment_Condition", "[Condition] IN ('New', 'Good', 'Used', 'Damaged')");
 
@@ -503,6 +503,796 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.FleetAttachment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("BoundAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<DateTime?>("CapturedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("OwnerId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("OwnerType")
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("UploadedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_FleetAttachment_IdempotencyKey");
+
+                    b.HasIndex("StorageKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_FleetAttachment_StorageKey");
+
+                    b.HasIndex(new[] { "OwnerType", "OwnerId" }, "IX_FleetAttachment_Owner");
+
+                    b.HasIndex(new[] { "Sha256" }, "IX_FleetAttachment_Sha256");
+
+                    b.ToTable("FleetAttachment", "fleet", t =>
+                        {
+                            t.HasCheckConstraint("CK_FleetAttachment_Owner", "([OwnerType] IS NULL AND [OwnerId] IS NULL) OR ([OwnerType] IN ('VehicleExpense', 'VehicleViolation') AND [OwnerId] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_FleetAttachment_Purpose", "[Purpose] IN ('Odometer', 'Invoice', 'Receipt', 'Violation', 'Supporting')");
+
+                            t.HasCheckConstraint("CK_FleetAttachment_Sha256", "LEN([Sha256]) = 64 AND [Sha256] COLLATE Latin1_General_BIN NOT LIKE '%[^0-9a-f]%'");
+
+                            t.HasCheckConstraint("CK_FleetAttachment_Size", "[SizeBytes] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.Vehicle", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FuelType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("GpsDeviceId")
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("GpsProvider")
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<string>("GpsStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<int?>("ModelYear")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal>("OdometerKm")
+                        .HasPrecision(18, 1)
+                        .HasColumnType("decimal(18,1)");
+
+                    b.Property<DateTime?>("OdometerUpdatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("OdometerUpdatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Plate")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Plate")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Vehicle_Plate");
+
+                    b.ToTable("Vehicle", "fleet", t =>
+                        {
+                            t.HasCheckConstraint("CK_Vehicle_FuelType", "[FuelType] IN ('Petrol', 'Diesel', 'Gas', 'Electric')");
+
+                            t.HasCheckConstraint("CK_Vehicle_Gps", "[GpsStatus] = 'NotConfigured' OR ([GpsProvider] IS NOT NULL AND [GpsDeviceId] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_Vehicle_GpsStatus", "[GpsStatus] IN ('NotConfigured', 'Configured', 'Unavailable')");
+
+                            t.HasCheckConstraint("CK_Vehicle_ModelYear", "[ModelYear] IS NULL OR ([ModelYear] >= 1950 AND [ModelYear] <= 2100)");
+
+                            t.HasCheckConstraint("CK_Vehicle_Odometer", "[OdometerKm] >= 0");
+
+                            t.HasCheckConstraint("CK_Vehicle_Type", "[Type] IN ('Car', 'Pickup', 'Van', 'Truck', 'Bus', 'Motorcycle', 'Other')");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VehicleCustodyEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DriverEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("EntryDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SourceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int>("VehicleId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SourceType", "SourceId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_VehicleCustodyEntry_Source");
+
+                    b.HasIndex(new[] { "DriverEmployeeId" }, "IX_VehicleCustodyEntry_DriverEmployeeId");
+
+                    b.HasIndex(new[] { "VehicleId", "EntryDate" }, "IX_VehicleCustodyEntry_Vehicle_Date");
+
+                    b.ToTable("VehicleCustodyEntry", "fleet", t =>
+                        {
+                            t.HasCheckConstraint("CK_VehicleCustodyEntry_Amount", "[Amount] > 0");
+
+                            t.HasCheckConstraint("CK_VehicleCustodyEntry_Kind", "[Kind] IN ('Funding', 'Return', 'Expense', 'AdjustmentIn', 'AdjustmentOut')");
+
+                            t.HasCheckConstraint("CK_VehicleCustodyEntry_Pending", "[Status] = 'Posted' OR [Kind] = 'Expense'");
+
+                            t.HasCheckConstraint("CK_VehicleCustodyEntry_SourceType", "[SourceType] IN ('CustodyTransfer', 'CustodyTransferReversal', 'VehicleExpense', 'CustodyAdjustment')");
+
+                            t.HasCheckConstraint("CK_VehicleCustodyEntry_Status", "[Status] IN ('Pending', 'Posted', 'Released')");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VehicleDriverAssignment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("AssignedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DriverEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal?>("EndOdometerKm")
+                        .HasPrecision(18, 1)
+                        .HasColumnType("decimal(18,1)");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("EndedBy")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("HandoverCustodyBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("HandoverNote")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal?>("HandoverPendingClaims")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal?>("StartOdometerKm")
+                        .HasPrecision(18, 1)
+                        .HasColumnType("decimal(18,1)");
+
+                    b.Property<int>("VehicleId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VehicleId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_VehicleDriverAssignment_Open")
+                        .HasFilter("[EndDate] IS NULL");
+
+                    b.HasIndex(new[] { "DriverEmployeeId", "StartDate" }, "IX_VehicleDriverAssignment_Driver_Start");
+
+                    b.HasIndex(new[] { "VehicleId", "StartDate" }, "IX_VehicleDriverAssignment_Vehicle_Start");
+
+                    b.ToTable("VehicleDriverAssignment", "fleet", t =>
+                        {
+                            t.HasCheckConstraint("CK_VehicleDriverAssignment_Dates", "[EndDate] IS NULL OR [EndDate] >= [StartDate]");
+
+                            t.HasCheckConstraint("CK_VehicleDriverAssignment_End", "([EndDate] IS NULL AND [EndedAt] IS NULL AND [EndedBy] IS NULL) OR ([EndDate] IS NOT NULL AND [EndedAt] IS NOT NULL AND [EndedBy] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_VehicleDriverAssignment_Odometer", "([StartOdometerKm] IS NULL OR [StartOdometerKm] >= 0) AND ([EndOdometerKm] IS NULL OR [EndOdometerKm] >= 0)");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VehicleExpense", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CustodyEntryId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DriverAssignmentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DriverEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("ExpenseDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal?>("FuelQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<DateTime?>("GpsCapturedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<decimal?>("GpsLatitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<decimal?>("GpsLongitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<int?>("HrReferralId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("InvoiceNo")
+                        .HasMaxLength(50)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasComputedColumnSql("CONCAT('VX-', REPLICATE('0', 6 - LEN([Id])), [Id])", true);
+
+                    b.Property<decimal>("OdometerKm")
+                        .HasPrecision(18, 1)
+                        .HasColumnType("decimal(18,1)");
+
+                    b.Property<DateTime?>("PostedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<string>("PostingStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("PriceCheck")
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<int?>("PriceExceptionId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PriceItemId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PriceJustification")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int?>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("ReferenceMaxPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ReversalReason")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("ReversedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("ReversedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("ReviewedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Round")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<DateTime>("SubmittedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("SupplierId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<decimal?>("UnitPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int>("VehicleId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("VendorName")
+                        .HasMaxLength(200)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustodyEntryId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_VehicleExpense_CustodyEntry")
+                        .HasFilter("[CustodyEntryId] IS NOT NULL");
+
+                    b.HasIndex("DriverAssignmentId");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_VehicleExpense_IdempotencyKey");
+
+                    b.HasIndex("Number")
+                        .IsUnique()
+                        .HasDatabaseName("UX_VehicleExpense_Number");
+
+                    b.HasIndex(new[] { "DriverEmployeeId" }, "IX_VehicleExpense_DriverEmployeeId");
+
+                    b.HasIndex(new[] { "InvoiceNo" }, "IX_VehicleExpense_InvoiceNo")
+                        .HasFilter("[InvoiceNo] IS NOT NULL");
+
+                    b.HasIndex(new[] { "ProjectId", "ExpenseDate" }, "IX_VehicleExpense_Project_Date");
+
+                    b.HasIndex(new[] { "Status", "Id" }, "IX_VehicleExpense_Status");
+
+                    b.HasIndex(new[] { "VehicleId", "ExpenseDate" }, "IX_VehicleExpense_Vehicle_Date");
+
+                    b.ToTable("VehicleExpense", "fleet", t =>
+                        {
+                            t.HasCheckConstraint("CK_VehicleExpense_Amount", "[Amount] > 0");
+
+                            t.HasCheckConstraint("CK_VehicleExpense_Approved", "[Status] <> 'Approved' OR [PostingStatus] <> 'NotPosted'");
+
+                            t.HasCheckConstraint("CK_VehicleExpense_Fuel", "([Type] = 'Fuel' AND [FuelQuantity] IS NOT NULL AND [UnitPrice] IS NOT NULL AND [FuelQuantity] > 0 AND [UnitPrice] > 0 AND ABS([Amount] - ROUND([FuelQuantity] * [UnitPrice], 2)) < 0.01) OR ([Type] <> 'Fuel' AND [FuelQuantity] IS NULL AND [UnitPrice] IS NULL)");
+
+                            t.HasCheckConstraint("CK_VehicleExpense_Gps", "([GpsLatitude] IS NULL AND [GpsLongitude] IS NULL) OR ([GpsLatitude] IS NOT NULL AND [GpsLongitude] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_VehicleExpense_Odometer", "[OdometerKm] >= 0");
+
+                            t.HasCheckConstraint("CK_VehicleExpense_Posting", "([PostingStatus] = 'NotPosted' AND [CustodyEntryId] IS NULL AND [PostedAt] IS NULL) OR ([PostingStatus] IN ('Posted', 'Reversed') AND [Status] = 'Approved' AND [CustodyEntryId] IS NOT NULL AND [PostedAt] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_VehicleExpense_PostingStatus", "[PostingStatus] IN ('NotPosted', 'Posted', 'Reversed')");
+
+                            t.HasCheckConstraint("CK_VehicleExpense_Referral", "[HrReferralId] IS NULL OR [Status] = 'Rejected'");
+
+                            t.HasCheckConstraint("CK_VehicleExpense_Reversal", "([PostingStatus] <> 'Reversed' AND [ReversedAt] IS NULL AND [ReversedBy] IS NULL AND [ReversalReason] IS NULL) OR ([PostingStatus] = 'Reversed' AND [ReversedAt] IS NOT NULL AND [ReversedBy] IS NOT NULL AND [ReversalReason] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_VehicleExpense_Round", "[Round] >= 1");
+
+                            t.HasCheckConstraint("CK_VehicleExpense_Status", "[Status] IN ('Submitted', 'Approved', 'Rejected', 'EvidenceRequested', 'Escalated')");
+
+                            t.HasCheckConstraint("CK_VehicleExpense_Type", "[Type] IN ('Fuel', 'Maintenance', 'Repair', 'Toll', 'Parking', 'Wash', 'Other')");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VehicleExpenseAlert", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("ExpenseId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecipientUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpenseId", "RecipientUserId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_VehicleExpenseAlert_Expense_Recipient");
+
+                    b.ToTable("VehicleExpenseAlert", "fleet");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VehicleExpenseFlag", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<string>("Detail")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int>("ExpenseId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<int?>("RelatedExpenseId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "ExpenseId" }, "IX_VehicleExpenseFlag_ExpenseId");
+
+                    b.ToTable("VehicleExpenseFlag", "fleet", t =>
+                        {
+                            t.HasCheckConstraint("CK_VehicleExpenseFlag_Kind", "[Kind] IN ('DuplicateInvoiceNo', 'DuplicateReceipt', 'SameAmountVehicleDay', 'OdometerNotIncreasing', 'ImplausibleDistance', 'PriceAboveRange', 'NoReferencePrice')");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VehicleViolation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("DriverAssignmentId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DriverEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("GpsLatitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<decimal?>("GpsLongitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<int?>("HrReferralId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasComputedColumnSql("CONCAT('VV-', REPLICATE('0', 6 - LEN([Id])), [Id])", true);
+
+                    b.Property<string>("Resolution")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("ReviewedBy")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("TicketNo")
+                        .HasMaxLength(50)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("TripReference")
+                        .HasMaxLength(100)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int>("VehicleId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("ViolationDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DriverAssignmentId");
+
+                    b.HasIndex("Number")
+                        .IsUnique()
+                        .HasDatabaseName("UX_VehicleViolation_Number");
+
+                    b.HasIndex(new[] { "DriverEmployeeId" }, "IX_VehicleViolation_DriverEmployeeId");
+
+                    b.HasIndex(new[] { "Status", "Id" }, "IX_VehicleViolation_Status");
+
+                    b.HasIndex(new[] { "VehicleId", "ViolationDate" }, "IX_VehicleViolation_Vehicle_Date");
+
+                    b.ToTable("VehicleViolation", "fleet", t =>
+                        {
+                            t.HasCheckConstraint("CK_VehicleViolation_Amount", "[Amount] IS NULL OR [Amount] > 0");
+
+                            t.HasCheckConstraint("CK_VehicleViolation_Category", "[Category] IN ('Speeding', 'Parking', 'Traffic', 'Accident', 'Damage', 'Misuse', 'Other')");
+
+                            t.HasCheckConstraint("CK_VehicleViolation_Gps", "([GpsLatitude] IS NULL AND [GpsLongitude] IS NULL) OR ([GpsLatitude] IS NOT NULL AND [GpsLongitude] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_VehicleViolation_Review", "([Status] IN ('Recorded', 'UnderReview') AND [Resolution] IS NULL) OR ([Status] IN ('Resolved', 'Dismissed') AND [ReviewedAt] IS NOT NULL AND [ReviewedBy] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_VehicleViolation_Status", "[Status] IN ('Recorded', 'UnderReview', 'Resolved', 'Dismissed')");
+                        });
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VoidedEquipmentCostPayment", b =>
                 {
                     b.Property<int>("Id")
@@ -598,6 +1388,96 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
                     b.Navigation("Equipment");
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.Vehicle", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Fleet.Data.Equipment", "Equipment")
+                        .WithOne()
+                        .HasForeignKey("AlMotaheda.Modules.Fleet.Data.Vehicle", "Id")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Equipment");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VehicleCustodyEntry", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Fleet.Data.Vehicle", "Vehicle")
+                        .WithMany()
+                        .HasForeignKey("VehicleId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Vehicle");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VehicleDriverAssignment", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Fleet.Data.Vehicle", "Vehicle")
+                        .WithMany()
+                        .HasForeignKey("VehicleId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Vehicle");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VehicleExpense", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Fleet.Data.VehicleCustodyEntry", null)
+                        .WithMany()
+                        .HasForeignKey("CustodyEntryId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("AlMotaheda.Modules.Fleet.Data.VehicleDriverAssignment", null)
+                        .WithMany()
+                        .HasForeignKey("DriverAssignmentId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("AlMotaheda.Modules.Fleet.Data.Vehicle", "Vehicle")
+                        .WithMany()
+                        .HasForeignKey("VehicleId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Vehicle");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VehicleExpenseAlert", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Fleet.Data.VehicleExpense", "Expense")
+                        .WithMany()
+                        .HasForeignKey("ExpenseId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Expense");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VehicleExpenseFlag", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Fleet.Data.VehicleExpense", null)
+                        .WithMany("Flags")
+                        .HasForeignKey("ExpenseId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VehicleViolation", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Fleet.Data.VehicleDriverAssignment", null)
+                        .WithMany()
+                        .HasForeignKey("DriverAssignmentId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("AlMotaheda.Modules.Fleet.Data.Vehicle", "Vehicle")
+                        .WithMany()
+                        .HasForeignKey("VehicleId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Vehicle");
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VoidedEquipmentCostPayment", b =>
                 {
                     b.HasOne("AlMotaheda.Modules.Fleet.Data.EquipmentCost", "Cost")
@@ -612,6 +1492,11 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
             modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.EquipmentCost", b =>
                 {
                     b.Navigation("Adjustments");
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VehicleExpense", b =>
+                {
+                    b.Navigation("Flags");
                 });
 #pragma warning restore 612, 618
         }

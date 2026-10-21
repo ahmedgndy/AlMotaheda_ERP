@@ -24,6 +24,9 @@ internal static class HrProblems
     public const string PaymentRequested = "payment_requested";
     public const string IdempotencyKeyReused = "idempotency_key_reused";
     public const string Busy = "busy";
+    public const string AlreadyAssigned = "already_assigned";
+    public const string AssignmentEnded = "assignment_already_ended";
+    public const string AlreadyReferred = "already_referred";
 
     public static ValidationProblem Validation(ValidationErrors errors) => ApiProblem.Validation(errors.ToDictionary());
 
@@ -34,6 +37,21 @@ internal static class HrProblems
     public static ProblemHttpResult DocumentNotFound() => NotFound("document");
     public static ProblemHttpResult InputNotFound() => NotFound("payroll input");
     public static ProblemHttpResult SheetNotFound() => NotFound("salary sheet");
+    public static ProblemHttpResult AssignmentNotFound() => NotFound("assignment");
+    public static ProblemHttpResult ReferralNotFound() => NotFound("referral");
+    public static ProblemHttpResult ProjectNotFound() => ApiProblem.NotFoundResult("The project was not found.");
+
+    public static ProblemHttpResult AssignedAlready() =>
+        Conflict(AlreadyAssigned, "The employee is already on this project. End that assignment first.");
+
+    public static ProblemHttpResult AssignmentAlreadyEnded() =>
+        Conflict(AssignmentEnded, "This assignment has already ended.");
+
+    public static ProblemHttpResult ReferredAlready() =>
+        Conflict(AlreadyReferred, "This record was already referred to HR.");
+
+    public static ProblemHttpResult DeductionNeedsMoney() =>
+        ApiProblem.ForbiddenResult("Raising a deduction needs hr Create and hr See money.");
 
     public static ProblemHttpResult DepartmentTaken() =>
         Conflict(DepartmentExists, "A department with this Arabic or English name already exists.");

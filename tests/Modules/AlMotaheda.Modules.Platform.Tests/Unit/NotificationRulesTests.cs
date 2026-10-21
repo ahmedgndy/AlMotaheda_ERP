@@ -142,6 +142,61 @@ public sealed class NotificationRulesTests
     }
 
     [Fact]
+    public void A_custody_transfer_tells_the_executives_when_asked_the_holder_when_disbursed_and_the_requester_of_the_rest()
+    {
+        const int requester = 51;
+        const int accountant = 52;
+        var asked = Assert.Single(NotificationRules.For(Change("CustodyTransferAlert", "Added", null, null, ("RecipientUserId", Reviewer)), requester));
+        Assert.Equal((Reviewer, NotificationTypes.TransferRequested, "تحويل عهدة بانتظار قرارك"), (asked.RecipientUserId, asked.Type, asked.TitleAr));
+
+        var approved = Assert.Single(NotificationRules.For(Change("CustodyTransfer", "Modified", "Requested", "Approved", ("RequestedBy", requester), ("DecidedBy", Reviewer)), Reviewer));
+        Assert.Equal((requester, NotificationTypes.RecordApproved, "تم اعتماد تحويل العهدة"), (approved.RecipientUserId, approved.Type, approved.TitleAr));
+
+        var received = NotificationRules.For(Change("CustodyTransfer", "Modified", "Disbursed", "Received", ("RequestedBy", requester), ("DisbursedBy", accountant), ("ReceivedBy", 53)), 53);
+        Assert.Equal([requester, accountant], received.Select(draft => draft.RecipientUserId));
+        Assert.All(received, draft => Assert.Equal(NotificationTypes.TransferReceived, draft.Type));
+
+        // The requester who also disbursed is told once; a disbursement itself tells nobody but the alert rows.
+        Assert.Single(NotificationRules.For(Change("CustodyTransfer", "Modified", "Disbursed", "Received", ("RequestedBy", requester), ("DisbursedBy", requester)), 53));
+        Assert.Empty(NotificationRules.For(Change("CustodyTransfer", "Modified", "Approved", "Disbursed", ("RequestedBy", requester)), accountant));
+        Assert.Equal(NotificationTypes.RecordReversed, Assert.Single(NotificationRules.For(Change("CustodyTransfer", "Modified", "Received", "Reversed", ("RequestedBy", requester)), Reviewer)).Type);
+    }
+
+    [Theory]
+    [InlineData("Approved", NotificationTypes.RecordApproved, "تم اعتماد مطالبة مصروف المركبة")]
+    [InlineData("Rejected", NotificationTypes.RecordRejected, "تم رفض مطالبة مصروف المركبة")]
+    [InlineData("EvidenceRequested", NotificationTypes.ClaimEvidenceRequested, "طُلبت مستندات إضافية لمطالبتك")]
+    [InlineData("Escalated", NotificationTypes.ClaimEscalated, "تمت إحالة مطالبتك إلى الإدارة العليا")]
+    public void The_driver_who_submitted_a_vehicle_claim_hears_every_review_outcome(string status, string type, string titleAr)
+    {
+        var change = Change("VehicleExpense", "Modified", "Submitted", status, ("CreatedBy", Recorder), ("ReviewedBy", Reviewer));
+
+        var draft = Assert.Single(NotificationRules.For(change, Reviewer));
+
+        Assert.Equal((Recorder, type, titleAr), (draft.RecipientUserId, draft.Type, draft.TitleAr));
+    }
+
+    [Fact]
+    public void A_submitted_vehicle_claim_tells_the_accountants_and_executives_through_its_alert_rows_never_the_driver()
+    {
+        var alert = Assert.Single(NotificationRules.For(Change("VehicleExpenseAlert", "Added", null, null, ("RecipientUserId", Reviewer)), Recorder));
+        Assert.Equal((Reviewer, NotificationTypes.ClaimSubmitted, "مطالبة مصروف مركبة بانتظار المراجعة"), (alert.RecipientUserId, alert.Type, alert.TitleAr));
+        Assert.Empty(NotificationRules.For(Change("VehicleExpenseAlert", "Added", null, null, ("RecipientUserId", Recorder)), Recorder));
+        Assert.Empty(NotificationRules.For(Change("VehicleExpense", "Added", null, "Submitted", ("CreatedBy", Recorder)), Recorder));
+    }
+
+    [Fact]
+    public void A_violation_review_and_an_hr_referral_closure_go_back_to_whoever_recorded_or_referred()
+    {
+        var reviewed = Assert.Single(NotificationRules.For(Change("VehicleViolation", "Modified", "Recorded", "Resolved", ("CreatedBy", Recorder)), Reviewer));
+        Assert.Equal((Recorder, NotificationTypes.RecordReviewed), (reviewed.RecipientUserId, reviewed.Type));
+
+        var closed = Assert.Single(NotificationRules.For(Change("HrReferral", "Modified", "UnderInvestigation", "Closed", ("ReferredBy", Recorder), ("ClosedBy", Reviewer)), Reviewer));
+        Assert.Equal((Recorder, NotificationTypes.HrReferralClosed, "تم إغلاق إحالة الموارد البشرية التي أحلتها"), (closed.RecipientUserId, closed.Type, closed.TitleAr));
+        Assert.Empty(NotificationRules.For(Change("HrReferral", "Added", null, "Open", ("ReferredBy", Recorder)), Recorder));
+    }
+
+    [Fact]
     public void A_price_range_request_is_answered_to_its_requester()
     {
         var change = Change("PriceRange", "Modified", "Pending", "Approved", ("RequestedBy", Recorder), ("DecidedBy", Reviewer));

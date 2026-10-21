@@ -1,6 +1,7 @@
 using AlMotaheda.BuildingBlocks.Modules;
 using AlMotaheda.BuildingBlocks.Time;
 using AlMotaheda.Modules.Finance.Contracts;
+using AlMotaheda.Modules.HR.Contracts;
 using AlMotaheda.Modules.HR.Data;
 using AlMotaheda.Modules.HR.Features;
 using AlMotaheda.Modules.HR.Integration;
@@ -32,6 +33,9 @@ public sealed class HrModule : IModule
 
         services.AddCompanyClock();
         services.AddScoped<IPaymentSource, SalarySheetPaymentSource>();
+        services.AddScoped<IPayrollEntitlementSource, SalaryEntitlementSource>();
+        services.AddScoped<IEmployeeDirectory, EmployeeDirectoryContract>();
+        services.AddScoped<IHrReferrals, HrReferralsContract>();
         services.AddScoped<IReportSource, HrReports>();
         HrFeatures.AddServices(services);
 

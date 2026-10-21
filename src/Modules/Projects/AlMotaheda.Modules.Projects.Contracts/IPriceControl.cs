@@ -50,7 +50,10 @@ public static class PriceExceptionSources
     /// <summary>A line of a supplier invoice (Procurement).</summary>
     public const string SupplierInvoiceLine = "SupplierInvoiceLine";
 
-    public static IReadOnlyList<string> All { get; } = [ProjectExpense, SupplierInvoiceLine];
+    /// <summary>A vehicle expense claim: fuel or another vehicle cost paid from a vehicle's custody (Fleet).</summary>
+    public const string VehicleExpense = "VehicleExpense";
+
+    public static IReadOnlyList<string> All { get; } = [ProjectExpense, SupplierInvoiceLine, VehicleExpense];
 }
 
 public sealed record PriceItemRef(int Id, string NameAr, string NameEn, string Unit, string CategoryCode, bool IsActive);

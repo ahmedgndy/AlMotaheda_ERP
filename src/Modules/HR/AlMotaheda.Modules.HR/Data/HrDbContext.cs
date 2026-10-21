@@ -21,6 +21,10 @@ internal sealed class HrDbContext(DbContextOptions<HrDbContext> options) : DbCon
     public DbSet<SalarySheet> SalarySheets => Set<SalarySheet>();
     public DbSet<SalarySheetLine> SalarySheetLines => Set<SalarySheetLine>();
 
+    /// <summary>Salaried employees on projects over time, and the cases other modules refer to HR.</summary>
+    public DbSet<EmployeeAssignment> EmployeeAssignments => Set<EmployeeAssignment>();
+    public DbSet<HrReferral> Referrals => Set<HrReferral>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(Schema);

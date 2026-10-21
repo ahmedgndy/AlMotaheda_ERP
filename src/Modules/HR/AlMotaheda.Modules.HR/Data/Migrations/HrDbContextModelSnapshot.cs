@@ -219,6 +219,80 @@ namespace AlMotaheda.Modules.HR.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.HR.Data.EmployeeAssignment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("AssignedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("EndReason")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("EndedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId", "ProjectId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_EmployeeAssignment_Open")
+                        .HasFilter("[EndDate] IS NULL");
+
+                    b.HasIndex(new[] { "EmployeeId", "StartDate" }, "IX_EmployeeAssignment_Employee_Start");
+
+                    b.HasIndex(new[] { "ProjectId", "StartDate" }, "IX_EmployeeAssignment_Project_Start");
+
+                    b.ToTable("EmployeeAssignment", "hr", t =>
+                        {
+                            t.HasCheckConstraint("CK_EmployeeAssignment_Dates", "[EndDate] IS NULL OR [EndDate] >= [StartDate]");
+
+                            t.HasCheckConstraint("CK_EmployeeAssignment_End", "([EndDate] IS NULL AND [EndedAt] IS NULL AND [EndedBy] IS NULL) OR ([EndDate] IS NOT NULL AND [EndedAt] IS NOT NULL AND [EndedBy] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_EmployeeAssignment_Role", "[Role] IN ('SiteEngineer', 'Driver', 'Supervisor', 'Administrator', 'Guard', 'Other')");
+                        });
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.HR.Data.EmployeeDocument", b =>
                 {
                     b.Property<int>("Id")
@@ -281,6 +355,136 @@ namespace AlMotaheda.Modules.HR.Data.Migrations
                             t.HasCheckConstraint("CK_EmployeeDocument_Dates", "[IssueDate] IS NULL OR [ExpiryDate] IS NULL OR [ExpiryDate] >= [IssueDate]");
 
                             t.HasCheckConstraint("CK_EmployeeDocument_Kind", "[Kind] IN ('NationalIdCard', 'Contract', 'Qualification', 'MilitaryStatus', 'SocialInsurance', 'Other')");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.HR.Data.HrReferral", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("ClosedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ClosingNote")
+                        .HasMaxLength(1000)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("DeductionInputId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Details")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("InvestigatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("InvestigationNote")
+                        .HasMaxLength(1000)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("InvestigationStartedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasComputedColumnSql("CONCAT('HRR-', REPLICATE('0', 6 - LEN([Id])), [Id])", true);
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("ReferenceNo")
+                        .HasMaxLength(50)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("ReferredAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("ReferredBy")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SourceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("VehicleId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeductionInputId");
+
+                    b.HasIndex("Number")
+                        .IsUnique()
+                        .HasDatabaseName("UX_HrReferral_Number");
+
+                    b.HasIndex("SourceType", "SourceId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_HrReferral_Source");
+
+                    b.HasIndex(new[] { "EmployeeId" }, "IX_HrReferral_EmployeeId");
+
+                    b.HasIndex(new[] { "Status", "Id" }, "IX_HrReferral_Status");
+
+                    b.ToTable("HrReferral", "hr", t =>
+                        {
+                            t.HasCheckConstraint("CK_HrReferral_Amount", "[Amount] IS NULL OR [Amount] > 0");
+
+                            t.HasCheckConstraint("CK_HrReferral_Closed", "([Status] <> 'Closed' AND [Outcome] IS NULL AND [ClosedAt] IS NULL AND [ClosedBy] IS NULL) OR ([Status] = 'Closed' AND [Outcome] IS NOT NULL AND [ClosedAt] IS NOT NULL AND [ClosedBy] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_HrReferral_Deduction", "([Outcome] = 'DeductionApplied' AND [DeductionInputId] IS NOT NULL) OR ([Outcome] IS NULL OR [Outcome] <> 'DeductionApplied') AND [DeductionInputId] IS NULL");
+
+                            t.HasCheckConstraint("CK_HrReferral_Outcome", "[Outcome] IS NULL OR [Outcome] IN ('DeductionApplied', 'Warning', 'NoAction')");
+
+                            t.HasCheckConstraint("CK_HrReferral_SourceType", "[SourceType] IN ('VehicleExpense', 'VehicleViolation')");
+
+                            t.HasCheckConstraint("CK_HrReferral_Status", "[Status] IN ('Open', 'UnderInvestigation', 'Closed')");
                         });
                 });
 
@@ -578,8 +782,31 @@ namespace AlMotaheda.Modules.HR.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.HR.Data.EmployeeAssignment", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.HR.Data.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.HR.Data.EmployeeDocument", b =>
                 {
+                    b.HasOne("AlMotaheda.Modules.HR.Data.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.HR.Data.HrReferral", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.HR.Data.PayrollInput", null)
+                        .WithMany()
+                        .HasForeignKey("DeductionInputId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("AlMotaheda.Modules.HR.Data.Employee", null)
                         .WithMany()
                         .HasForeignKey("EmployeeId")

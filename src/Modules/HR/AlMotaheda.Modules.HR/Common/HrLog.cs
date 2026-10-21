@@ -48,4 +48,16 @@ internal sealed partial class HrLog(ILogger<HrLog> logger)
 
     [LoggerMessage(EventId = 9054, Level = LogLevel.Information, Message = "User {ActorId} confirmed payment request {RequestId}: salary sheet {SheetId} paid")]
     public partial void SheetPaid(int actorId, int sheetId, int requestId);
+
+    [LoggerMessage(EventId = 9061, Level = LogLevel.Information, Message = "User {ActorId} assigned employee {EmployeeId} to project {ProjectId} (assignment {AssignmentId}, {Role})")]
+    public partial void EmployeeAssigned(int actorId, int employeeId, int projectId, int assignmentId, string role);
+
+    [LoggerMessage(EventId = 9062, Level = LogLevel.Information, Message = "User {ActorId} ended assignment {AssignmentId} of employee {EmployeeId}")]
+    public partial void AssignmentEnded(int actorId, int employeeId, int assignmentId);
+
+    [LoggerMessage(EventId = 9071, Level = LogLevel.Information, Message = "User {ActorId} referred employee {EmployeeId} to HR (referral {ReferralId}, {SourceType} {SourceId})")]
+    public partial void Referred(int actorId, int employeeId, int referralId, string sourceType, int sourceId);
+
+    [LoggerMessage(EventId = 9072, Level = LogLevel.Information, Message = "User {ActorId} moved referral {ReferralId} to {Status} ({Outcome})")]
+    public partial void ReferralMoved(int actorId, int referralId, string status, string? outcome);
 }

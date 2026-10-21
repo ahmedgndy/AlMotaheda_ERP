@@ -25,6 +25,15 @@
 | C1 | Another module's record is pointed to (archive document links, a daily report's subcontract and machine) only after the owning module confirms it is on the project, through `IProjectRecordOwnership`. A machine counts as on the project when it has ever been assigned there | The client's ids are never trusted; a machine moves between sites, so its history decides |
 | F3 | A supply or site expense (Projects) from a supplier of kind `Fuel` or `Equipment` is refused with 409 `use_equipment_costs` | Equipment fuel, rental and maintenance are recorded only in Site equipment (Fleet); the same cost in both modules would be counted twice. Project expenses already have no equipment category |
 | A1 | Archive permissions reuse the `projects` permission module | There is no documents permission module among the 17 seeded ones |
+| T1 | One custody registry in Finance (`CustodyAccount`, `CustodyTransfer`), several ledgers: Finance ledgers Accountant and payroll-batch accounts; a project custody stays in `projects.CustodyEntry`; a vehicle custody is `fleet.VehicleCustodyEntry`. Finance writes the other module's side through `ICustodyLedgerSource` in the same transaction | Keeps the Projects custody and its screens, reports and tests as they are, keeps each module the owner of its money, and still gives one hierarchy, one transfer spine and one set of figures |
+| T2 | A transfer is a linked pair of movements with purpose `CustodyAdvance` / `CustodyReturn`; balances move only on `Disbursed` (source) and `Received` (destination); requests and approvals reserve | The brief: a transfer is never an expense; cash in transit is in nobody's balance |
+| T3 | The treasury balance is never stored: opening balance (set once by an Executive) + the ledger from the opening date | One rule for the ledger and the treasury; no stored total to drift |
+| T4 | `Projects:CustodyBalanceCheck` is the one overdraft policy for the treasury, every custody account and the vehicle custody | The brief asks for reuse; two policies would disagree |
+| T5 | A payroll batch never recalculates entitlements: Workforce (and HR) answer `IPayrollEntitlementSource`; only the Accountant's settlement confirmation marks wages paid | Separation of duties and no second source of truth for payroll |
+| T6 | The `Office` custody kind is reserved and not wired; the Office module keeps its custody | Out of this delivery's scope; registering it later is one `ICustodyLedgerSource` |
+| T7 | A fuel claim gated by price control opens a `PriceException` only when the vehicle is on a project; off-project it is `Escalated` to an Executive | A price exception belongs to a project (table and inbox); the Executive still decides either way |
+| T8 | Claim evidence is stored by a Fleet file store (`Fleet:Storage:RootPath`), typed from the bytes, served only through the API | The Archive module's documents are project-scoped with their own approval; a claim photo is a private attachment of the claim |
+| T9 | An HR referral closes with `NoAction`, `Warning` or `DeductionApplied`; only the last raises a `PayrollInput` deduction, through HR's own rules, approved with the salary sheet | Nothing is deducted automatically; Fleet never writes payroll |
 
 ## 2. Open business questions (need an answer from the company)
 
@@ -38,6 +47,11 @@
 4. **Weekly payroll.** One run per week for the company (ERD) or payments per worker as now?
 5. **Retention and advances for subcontractors.** When is retention released? How is an advance recovered on
    each certificate?
+6. **Custody period closes.** Should a period close require the custody to be returned in full
+   (`Finance__CustodyPeriodCarryForward` = `RequireZeroBalance`) or carry the balance forward (shipped)?
+7. **Vehicle claims above an amount.** Should a claim above some amount need the Executive
+   (`Fleet__ClaimExecutiveApprovalAbove`, shipped as 0: the accountant approves every claim)?
+8. **Vehicle GPS.** Which tracking provider, if any? Until one is integrated the location screens say so.
 6. **Who approves subcontract work.** Only roles with `subcontractors` Approve can (by default the Executive).
    The prototype also lets the Accountant approve manpower lines. Grant the permission to the Accountant role?
 7. **Who records equipment costs.** `equipment` Create or Edit (Executive, Manager by default). Should site

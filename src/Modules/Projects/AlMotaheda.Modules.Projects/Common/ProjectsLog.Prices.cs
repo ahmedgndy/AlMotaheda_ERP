@@ -42,6 +42,9 @@ internal sealed partial class ProjectsLog
     [LoggerMessage(EventId = 2855, Level = LogLevel.Information, Message = "Custody entry {EntryId} on project {ProjectId} for {SourceType} {SourceId}: {NewStatus}")]
     public partial void CustodyOutflowMoved(int projectId, int entryId, string sourceType, int sourceId, string newStatus);
 
+    [LoggerMessage(EventId = 2461, Level = LogLevel.Information, Message = "User {ActorId} wrote custody entry {EntryId} ({Kind}) of holder {HolderUserId} on project {ProjectId} from {SourceType} {SourceId}")]
+    public partial void CustodyTransferWritten(int actorId, int projectId, int entryId, int holderUserId, string sourceType, int sourceId, string kind);
+
     [LoggerMessage(EventId = 2856, Level = LogLevel.Warning, Message = "User {ActorId} paid record {ExpenseId} on project {ProjectId} out of custody beyond its balance (policy Warn)")]
     public partial void CustodyOverdrawn(int actorId, int projectId, int expenseId);
 }

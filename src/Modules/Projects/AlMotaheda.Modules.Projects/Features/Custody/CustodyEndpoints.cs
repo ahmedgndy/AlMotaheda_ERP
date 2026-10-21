@@ -202,7 +202,7 @@ internal static class CustodyEndpoints
             .Select(line =>
             {
                 var item = line.Movement.ProjectItemId is { } itemId ? items.GetValueOrDefault(itemId) : null;
-                var signed = line.Movement.Kind == CustodyEntryKind.Funding ? line.Movement.Amount : -line.Movement.Amount;
+                var signed = line.Movement.Kind is { } kind && CustodyEntryKinds.IsCashIn(kind) ? line.Movement.Amount : -line.Movement.Amount;
                 return new CustodyLineView(
                     line.Movement.Date, line.Movement.Type, signed, line.Balance, line.Movement.Pending, line.Movement.Status, line.Movement.SourceType,
                     line.Movement.SourceId, line.Movement.Description, line.Movement.ProjectItemId, item?.NameAr, item?.NameEn, line.Movement.RecordedBy,

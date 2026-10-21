@@ -13,6 +13,9 @@ internal static class FinancePermissions
 
     /// <summary>The bank step and the ledger.</summary>
     public const string Finance = "finance";
+
+    /// <summary>Custody accounts and transfers: View (own), Create (ask), Approve (review, adjust, close), See money (every account).</summary>
+    public const string Custody = "custody";
 }
 
 /// <summary>The signed-in caller as Finance sees them.</summary>
@@ -36,6 +39,14 @@ internal sealed class FinanceCaller
     public bool Can(string module, PermissionAction action) => _principal.HasPermission(module, action);
 
     public bool SeesAmounts => Can(FinancePermissions.Payments, PermissionAction.SeeMoney);
+
+    /// <summary>Sees every custody account and transfer: a custody reviewer, or anyone who sees the ledger.</summary>
+    public bool SeesAllCustody =>
+        Can(FinancePermissions.Custody, PermissionAction.Approve)
+        || Can(FinancePermissions.Custody, PermissionAction.SeeMoney)
+        || Can(FinancePermissions.Finance, PermissionAction.SeeMoney);
+
+    public bool ReviewsCustody => Can(FinancePermissions.Custody, PermissionAction.Approve);
 
     public static FinanceCaller? From(ClaimsPrincipal principal) =>
         principal.GetUserId() is { } userId ? new FinanceCaller(principal, userId, principal.GetSessionId()) : null;

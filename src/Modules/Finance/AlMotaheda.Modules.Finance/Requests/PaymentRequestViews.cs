@@ -26,7 +26,8 @@ internal sealed record PaymentRequestRow(
     DateTime CreatedAt,
     PersonView CreatedBy,
     DateOnly? PaidOn,
-    string Origin);
+    string Origin,
+    int? SourceCustodyAccountId = null);
 
 internal sealed record PaymentLineView(string RecordType, int RecordId, int ProjectId, decimal? Amount);
 
@@ -201,7 +202,8 @@ internal sealed class PaymentRequestViews(FinanceDbContext db, IEnumerable<IPaym
             request.CreatedAt,
             Person(request.CreatedBy, people)!,
             request.PaidOn,
-            request.Origin.ToString());
+            request.Origin.ToString(),
+            request.SourceCustodyAccountId);
     }
 
     private static PersonView? Person(int? userId, IReadOnlyDictionary<int, UserSummary> people) =>

@@ -10,7 +10,7 @@ namespace AlMotaheda.Modules.Fleet.Startup;
 /// Applies pending Fleet migrations once before the API accepts requests, only when
 /// <c>Database:ApplyMigrationsOnStartup</c> is true (meant for development; servers run the reviewed script).
 /// </summary>
-/// <remarks>The Fleet tables point to <c>projects.Project</c>, <c>projects.ProjectItem</c>, <c>projects.Supplier</c> and <c>access.User</c>, so the Access and Projects migrations run first. See <see cref="ModuleMigrations"/>.</remarks>
+/// <remarks>The Fleet tables point to <c>projects.Project</c>, <c>projects.ProjectItem</c>, <c>projects.Supplier</c>, <c>access.User</c> and <c>hr.Employee</c> (vehicle drivers), so the Access, Projects and HR migrations run first. See <see cref="ModuleMigrations"/>.</remarks>
 internal sealed class FleetStartup(
     IServiceScopeFactory scopeFactory,
     IConfiguration configuration,
@@ -25,7 +25,7 @@ internal sealed class FleetStartup(
 
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<FleetDbContext>();
-        await ModuleMigrations.ApplyAsync(db, "Fleet", ["projects.Project", "projects.ProjectItem", "projects.Supplier"], "Access and Projects", logger, cancellationToken);
+        await ModuleMigrations.ApplyAsync(db, "Fleet", ["projects.Project", "projects.ProjectItem", "projects.Supplier", "hr.Employee"], "Access, Projects and HR", logger, cancellationToken);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

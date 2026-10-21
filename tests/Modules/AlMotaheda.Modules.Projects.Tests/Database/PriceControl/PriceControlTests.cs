@@ -18,7 +18,8 @@ namespace AlMotaheda.Modules.Projects.Tests.Database.PriceControl;
 [Collection(SqlServerCollection.Name)]
 public sealed class PriceControlTests(SqlServerFixture database)
 {
-    private static string Today => DateTime.UtcNow.ToString("yyyy-MM-dd");
+    // The company's day (Cairo), as the server dates ranges "from today": UTC is a day behind after midnight in Cairo.
+    private static string Today => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Africa/Cairo")).ToString("yyyy-MM-dd");
 
     [DatabaseFact]
     public async Task A_price_inside_its_range_is_recorded_approved_and_paid_with_no_case()

@@ -51,6 +51,9 @@ internal enum EquipmentCategory
     Heavy,
     Survey,
     Safety,
+
+    /// <summary>A road vehicle: the register row of a <see cref="Vehicle"/> (plate, odometer, driver, custody, GPS).</summary>
+    Vehicle,
 }
 
 internal enum EquipmentOwnership

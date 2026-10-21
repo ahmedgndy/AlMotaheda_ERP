@@ -2,10 +2,14 @@ using AlMotaheda.BuildingBlocks.Modules;
 using AlMotaheda.BuildingBlocks.Time;
 using AlMotaheda.Modules.Projects.Contracts;
 using AlMotaheda.Modules.Finance.Contracts;
+using AlMotaheda.Modules.Fleet.Common;
 using AlMotaheda.Modules.Fleet.Data;
 using AlMotaheda.Modules.Fleet.Features;
+using AlMotaheda.Modules.Fleet.Features.Gps;
 using AlMotaheda.Modules.Fleet.Integration;
 using AlMotaheda.Modules.Fleet.Startup;
+using AlMotaheda.Modules.Fleet.Storage;
+using Microsoft.Extensions.Options;
 using AlMotaheda.Modules.Reports.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -38,6 +42,18 @@ public sealed class FleetModule : IModule
         services.AddScoped<IPaymentSource, EquipmentCostPaymentSource>();
         services.AddScoped<IProjectRecordOwnership, FleetRecordOwnership>();
         services.AddScoped<IReportSource, FleetReports>();
+        services.AddScoped<IReportSource, VehicleReports>();
+
+        // Vehicles: policies, the evidence store, the custody ledger for Finance, Price Control, GPS (no provider yet).
+        services.AddOptions<FleetOptions>().Bind(configuration.GetSection(FleetOptions.SectionName)).ValidateOnStart();
+        services.AddSingleton<IValidateOptions<FleetOptions>, FleetOptionsValidator>();
+        services.AddOptions<FleetStorageOptions>().Bind(configuration.GetSection(FleetStorageOptions.SectionName)).ValidateOnStart();
+        services.AddSingleton<IPostConfigureOptions<FleetStorageOptions>, FleetStorageOptionsSetup>();
+        services.AddSingleton<IValidateOptions<FleetStorageOptions>, FleetStorageOptionsValidator>();
+        services.AddSingleton<IFleetFileStore, LocalFleetFileStore>();
+        services.AddScoped<ICustodyLedgerSource, VehicleCustodyLedgerSource>();
+        services.AddScoped<IPriceExceptionSource, VehicleExpensePriceExceptionSource>();
+        services.AddSingleton<IVehicleLocationProvider, NullVehicleLocationProvider>();
         FleetFeatures.AddServices(services);
 
         services.AddHostedService<FleetStartup>();

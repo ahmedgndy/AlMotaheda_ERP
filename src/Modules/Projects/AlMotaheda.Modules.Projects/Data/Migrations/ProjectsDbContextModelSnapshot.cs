@@ -396,7 +396,7 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                         {
                             t.HasCheckConstraint("CK_CustodyEntry_Amount", "[Amount] > 0");
 
-                            t.HasCheckConstraint("CK_CustodyEntry_Kind", "[Kind] IN ('Funding', 'Return', 'Payroll')");
+                            t.HasCheckConstraint("CK_CustodyEntry_Kind", "[Kind] IN ('Funding', 'Return', 'Payroll', 'AdjustmentIn', 'AdjustmentOut')");
 
                             t.HasCheckConstraint("CK_CustodyEntry_Pending", "[Status] = 'Posted' OR [Kind] = 'Payroll'");
 
@@ -1355,7 +1355,7 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
 
                             t.HasCheckConstraint("CK_PriceException_NewRange", "[NewRangeId] IS NULL OR [Status] = 'ApprovedWithPriceChange'");
 
-                            t.HasCheckConstraint("CK_PriceException_SourceType", "[SourceType] IN ('ProjectExpense', 'SupplierInvoiceLine')");
+                            t.HasCheckConstraint("CK_PriceException_SourceType", "[SourceType] IN ('ProjectExpense', 'SupplierInvoiceLine', 'VehicleExpense')");
 
                             t.HasCheckConstraint("CK_PriceException_Status", "[Status] IN ('Pending', 'ApprovedOnce', 'ApprovedWithPriceChange', 'Rejected', 'Withdrawn')");
                         });

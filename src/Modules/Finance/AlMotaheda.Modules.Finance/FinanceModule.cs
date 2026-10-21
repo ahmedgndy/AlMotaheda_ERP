@@ -4,8 +4,11 @@ using AlMotaheda.Modules.Finance.Bank;
 using AlMotaheda.Modules.Finance.Common;
 using AlMotaheda.Modules.Finance.Contracts;
 using AlMotaheda.Modules.Finance.Data;
+using AlMotaheda.Modules.Finance.Features.Custody;
 using AlMotaheda.Modules.Finance.Features.Ledger;
 using AlMotaheda.Modules.Finance.Features.PaymentRequests;
+using AlMotaheda.Modules.Finance.Features.Payroll;
+using AlMotaheda.Modules.Finance.Features.Treasury;
 using AlMotaheda.Modules.Finance.Integration;
 using AlMotaheda.Modules.Finance.Requests;
 using AlMotaheda.Modules.Finance.Startup;
@@ -41,12 +44,24 @@ public sealed class FinanceModule : IModule
         services.AddSingleton<IValidateOptions<BankOptions>, BankOptionsValidator>();
         services.AddSingleton<IBankPaymentProvider, MockBankPaymentProvider>();
 
+        services.AddOptions<FinanceOptions>().Bind(configuration.GetSection(FinanceOptions.SectionName)).ValidateOnStart();
+        services.AddSingleton<IValidateOptions<FinanceOptions>, FinanceOptionsValidator>();
+
         services.AddCompanyClock();
         services.AddSingleton<FinanceLog>();
+        services.AddSingleton<CustodyBalancePolicy>();
         services.AddScoped<PaymentRequestViews>();
         services.AddScoped<PaymentRequestWorkflow>();
         services.AddScoped<IPaymentRequests, PaymentRequestsContract>();
         services.AddScoped<IReportSource, FinanceReports>();
+
+        // The treasury and the custody hierarchy.
+        services.AddScoped<CustodyLedgers>();
+        services.AddScoped<CustodyAccountViews>();
+        services.AddScoped<CustodyTransferWorkflow>();
+        services.AddScoped<PayrollBatchRules>();
+        services.AddScoped<PayrollBatchViews>();
+        services.AddScoped<IReportSource, CustodyReports>();
 
         services.AddHostedService<FinanceStartup>();
     }
@@ -60,5 +75,12 @@ public sealed class FinanceModule : IModule
         GetPaymentRequest.Map(api);
         MovePaymentRequest.Map(api);
         ListLedgerEntries.Map(api);
+
+        TreasuryEndpoints.Map(api);
+        CustodyAccountEndpoints.Map(api);
+        CustodyControlEndpoints.Map(api);
+        CustodyTransferEndpoints.Map(api);
+        PayrollBatchEndpoints.Map(api);
+        CustodyMonitorEndpoints.Map(api);
     }
 }

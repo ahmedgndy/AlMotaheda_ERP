@@ -25,6 +25,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks\AlMotaheda.BuildingBlocks.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\AlMotaheda.BuildingBlocks.Data\AlMotaheda.BuildingBlocks.Data.csproj" />
+    <ProjectReference Include="..\AlMotaheda.Modules.HR.Contracts\AlMotaheda.Modules.HR.Contracts.csproj" />
+    <!-- Project names on employee assignments. -->
+    <ProjectReference Include="..\..\Projects\AlMotaheda.Modules.Projects.Contracts\AlMotaheda.Modules.Projects.Contracts.csproj" />
     <!-- User names (who prepared and reviewed a sheet), and linking an employee to a sign-in account. -->
     <ProjectReference Include="..\..\Access\AlMotaheda.Modules.Access.Contracts\AlMotaheda.Modules.Access.Contracts.csproj" />
     <!-- Salary sheets are paid through Finance payment requests; Finance marks the sheet paid once the money left. -->

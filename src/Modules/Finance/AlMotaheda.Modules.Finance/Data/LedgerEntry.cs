@@ -28,7 +28,14 @@ internal sealed class LedgerEntry
     /// <summary>One of <c>PaymentPurposes</c>.</summary>
     public string Purpose { get; set; } = "";
 
-    public int PaymentRequestId { get; set; }
+    /// <summary>The paid request, or <c>null</c> for an entry of a custody transfer (<see cref="CustodyTransferId"/>).</summary>
+    public int? PaymentRequestId { get; set; }
+
+    /// <summary>The internal transfer that moved the money, when it was not a payment request.</summary>
+    public int? CustodyTransferId { get; set; }
+
+    /// <summary>For <see cref="LedgerAccount.Custody"/>: the custody account the money left, instead of the treasury.</summary>
+    public int? CustodyAccountId { get; set; }
 
     /// <summary>One of <c>PaymentSourceTypes</c>, and the payment row in that module.</summary>
     public string SourceType { get; set; } = "";
@@ -48,4 +55,10 @@ internal enum LedgerAccount
 {
     Bank,
     Cash,
+
+    /// <summary>
+    /// A custody account (<c>CustodyAccountId</c>): cash already drawn from the treasury, paid out by its holder. The
+    /// treasury balances count only Bank and Cash; custody entries are the payments of the custody ledger.
+    /// </summary>
+    Custody,
 }

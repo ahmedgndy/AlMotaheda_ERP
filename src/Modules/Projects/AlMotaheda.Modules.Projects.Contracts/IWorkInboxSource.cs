@@ -55,6 +55,12 @@ public static class WorkInboxRecordTypes
 
     /// <summary>A transaction priced above its reference range, waiting for the Executive in Price Control.</summary>
     public const string PriceException = "PriceException";
+
+    /// <summary>A vehicle expense claim (fuel, maintenance…) waiting for the accountant's review (Fleet).</summary>
+    public const string VehicleExpense = "VehicleExpense";
+
+    /// <summary>A vehicle violation waiting for review (Fleet).</summary>
+    public const string VehicleViolation = "VehicleViolation";
 }
 
 /// <param name="Reason">One of <see cref="WorkInboxReasons"/>.</param>

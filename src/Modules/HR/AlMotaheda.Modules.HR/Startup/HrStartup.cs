@@ -25,7 +25,7 @@ internal sealed class HrStartup(
 
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<HrDbContext>();
-        await ModuleMigrations.ApplyAsync(db, "HR", [], "Platform", logger, cancellationToken);
+        await ModuleMigrations.ApplyAsync(db, "HR", ["projects.Project"], "Platform, Access and Projects", logger, cancellationToken);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

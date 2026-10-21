@@ -94,6 +94,24 @@ internal static class LiveScopes
         ["PayrollSettlement"] = new(["LaborSettlements", "LaborPayable", "LaborSummary", "WorkerAccount", "Custody", .. ProjectCost], true, [Finance]),
         ["SupplyAgreement"] = new(["SupplyAgreements", "ProjectSuppliers"], true, [Procurement]),
         ["ContractVariation"] = new(["Subcontracts", "Obligations", .. ProjectCost], true, [Finance]),
+        // The treasury and the custody hierarchy (Finance): company-wide money screens; an engineer's transfer also refreshes their project's custody.
+        ["TreasuryAccount"] = new(["Treasury", "CompanyDashboard"], true, [Finance]),
+        ["CustodyAccount"] = new(["CustodyAccounts", "Treasury"], true, [Finance]),
+        ["CustodyMovement"] = new(["CustodyAccounts", "CustodyStatement", "PayrollBatches"], true, [Finance]),
+        ["CustodyTransfer"] = new(["CustodyTransfers", "CustodyAccounts", "Treasury", "Custody", "PayrollBatches"], true, [Finance]),
+        ["PayrollBatch"] = new(["PayrollBatches"], true, [Finance]),
+        ["CustodyCashCount"] = new(["CustodyAccounts", "CustodyStatement"], true, [Finance]),
+        ["CustodyAdjustment"] = new(["CustodyAccounts", "CustodyStatement"], true, [Finance]),
+        ["CustodyPeriodClose"] = new(["CustodyAccounts"], true, [Finance]),
+        // Vehicles (Fleet): the register, a vehicle's custody and claims; a claim on a project also refreshes its equipment figures.
+        ["Vehicle"] = new(["Vehicles"], false, []),
+        ["VehicleDriverAssignment"] = new(["Vehicles", "VehicleDrivers"], false, []),
+        ["VehicleCustodyEntry"] = new(["VehicleCustody", "Vehicles", "CustodyAccounts"], true, [Finance]),
+        ["VehicleExpense"] = new(["VehicleExpenses", "VehicleCustody", "EquipmentSummary", .. ProjectCost], true, [Finance]),
+        ["VehicleViolation"] = new(["VehicleViolations"], false, []),
+        // HR: assignments and referrals.
+        ["EmployeeAssignment"] = new(["EmployeeAssignments", "Employees"], false, [Hr]),
+        ["HrReferral"] = new(["HrReferrals"], false, [Hr]),
     };
 
     /// <summary>Records that only add detail to a parent that changes in the same save; they send nothing alone.</summary>
@@ -104,6 +122,7 @@ internal static class LiveScopes
         "PurchaseOrderRevision", "GoodsReceiptLine", "SupplierInvoiceLine", "SalarySheetLine", "BudgetLine", "VoidedEquipmentCostPayment",
         "ReportRun", "RefreshToken", "UserSignInState", "PriceAboveRangeAlert", "CostRecordedAlert", "PriceExceptionAlert",
         "PayrollSettlementLine", "PayrollSettlementAllocation", "SettlementAlert",
+        "CustodyTransferEvent", "CustodyTransferAlert", "PayrollBatchAllocation", "VehicleExpenseFlag", "VehicleExpenseAlert", "FleetAttachment",
     };
 
     /// <summary>The signals one changed record sends.</summary>

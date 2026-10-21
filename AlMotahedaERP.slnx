@@ -33,6 +33,7 @@
   </Folder>
   <Folder Name="/src/Modules/HR/">
     <Project Path="src/Modules/HR/AlMotaheda.Modules.HR/AlMotaheda.Modules.HR.csproj" />
+    <Project Path="src/Modules/HR/AlMotaheda.Modules.HR.Contracts/AlMotaheda.Modules.HR.Contracts.csproj" />
   </Folder>
   <Folder Name="/src/Modules/Procurement/">
     <Project Path="src/Modules/Procurement/AlMotaheda.Modules.Procurement.Contracts/AlMotaheda.Modules.Procurement.Contracts.csproj" />

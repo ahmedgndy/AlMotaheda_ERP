@@ -23,9 +23,11 @@ internal static class ListLedgerEntries
         DateOnly? From, DateOnly? To, int? ProjectId, LedgerAccount? Account, string? CounterpartyType, int? CounterpartyId,
         IReadOnlySet<int>? VisibleProjects);
 
+    /// <param name="IsInternalTransfer">A custody advance or return: money moved inside the company, never an expense.</param>
     internal sealed record EntryView(
         long Id, DateOnly EntryDate, string Account, decimal Amount, string CounterpartyType, int CounterpartyId, int? ProjectId,
-        string Purpose, int PaymentRequestId, string SourceType, int? SourcePaymentId, long? ReversesEntryId, DateTime CreatedAt);
+        string Purpose, int? PaymentRequestId, string SourceType, int? SourcePaymentId, long? ReversesEntryId, DateTime CreatedAt,
+        int? CustodyTransferId = null, int? CustodyAccountId = null, bool IsInternalTransfer = false);
 
     internal sealed record Totals(decimal MoneyOut, decimal MoneyIn, decimal Net, int Count);
 
@@ -97,7 +99,8 @@ internal static class ListLedgerEntries
             .Select(entry => new EntryView(
                 entry.Id, entry.EntryDate, entry.Account.ToString(), entry.Amount, entry.CounterpartyType, entry.CounterpartyId,
                 entry.ProjectId, entry.Purpose, entry.PaymentRequestId, entry.SourceType, entry.SourcePaymentId, entry.ReversesEntryId,
-                entry.CreatedAt))
+                entry.CreatedAt, entry.CustodyTransferId, entry.CustodyAccountId,
+                entry.Purpose == PaymentPurposes.CustodyAdvance || entry.Purpose == PaymentPurposes.CustodyReturn))
             .ToListAsync(cancellationToken);
 
         return TypedResults.Ok(new Response(items, page, pageSize, totals.Count, totals));

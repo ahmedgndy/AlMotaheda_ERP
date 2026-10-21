@@ -25,19 +25,20 @@ internal static class ModuleCatalog
     /// <summary>Creates a new instance of every module. Called once at startup.</summary>
     /// <remarks>
     /// The order is the migration order: Platform first (every save of every module writes its audit and outbox
-    /// tables), then Access, then Projects, then the modules whose tables point to <c>projects</c> tables, then HR, Procurement and Reports, and Finance
-    /// last (its first migration copies the payments already recorded in those modules into the ledger).
+    /// tables), then Access, then Projects, then HR (vehicles' drivers are employees, so Fleet's tables point to
+    /// <c>hr</c>), then the modules whose tables point to <c>projects</c> tables, then Procurement and Reports, and
+    /// Finance last (its first migration copies the payments already recorded in those modules into the ledger).
     /// </remarks>
     public static IReadOnlyList<IModule> CreateAll() =>
     [
         new PlatformModule(),
         new AccessModule(),
         new ProjectsModule(),
+        new HrModule(),
         new WorkforceModule(),
         new SubcontractorsModule(),
         new FleetModule(),
         new ArchiveModule(),
-        new HrModule(),
         new ProcurementModule(),
         new ReportsModule(),
         new FinanceModule(),

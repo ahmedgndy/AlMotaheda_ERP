@@ -15,7 +15,7 @@ public sealed class DatabaseSchemaTests
         using var db = CreateContext();
 
         Assert.False(db.Database.HasPendingModelChanges(), "The model changed without a migration. Run dotnet ef migrations add.");
-        Assert.Equal(["InitialHr"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
+        Assert.Equal(["InitialHr", "AssignmentsAndReferrals"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
     }
 
     [Theory]
@@ -28,11 +28,30 @@ public sealed class DatabaseSchemaTests
     [InlineData("CONSTRAINT [CK_SalarySheet_Paid] CHECK ([Status] <> 'Paid' OR ([PaidOn] IS NOT NULL AND [PaymentRequestId] IS NOT NULL))")]
     [InlineData("CONSTRAINT [CK_Employee_NationalId] CHECK (LEN([NationalId]) = 14 AND [NationalId] NOT LIKE '%[^0-9]%')")]
     [InlineData("[BasicSalary] decimal(18,2) NOT NULL")]
+    // Employees on projects over time, and the cases other modules refer to HR.
+    [InlineData("CREATE TABLE [hr].[EmployeeAssignment]")]
+    [InlineData("CREATE UNIQUE INDEX [UX_EmployeeAssignment_Open] ON [hr].[EmployeeAssignment] ([EmployeeId], [ProjectId]) WHERE [EndDate] IS NULL")]
+    [InlineData("CONSTRAINT [CK_EmployeeAssignment_Role] CHECK ([Role] IN ('SiteEngineer', 'Driver', 'Supervisor', 'Administrator', 'Guard', 'Other'))")]
+    [InlineData("CREATE TABLE [hr].[HrReferral]")]
+    [InlineData("CREATE UNIQUE INDEX [UX_HrReferral_Source] ON [hr].[HrReferral] ([SourceType], [SourceId])")]
+    [InlineData("CONSTRAINT [CK_HrReferral_SourceType] CHECK ([SourceType] IN ('VehicleExpense', 'VehicleViolation'))")]
+    [InlineData("CONSTRAINT [CK_HrReferral_Deduction] CHECK (([Outcome] = 'DeductionApplied' AND [DeductionInputId] IS NOT NULL) OR ([Outcome] IS NULL OR [Outcome] <> 'DeductionApplied') AND [DeductionInputId] IS NULL)")]
+    [InlineData("[Number] AS CONCAT('HRR-', REPLICATE('0', 6 - LEN([Id])), [Id]) PERSISTED")]
     public void The_create_script_contains(string expected)
     {
         using var db = CreateContext();
 
         Assert.Contains(expected, db.Database.GenerateCreateScript());
+    }
+
+    [Fact]
+    public void The_migration_adds_the_project_foreign_key_of_an_assignment()
+    {
+        using var db = CreateContext();
+
+        Assert.Contains(
+            "ALTER TABLE [hr].[EmployeeAssignment] ADD CONSTRAINT [FK_EmployeeAssignment_Project_ProjectId] FOREIGN KEY ([ProjectId]) REFERENCES [projects].[Project] ([Id])",
+            Microsoft.EntityFrameworkCore.Infrastructure.AccessorExtensions.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>(db).GenerateScript());
     }
 
     [Fact]

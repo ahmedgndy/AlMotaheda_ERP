@@ -41,6 +41,7 @@ internal sealed class PaymentRequestWorkflow(
     IVisibleProjects projects,
     IPermissionCheck permissions,
     PaymentRequestViews views,
+    Features.Custody.CustodyLedgers custody,
     CompanyClock clock,
     FinanceLog log)
 {
@@ -180,9 +181,56 @@ internal sealed class PaymentRequestWorkflow(
 
         var now = clock.UtcNow;
         var paid = StepOutcome.From(request.MarkPaid(userId, now, paidOn, reference, sourcePaymentId), request);
-        if (paid.Problem is null)
+        if (paid.Problem is not null)
         {
-            db.LedgerEntries.AddRange(LedgerPosting.Paid(request, now, userId));
+            return paid;
+        }
+
+        db.LedgerEntries.AddRange(LedgerPosting.Paid(request, now, userId));
+
+        // Paid out of a custody: the custody's own movement, under its lock, within what it holds under policy Block.
+        if (request.SourceCustodyAccountId is { } accountId)
+        {
+            if (!await Features.Custody.CustodyLedgers.TryLockAsync(db, accountId, cancellationToken))
+            {
+                return new StepOutcome(FinanceProblems.CustodyIsBusy());
+            }
+
+            var account = await db.CustodyAccounts.AsNoTracking().SingleAsync(candidate => candidate.Id == accountId, cancellationToken);
+            if (account.Status == CustodyAccountStatus.Closed)
+            {
+                return new StepOutcome(FinanceProblems.AccountClosed());
+            }
+
+            var figures = await custody.FiguresAsync(account, cancellationToken);
+            // This request's own reservation is what it spends: add it back before comparing.
+            var available = figures.Available + request.Amount;
+            if (custody.Policy.Blocks && request.Amount > available)
+            {
+                return new StepOutcome(FinanceProblems.NotEnoughCustody(available, request.Amount));
+            }
+
+            if (await custody.ClosedPeriodOfAsync(accountId, paidOn, cancellationToken) is { } closed)
+            {
+                return new StepOutcome(FinanceProblems.ClosedPeriod(closed));
+            }
+
+            db.CustodyMovements.Add(new CustodyMovement
+            {
+                AccountId = accountId,
+                EntryDate = paidOn,
+                Amount = -request.Amount,
+                Kind = CustodyMovementKind.Payment,
+                Status = CustodyMovementStatus.Posted,
+                SourceType = CustodyMovementSources.PaymentRequest,
+                SourceId = request.Id,
+                PaymentRequestId = request.Id,
+                Reference = request.Reference ?? request.Number,
+                Reason = request.Notes,
+                CreatedAt = now,
+                CreatedBy = userId,
+            });
+            log.PaidFromCustody(userId, request.Id, accountId);
         }
 
         return paid;

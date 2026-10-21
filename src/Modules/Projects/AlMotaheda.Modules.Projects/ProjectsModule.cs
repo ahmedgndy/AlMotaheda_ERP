@@ -58,6 +58,7 @@ public sealed class ProjectsModule : IModule
         services.AddScoped<IPaymentSource, SupplierPaymentSource>();
         services.AddScoped<IPaymentSource, CustodyFundingSource>();
         services.AddScoped<ICustodyLedger, CustodyLedgerContract>();
+        services.AddScoped<ICustodyLedgerSource, ProjectCustodyLedgerSource>();
         services.AddScoped<Features.PriceControl.PriceExceptionCases>();
         services.AddScoped<IPriceControl, PriceControlContract>();
         services.AddScoped<IProjectItems, ProjectItemsContract>();

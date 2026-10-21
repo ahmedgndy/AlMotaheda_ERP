@@ -98,7 +98,7 @@ public sealed class ReportFlowTests(SqlServerFixture database)
         await EnsureStatus(file, HttpStatusCode.OK);
         using (var workbook = new XLWorkbook(await file.Content.ReadAsStreamAsync()))
         {
-            Assert.Equal(-1_300m, workbook.Worksheet(1).Cell(8, 10).GetValue<decimal>()); // the totals row after two rows
+            Assert.Equal(-1_300m, workbook.Worksheet(1).Cell(8, 11).GetValue<decimal>()); // the totals row after two rows; amount is the 11th column (after "kind")
         }
 
         var notice = await WaitAsync(async () =>

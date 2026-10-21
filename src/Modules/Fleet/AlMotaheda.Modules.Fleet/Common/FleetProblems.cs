@@ -24,6 +24,23 @@ internal static class FleetProblems
     public const string NotPaid = "not_paid";
     public const string ItemInactive = "item_inactive";
     public const string ItemGone = "item_removed";
+    public const string PlateTaken = "plate_taken";
+    public const string DriverAssigned = "driver_assigned";
+    public const string NotTheDriver = "not_the_driver";
+    public const string NoDriverOnDate = "no_driver_on_date";
+    public const string EvidenceRequired = "evidence_required";
+    public const string FileTypeNotAllowed = "file_type_not_allowed";
+    public const string FileTooLargeCode = "file_too_large";
+    public const string EmptyFileCode = "file_empty";
+    public const string StorageUnavailable = "storage_unavailable";
+    public const string BadAttachmentsCode = "attachments_invalid";
+    public const string AlreadyReferred = "already_referred";
+    public const string ExecutiveRequired = "executive_required";
+    public const string PriceAboveRange = "price_above_range";
+    public const string PriceExceptionPending = "price_exception_pending";
+    public const string PriceExceptionRejected = "price_exception_rejected";
+    public const string NotVehicle = "not_a_vehicle";
+    public const string AlreadyPosted = "already_posted";
 
     public static ValidationProblem Validation(ValidationErrors errors) => ApiProblem.Validation(errors.ToDictionary());
 
@@ -113,6 +130,57 @@ internal static class FleetProblems
 
     public static ProblemHttpResult NotTheRecorder() =>
         ApiProblem.ForbiddenResult("Only the person who recorded this cost can change it.");
+
+    public static ProblemHttpResult VehicleNotFound() => NotFound("vehicle");
+    public static ProblemHttpResult DriverAssignmentNotFound() => NotFound("driver assignment");
+    public static ProblemHttpResult ClaimNotFound() => NotFound("vehicle expense claim");
+    public static ProblemHttpResult ViolationNotFound() => NotFound("vehicle violation");
+    public static ProblemHttpResult AttachmentNotFound() => NotFound("attachment");
+
+    public static ProblemHttpResult PlateAlreadyUsed() => Conflict(PlateTaken, "Another vehicle already has this plate.");
+
+    public static ProblemHttpResult DriverAlreadyAssigned() => Conflict(DriverAssigned, "This vehicle already has a driver. End that assignment first.");
+
+    public static ProblemHttpResult NotAVehicle() => Conflict(NotVehicle, "This equipment is not a vehicle.");
+
+    /// <summary>A claim is made by the vehicle's driver on that day; nobody claims against another vehicle's custody.</summary>
+    public static ProblemHttpResult NotTheVehiclesDriver() =>
+        ApiProblem.ForbiddenResult("Only the driver assigned to this vehicle on the expense date (or a fleet manager on their behalf) can claim against its custody.");
+
+    public static ProblemHttpResult NobodyDrove(DateOnly date) =>
+        Conflict(NoDriverOnDate, $"No driver was assigned to this vehicle on {date:yyyy-MM-dd}.");
+
+    public static ProblemHttpResult EvidenceMissing(string what) =>
+        ApiProblem.Create(StatusCodes.Status422UnprocessableEntity, EvidenceRequired, $"A claim needs {what} before it can be submitted.");
+
+    public static ProblemHttpResult TypeNotAllowed(string allowed) =>
+        ApiProblem.Create(StatusCodes.Status415UnsupportedMediaType, FileTypeNotAllowed, $"The file type is not accepted. Allowed: {allowed}.");
+
+    public static ProblemHttpResult TooLarge(long maxBytes) =>
+        ApiProblem.Create(StatusCodes.Status413PayloadTooLarge, FileTooLargeCode, $"The file is larger than the limit of {maxBytes / (1024 * 1024)} MB.");
+
+    public static ProblemHttpResult EmptyFile() => ApiProblem.Create(StatusCodes.Status422UnprocessableEntity, EmptyFileCode, "The file is empty.");
+
+    public static ProblemHttpResult StorageDown() =>
+        ApiProblem.Create(StatusCodes.Status503ServiceUnavailable, StorageUnavailable, "The evidence folder can't be used right now. Try again in a moment.");
+
+    public static ProblemHttpResult BadAttachments(string title) => ApiProblem.Create(StatusCodes.Status422UnprocessableEntity, BadAttachmentsCode, title);
+
+    public static ProblemHttpResult ReferredAlready() => Conflict(AlreadyReferred, "This record was already referred to HR.");
+
+    public static ProblemHttpResult NeedsExecutive() =>
+        ApiProblem.ForbiddenResult("Only a currently signed-in Executive can decide this claim (escalated, or above the policy's limit).");
+
+    public static ProblemHttpResult AboveRangeBlocked(decimal unitPrice, decimal maxPrice) =>
+        Conflict(PriceAboveRange, $"The price per litre {unitPrice:0.00} is above the highest reference price {maxPrice:0.00}. The company policy refuses it.");
+
+    public static ProblemHttpResult PriceCasePending() =>
+        Conflict(PriceExceptionPending, "The price of this claim waits for the Executive's decision in Price Control.");
+
+    public static ProblemHttpResult PriceCaseRejected() =>
+        Conflict(PriceExceptionRejected, "The Executive rejected the price of this claim. It can't be approved at this price.");
+
+    public static ProblemHttpResult PostedAlready() => Conflict(AlreadyPosted, "This claim was already posted to the vehicle's custody.");
 
     /// <summary>Another change to the same records held its lock for too long; safe to retry.</summary>
     public static ProblemHttpResult TryAgainLater() =>

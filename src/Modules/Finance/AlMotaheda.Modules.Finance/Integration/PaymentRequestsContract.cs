@@ -63,11 +63,40 @@ internal sealed class PaymentRequestsContract(
             .ToDictionaryAsync(entry => entry.PayeeId, entry => entry.Amount, cancellationToken);
     }
 
+    public async Task<CustodySourceCheck> CheckCustodySourceAsync(int accountId, int payerUserId, CancellationToken cancellationToken)
+    {
+        var account = await db.CustodyAccounts.AsNoTracking()
+            .Where(candidate => candidate.Id == accountId && candidate.Status == CustodyAccountStatus.Active)
+            .Select(candidate => new { candidate.Kind, candidate.HolderUserId })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (account is null)
+        {
+            return CustodySourceCheck.NotFound;
+        }
+
+        if (!CustodyAccountKinds.IsLedgeredByFinance(account.Kind))
+        {
+            return CustodySourceCheck.NotLedgered;
+        }
+
+        return account.HolderUserId == payerUserId ? CustodySourceCheck.Ok : CustodySourceCheck.NotHolder;
+    }
+
     public async Task<PaymentRequestRef> SubmitAsync(NewPaymentRequest draft, SharedTransaction transaction, CancellationToken cancellationToken)
     {
         Validate(draft);
 
         await using var joined = await JoinAsync(transaction, cancellationToken);
+        if (draft.SourceCustodyAccountId is { } accountId)
+        {
+            // The source module asked CheckCustodySourceAsync first; here it is a bug, not a client error.
+            var check = await CheckCustodySourceAsync(accountId, draft.CreatedBy, cancellationToken);
+            if (check != CustodySourceCheck.Ok || draft.Method != PaymentMethods.Cash)
+            {
+                throw new ArgumentException($"Custody account {accountId} can't be the source of this request ({check}, {draft.Method}).", nameof(draft));
+            }
+        }
+
         var request = PaymentRequest.Submit(
             draft.SourceType, draft.PayeeType, draft.PayeeId, draft.ProjectId, draft.Purpose, draft.Amount, draft.Method,
             draft.RequestedDate, draft.Reference, draft.Notes, draft.Payload, draft.IdempotencyKey, draft.CreatedBy, clock.UtcNow,
@@ -77,7 +106,8 @@ internal sealed class PaymentRequestsContract(
                 RecordId = line.RecordId,
                 ProjectId = line.ProjectId,
                 Amount = line.Amount,
-            }));
+            }),
+            draft.SourceCustodyAccountId);
         joined.PaymentRequests.Add(request);
         await joined.SaveChangesAsync(cancellationToken);
 
@@ -107,6 +137,37 @@ internal sealed class PaymentRequestsContract(
             .ToListAsync(cancellationToken);
         joined.LedgerEntries.AddRange(LedgerPosting.Reversal(originals, clock.Today, now, actorUserId));
 
+        // Paid out of a custody: the custody gets the cash back, as a reversal pointing to the payment's movement.
+        if (request.SourceCustodyAccountId is { } accountId)
+        {
+            if (!await SqlAppLock.TryAcquireAsync(joined, Features.Custody.CustodyLedgers.LockName(accountId), cancellationToken))
+            {
+                throw new InvalidOperationException("The custody account is busy. Try again in a moment.");
+            }
+
+            var movement = await joined.CustodyMovements.SingleOrDefaultAsync(
+                candidate => candidate.AccountId == accountId && candidate.SourceType == CustodyMovementSources.PaymentRequest && candidate.SourceId == request.Id, cancellationToken);
+            if (movement is not null)
+            {
+                joined.CustodyMovements.Add(new CustodyMovement
+                {
+                    AccountId = accountId,
+                    EntryDate = clock.Today,
+                    Amount = -movement.Amount,
+                    Kind = CustodyMovementKind.Reversal,
+                    Status = CustodyMovementStatus.Posted,
+                    SourceType = CustodyMovementSources.PaymentReversal,
+                    SourceId = request.Id,
+                    PaymentRequestId = request.Id,
+                    ReversesMovementId = movement.Id,
+                    Reason = reason,
+                    Reference = request.Number,
+                    CreatedAt = now,
+                    CreatedBy = actorUserId,
+                });
+            }
+        }
+
         await joined.SaveChangesAsync(cancellationToken);
         log.Reversed(actorUserId, request.Id, sourceType, sourcePaymentId);
     }
@@ -127,7 +188,8 @@ internal sealed class PaymentRequestsContract(
         request.Method,
         request.RequestedDate,
         request.IdempotencyKey,
-        request.Lines.OrderBy(line => line.Id).Select(line => new PaymentLine(line.RecordType, line.RecordId, line.ProjectId, line.Amount)).ToList());
+        request.Lines.OrderBy(line => line.Id).Select(line => new PaymentLine(line.RecordType, line.RecordId, line.ProjectId, line.Amount)).ToList(),
+        request.SourceCustodyAccountId);
 
     /// <summary>The source modules build requests from validated input; anything else is a bug, so it throws.</summary>
     private static void Validate(NewPaymentRequest draft)

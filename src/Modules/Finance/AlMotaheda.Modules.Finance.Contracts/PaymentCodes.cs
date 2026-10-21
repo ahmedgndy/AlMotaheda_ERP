@@ -13,7 +13,13 @@ public static class PayeeTypes
     /// <summary>A person given cash to spend on a project (a site engineer's custody, "العهدة"); the payee id is the user id.</summary>
     public const string CustodyHolder = "CustodyHolder";
 
-    public static IReadOnlyList<string> All { get; } = [Supplier, Worker, Subcontractor, Employees, CustodyHolder];
+    /// <summary>
+    /// A custody account of the company's treasury hierarchy (<c>finance.CustodyAccount</c>): the counterparty of an
+    /// internal transfer (money handed to the accountant, a payroll batch, a vehicle), never a payee of an expense.
+    /// </summary>
+    public const string CustodyAccount = "CustodyAccount";
+
+    public static IReadOnlyList<string> All { get; } = [Supplier, Worker, Subcontractor, Employees, CustodyHolder, CustodyAccount];
 }
 
 /// <summary>What a payment is for. Stored by name; reports group by it.</summary>
@@ -34,7 +40,13 @@ public static class PaymentPurposes
     /// </summary>
     public const string CustodyAdvance = "CustodyAdvance";
 
-    public static IReadOnlyList<string> All { get; } = [SupplierInvoices, WorkerWages, SubcontractWork, SubcontractAdvance, EquipmentCost, Salaries, CustodyAdvance];
+    /// <summary>Cash handed back from a custody to the treasury. Money in, never income: it undoes an advance.</summary>
+    public const string CustodyReturn = "CustodyReturn";
+
+    public static IReadOnlyList<string> All { get; } = [SupplierInvoices, WorkerWages, SubcontractWork, SubcontractAdvance, EquipmentCost, Salaries, CustodyAdvance, CustodyReturn];
+
+    /// <summary>An internal movement between the treasury and a custody, or between custodies: counted zero times as expense.</summary>
+    public static bool IsInternalTransfer(string purpose) => purpose is CustodyAdvance or CustodyReturn;
 }
 
 /// <summary>How money leaves. Cash is paid by hand; bank transfers and cheques go through the bank and wait for its confirmation.</summary>
@@ -61,6 +73,13 @@ public static class PaymentSourceTypes
     /// <summary>Cash handed to a custody (Projects writes the custody funding when the request is paid).</summary>
     public const string CustodyFunding = "CustodyFunding";
 
+    /// <summary>
+    /// An internal transfer between the treasury and the custody hierarchy, written by Finance itself. Only a ledger
+    /// entry's <c>SourceType</c>: a transfer is never a payment request.
+    /// </summary>
+    public const string CustodyTransfer = "CustodyTransfer";
+
+    /// <summary>The source types a payment request may have (a custody transfer is not one).</summary>
     public static IReadOnlyList<string> All { get; } = [SupplierPayment, WorkerPayment, SubcontractPayment, EquipmentCostPayment, SalarySheetPayment, CustodyFunding];
 }
 

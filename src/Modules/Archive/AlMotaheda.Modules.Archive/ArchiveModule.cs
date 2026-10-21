@@ -30,6 +30,7 @@ public sealed class ArchiveModule : IModule
         services.AddModuleDbContext<ArchiveDbContext>(configuration, ArchiveDatabase.Configure);
 
         services.AddCompanyClock();
+        services.AddScoped<Projects.Contracts.IRecordDocuments, Integration.RecordDocuments>();
         ArchiveFeatures.AddServices(services, configuration);
 
         services.AddHostedService<ArchiveStartup>();

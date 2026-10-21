@@ -90,7 +90,7 @@ internal static class PriceControlApi
         // Dated today, so a reference range approved "from today" applies to the next purchase.
         var body = CoreApi.SupplyBody(supplierId, 2m, unitPrice, "Credit", new()
         {
-            ["expenseDate"] = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+            ["expenseDate"] = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Africa/Cairo")).ToString("yyyy-MM-dd"),
             ["itemName"] = "Cement 42.5",
             ["unit"] = "Ton",
             ["priceItemId"] = priceItemId,

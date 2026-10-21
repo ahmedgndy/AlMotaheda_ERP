@@ -1,6 +1,8 @@
 using AlMotaheda.Modules.HR.Common;
+using AlMotaheda.Modules.HR.Features.Assignments;
 using AlMotaheda.Modules.HR.Features.Employees;
 using AlMotaheda.Modules.HR.Features.Payroll;
+using AlMotaheda.Modules.HR.Features.Referrals;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -30,5 +32,8 @@ internal static class HrFeatures
         PrepareSalarySheet.Map(api);
         ReviewSalarySheet.Map(api);
         RequestSalaryPayment.Map(api);
+
+        EmployeeAssignments.Map(api);
+        HrReferralEndpoints.Map(api);
     }
 }

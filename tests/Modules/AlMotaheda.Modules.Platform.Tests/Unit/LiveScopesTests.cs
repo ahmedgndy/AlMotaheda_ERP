@@ -40,6 +40,22 @@ public sealed class LiveScopesTests
     }
 
     [Fact]
+    public void Treasury_and_custody_records_reach_the_finance_group_and_a_transfer_also_its_engineers_project_money()
+    {
+        Assert.Equal(["company:finance"], Signals(Change("TreasuryAccount", null)).Select(signal => signal.Group));
+        Assert.Equal(["company:finance"], Signals(Change("CustodyMovement", null)).Select(signal => signal.Group));
+        var transfer = Signals(Change("CustodyTransfer", 5, statusAfter: "Received"));
+        Assert.Equal(["project:5:money", "project:5", "company:finance"], transfer.Select(signal => signal.Group));
+        Assert.Contains("Custody", transfer[0].Signal.Aggregates);
+        Assert.Contains("Treasury", transfer[0].Signal.Aggregates);
+        Assert.Empty(LiveScopes.For(Change("CustodyTransferEvent", null), 1));
+        Assert.Empty(LiveScopes.For(Change("VehicleExpenseFlag", null), 1));
+        var claim = Signals(Change("VehicleExpense", 5, statusAfter: "Approved"));
+        Assert.Contains("ProjectOverview", claim[0].Signal.Aggregates);
+        Assert.Equal(["company:hr"], Signals(Change("HrReferral", null)).Select(signal => signal.Group));
+    }
+
+    [Fact]
     public void Detail_rows_send_nothing_and_unknown_records_reach_only_their_project()
     {
         Assert.Empty(LiveScopes.For(Change("AttendanceLine", 3), 1));

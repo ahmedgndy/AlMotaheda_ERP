@@ -1,7 +1,12 @@
 using AlMotaheda.Modules.Fleet.Common;
 using AlMotaheda.Modules.Fleet.Features.Assignments;
+using AlMotaheda.Modules.Fleet.Features.Attachments;
+using AlMotaheda.Modules.Fleet.Features.Claims;
 using AlMotaheda.Modules.Fleet.Features.Costs;
+using AlMotaheda.Modules.Fleet.Features.Gps;
 using AlMotaheda.Modules.Fleet.Features.Register;
+using AlMotaheda.Modules.Fleet.Features.Vehicles;
+using AlMotaheda.Modules.Fleet.Features.Violations;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -16,6 +21,11 @@ internal static class FleetFeatures
     {
         // Stateless: the logger it wraps is a singleton too.
         services.AddSingleton<FleetLog>();
+
+        // Vehicles: views with their lookups.
+        services.AddScoped<VehicleViews>();
+        services.AddScoped<VehicleExpenseViews>();
+        services.AddScoped<ViolationViews>();
     }
 
     /// <param name="api">The shared <c>/api</c> group. Routes under one project start with <c>/projects/{projectId:int}</c>.</param>
@@ -47,5 +57,13 @@ internal static class FleetFeatures
         VoidEquipmentCostPayment.Map(api);
         ListVoidedEquipmentPayments.Map(api);
         GetEquipmentSummary.Map(api);
+
+        // Vehicles: register, drivers, custody, evidence, claims, violations, GPS.
+        VehicleEndpoints.Map(api);
+        FleetAttachmentEndpoints.Map(api);
+        VehicleExpenseEndpoints.Map(api);
+        VehicleExpenseReview.Map(api);
+        VehicleViolationEndpoints.Map(api);
+        VehicleLocationEndpoints.Map(api);
     }
 }

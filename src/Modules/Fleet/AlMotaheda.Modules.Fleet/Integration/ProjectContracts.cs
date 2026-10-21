@@ -21,7 +21,46 @@ internal sealed class EquipmentCostSource(FleetDbContext db) : IProjectCostSourc
     public async Task<ProjectCostFigures> SummarizeAsync(int projectId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken)
     {
         var rows = await EquipmentCostQueries.SettlementRows(db, projectId, from, to).ToListAsync(cancellationToken);
-        return EquipmentCostSettlement.Figures(rows);
+        var claims = await VehicleExpenseSettlement.Rows(db, projectId, from, to).ToListAsync(cancellationToken);
+        return EquipmentCostSettlement.Figures(rows.Concat(claims));
+    }
+}
+
+/// <summary>
+/// Posted vehicle expense claims as settlement rows of the project the vehicle was on at the expense date: a claim is
+/// recognised and paid (from the vehicle's custody) once it is approved and posted; a submitted one is pending
+/// review; a reversed posting counts nowhere. On no work item (vehicles serve the whole site).
+/// </summary>
+internal static class VehicleExpenseSettlement
+{
+    public static IQueryable<EquipmentCostSettlementRow> Rows(FleetDbContext db, int projectId, DateOnly? from = null, DateOnly? to = null)
+    {
+        var query = db.VehicleExpenses.AsNoTracking()
+            .Where(claim => claim.ProjectId == projectId && claim.PostingStatus != VehiclePostingStatus.Reversed
+                            && (claim.Status == VehicleExpenseStatus.Approved || claim.Status == VehicleExpenseStatus.Submitted || claim.Status == VehicleExpenseStatus.Escalated));
+        if (from is { } start)
+        {
+            query = query.Where(claim => claim.ExpenseDate >= start);
+        }
+
+        if (to is { } end)
+        {
+            query = query.Where(claim => claim.ExpenseDate <= end);
+        }
+
+        return query.Select(claim => new EquipmentCostSettlementRow(
+            claim.Id,
+            claim.VehicleId,
+            claim.Type == VehicleExpenseType.Fuel ? EquipmentCostType.Fuel
+                : claim.Type == VehicleExpenseType.Maintenance ? EquipmentCostType.Maintenance
+                : claim.Type == VehicleExpenseType.Repair ? EquipmentCostType.Repair : EquipmentCostType.Other,
+            claim.Status == VehicleExpenseStatus.Approved ? EquipmentCostStatus.Approved : EquipmentCostStatus.Recorded,
+            CostChannel.Custody,
+            claim.ExpenseDate,
+            claim.Amount,
+            claim.FuelQuantity,
+            claim.Status == VehicleExpenseStatus.Approved,
+            null));
     }
 }
 
@@ -39,7 +78,8 @@ internal sealed class EquipmentItemCosts(FleetDbContext db) : IEquipmentItemCost
     public async Task<IReadOnlyList<ItemCostTotal>> TotalsByItemAsync(int projectId, CancellationToken cancellationToken)
     {
         var rows = await EquipmentCostQueries.SettlementRows(db, projectId).ToListAsync(cancellationToken);
-        return EquipmentCostSettlement.ItemTotals(rows);
+        var claims = await VehicleExpenseSettlement.Rows(db, projectId).ToListAsync(cancellationToken);
+        return EquipmentCostSettlement.ItemTotals(rows.Concat(claims));
     }
 
     public async Task<IReadOnlyDictionary<int, IReadOnlyList<EquipmentItemLine>>> LinesByItemAsync(

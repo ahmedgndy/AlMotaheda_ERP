@@ -58,6 +58,18 @@ internal enum CustodyEntryKind
     Funding,
     Return,
     Payroll,
+
+    /// <summary>A reviewed adjustment up (after a cash count), with its reason and evidence, by a custody reviewer.</summary>
+    AdjustmentIn,
+
+    /// <summary>A reviewed adjustment down.</summary>
+    AdjustmentOut,
+}
+
+/// <summary>The sign of a custody entry kind: cash in is positive.</summary>
+internal static class CustodyEntryKinds
+{
+    public static bool IsCashIn(CustodyEntryKind kind) => kind is CustodyEntryKind.Funding or CustodyEntryKind.AdjustmentIn;
 }
 
 internal enum CustodyEntryStatus
