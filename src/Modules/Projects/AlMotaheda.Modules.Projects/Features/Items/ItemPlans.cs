@@ -41,7 +41,7 @@ internal sealed class ItemPlans(ProjectsDbContext db, ISubcontractItemCosts subc
     {
         var approved = await BudgetQueries.Approved(db, projectId).Select(budget => (int?)budget.Id).FirstOrDefaultAsync(cancellationToken);
         var budgeted = approved is { } budgetId
-            ? await BudgetQueries.Amounts(db, projectId, [budgetId])
+            ? await BudgetQueries.LinesOf(db, projectId, [budgetId])
                 .Where(line => line.ProjectItemId != null)
                 .GroupBy(line => line.ProjectItemId!.Value)
                 .Select(group => new { group.Key, Amount = group.Sum(line => line.Amount) })

@@ -13,6 +13,34 @@ namespace AlMotaheda.Modules.Projects.Tests.Database.Planning;
 public sealed class BudgetWorkflowTests(SqlServerFixture database)
 {
     [DatabaseFact]
+    public async Task The_items_table_and_an_items_cost_breakdown_show_the_approved_budget_of_the_item()
+    {
+        // Regression: once a budget was approved, both endpoints failed with 500 (EF could not translate a filter on
+        // the projected BudgetLineAmount record).
+        await using var api = await ProjectsApi.StartAsync(database);
+        var cast = await api.CastAsync("BDR-BUD-ITM");
+        var item = await api.CreateItemAsync(cast.Manager, cast.ProjectId, "Slab concrete");
+        var budgets = $"/api/projects/{cast.ProjectId}/budgets";
+        var budget = await ExpectAsync(await api.PostAsync(cast.Manager, budgets, new
+        {
+            title = "Execution budget",
+            lines = new object[]
+            {
+                new { costGroup = "Materials", projectItemId = item.Id(), description = "Ready-mix", unit = "M3", quantity = 100m, unitPrice = 2_500m },
+                new { costGroup = "Labor", description = "Crew, not linked to an item", amount = 40_000m },
+            },
+        }), HttpStatusCode.Created);
+        await ExpectAsync(await api.PostAsync(cast.Executive, $"{budgets}/{budget.Id()}/approve", new { rowVersion = budget.RowVersion() }), HttpStatusCode.OK);
+
+        var items = await api.GetOkAsync(cast.Manager, $"/api/projects/{cast.ProjectId}/items");
+        var row = items.GetProperty("items").EnumerateArray().Single(entry => entry.Id() == item.Id());
+        Assert.Equal(250_000m, row.GetProperty("plan").GetProperty("budgeted").GetDecimal());
+
+        var breakdown = await api.GetOkAsync(cast.Manager, $"/api/projects/{cast.ProjectId}/items/{item.Id()}/cost-breakdown");
+        Assert.Equal(250_000m, breakdown.GetProperty("budget").GetProperty("budgeted").GetDecimal());
+    }
+
+    [DatabaseFact]
     public async Task A_budget_is_never_overwritten_a_revision_is_a_new_version_and_approving_it_supersedes_the_old_one()
     {
         await using var api = await ProjectsApi.StartAsync(database);

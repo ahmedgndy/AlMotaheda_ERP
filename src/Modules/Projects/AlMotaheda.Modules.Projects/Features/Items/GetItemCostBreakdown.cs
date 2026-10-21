@@ -180,7 +180,7 @@ internal static class GetItemCostBreakdown
             return new BudgetedAmount(null, null, 0);
         }
 
-        var amount = await BudgetQueries.Amounts(db, projectId, [approved.Id])
+        var amount = await BudgetQueries.LinesOf(db, projectId, [approved.Id])
             .Where(line => line.ProjectItemId != null && itemIds.Contains(line.ProjectItemId.Value))
             .SumAsync(line => line.Amount, cancellationToken);
         return new BudgetedAmount(approved.Id, approved.Version, amount);

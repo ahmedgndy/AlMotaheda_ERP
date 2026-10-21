@@ -482,3 +482,8 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Local development only: demo credentials, demo database settings and demo file storage (never committed).
+.local/
+# The Archive default storage folder under the API content root (uploaded documents).
+App_Data/

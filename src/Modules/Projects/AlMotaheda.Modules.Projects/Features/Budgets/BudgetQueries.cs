@@ -50,9 +50,16 @@ internal static class BudgetQueries
 
     /// <summary>The amounts of the lines of some versions of the project, flat, for the totals.</summary>
     public static IQueryable<BudgetLineAmount> Amounts(ProjectsDbContext db, int projectId, IReadOnlyCollection<int> budgetIds) =>
-        db.BudgetLines.AsNoTracking()
-            .Where(line => line.Budget.ProjectId == projectId && budgetIds.Contains(line.BudgetId))
+        LinesOf(db, projectId, budgetIds)
             .Select(line => new BudgetLineAmount(line.BudgetId, line.CostGroup, line.ProjectItemId, line.Amount));
+
+    /// <summary>
+    /// The lines of these versions as entities, for a filter or a sum in SQL. EF cannot translate a <c>Where</c> or a
+    /// <c>GroupBy</c> on the properties of the <see cref="BudgetLineAmount"/> record that <see cref="Amounts"/> makes.
+    /// </summary>
+    public static IQueryable<BudgetLine> LinesOf(ProjectsDbContext db, int projectId, IReadOnlyCollection<int> budgetIds) =>
+        db.BudgetLines.AsNoTracking()
+            .Where(line => line.Budget.ProjectId == projectId && budgetIds.Contains(line.BudgetId));
 
     /// <summary>The lines of one version, in line order, with item names.</summary>
     public static IQueryable<BudgetLineRow> Lines(ProjectsDbContext db, int projectId, int budgetId) =>
