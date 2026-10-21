@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    Development-only: serves the Flutter web build and forwards /api to the local demo API on the same origin, so the
+    browser needs no CORS and keeps the refresh cookie. Not part of the solution and never deployed.
+    See docs/local-demo.md ("Web app in the browser").
+  -->
+  <PropertyGroup>
+    <RootNamespace>AlMotaheda.WebDemo</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>

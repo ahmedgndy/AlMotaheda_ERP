@@ -160,6 +160,40 @@ Sign in with any e-mail from `.local/demo-credentials.md` and the `DEMO_PASSWORD
 5. Turn the network back on: the queue is sent in order, each item with its own idempotency key, and shows *synced*
    (or *failed* / *conflict* with the server's reason).
 
+## 5b. The app in the browser, one tab per account
+
+With the demo API running:
+
+```bash
+tools/dev/run-web-demo.sh ~/StudioProjects/al_motaheda_erp_flutter
+```
+
+It builds the Flutter web app once (`REBUILD=1` to build again) and serves it with a small forwarder
+(`tools/dev/WebDemo`) that also passes `/api` to the demo API on the same origin, so the browser needs no CORS and keeps
+the refresh cookie. Open <http://localhost:8100/accounts>: one link per demo account, `http://a1.localhost:8100` …
+`http://a12.localhost:8100`. Browsers send `*.localhost` to this machine and keep cookies per host name, so every
+account stays signed in in its own tab, including after a reload. The API allows 10 sign-ins a minute.
+
+On the web there is no device database: offline mode, the camera and phone location tracking need the Android app.
+
+## 5c. Browse the database
+
+[SQLPad](https://getsqlpad.com) in Docker, on this machine only, already connected to the demo database:
+
+```bash
+docker run -d --name almotaheda-sqlpad -p 127.0.0.1:3010:3000 -v almotaheda-sqlpad-data:/var/lib/sqlpad \
+  -e SQLPAD_AUTH_DISABLED=true -e SQLPAD_AUTH_DISABLED_DEFAULT_ROLE=admin \
+  -e SQLPAD_CONNECTIONS__demo__name="AlMotaheda demo" -e SQLPAD_CONNECTIONS__demo__driver=sqlserver \
+  -e SQLPAD_CONNECTIONS__demo__host=host.docker.internal -e SQLPAD_CONNECTIONS__demo__port=1433 \
+  -e SQLPAD_CONNECTIONS__demo__database=AlMotahedaErp_v2_Demo -e SQLPAD_CONNECTIONS__demo__username=sa \
+  -e SQLPAD_CONNECTIONS__demo__password='<sa-password>' -e SQLPAD_CONNECTIONS__demo__sqlserverEncrypt=false \
+  sqlpad/sqlpad:7.5.7
+```
+
+Open <http://127.0.0.1:3010>. Sign-in is off because it listens on this machine only; it connects as `sa`, so edits are
+real: change data through the app, not SQL, or the demo stops reconciling. Stop it with `docker stop almotaheda-sqlpad`
+(start again with `docker start almotaheda-sqlpad`).
+
 ## 6. Tests
 
 Run the backend test projects **one at a time**: each starts its own SQL Server test container (~1 GB), and running
