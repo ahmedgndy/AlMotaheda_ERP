@@ -62,6 +62,8 @@ public sealed class FinanceModule : IModule
         services.AddScoped<PayrollBatchRules>();
         services.AddScoped<PayrollBatchViews>();
         services.AddScoped<IReportSource, CustodyReports>();
+        services.AddScoped<Projects.Contracts.IWorkInboxSource, Integration.FinanceInboxSource>();
+        services.AddScoped<Projects.Contracts.IPersonalOverviewSource, Integration.FinancePersonalOverview>();
 
         services.AddHostedService<FinanceStartup>();
     }

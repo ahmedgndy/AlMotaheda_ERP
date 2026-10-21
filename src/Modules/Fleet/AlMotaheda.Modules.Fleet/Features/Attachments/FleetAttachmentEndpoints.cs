@@ -1,5 +1,6 @@
 using AlMotaheda.BuildingBlocks.Authorization;
 using AlMotaheda.BuildingBlocks.Http;
+using AlMotaheda.BuildingBlocks.Storage;
 using AlMotaheda.BuildingBlocks.Time;
 using AlMotaheda.Modules.Fleet.Common;
 using AlMotaheda.Modules.Fleet.Data;
@@ -126,7 +127,7 @@ internal static class FleetAttachmentEndpoints
             return FleetProblems.EmptyFile();
         }
 
-        FleetFileTypes.Kind? kind;
+        PrivateFileTypes.Kind? kind;
         await using (var head = file.OpenReadStream())
         {
             var header = new byte[FleetFileTypes.HeaderLength];
@@ -141,18 +142,18 @@ internal static class FleetAttachmentEndpoints
         }
 
         var limit = (long)(kind.IsImage ? options.ImageMaxMegabytes : options.DocumentMaxMegabytes) * 1024 * 1024;
-        FleetStoredFile stored;
+        StoredFile stored;
         try
         {
             await using var content = file.OpenReadStream();
             stored = await store.SaveAsync(content, limit, cancellationToken);
         }
-        catch (FleetFileTooLargeException)
+        catch (FileTooLargeException)
         {
             log.UploadRefused(caller.UserId, FleetProblems.FileTooLargeCode);
             return FleetProblems.TooLarge(limit);
         }
-        catch (FleetStorageUnavailableException exception)
+        catch (StorageUnavailableException exception)
         {
             log.StorageFailed(exception);
             return FleetProblems.StorageDown();
@@ -212,7 +213,7 @@ internal static class FleetAttachmentEndpoints
         {
             stream = await store.OpenReadAsync(attachment.StorageKey, cancellationToken);
         }
-        catch (FleetStorageUnavailableException exception)
+        catch (StorageUnavailableException exception)
         {
             log.StorageFailed(exception);
             return FleetProblems.StorageDown();
@@ -235,7 +236,7 @@ internal static class FleetAttachmentEndpoints
         || caller.SeesVehicleMoney
         || (attachment.OwnerType is not null && (caller.CanFleet(PermissionAction.View) || caller.CanFuel(PermissionAction.View)));
 
-    private static string SafeName(string? fileName, FleetFileTypes.Kind kind)
+    private static string SafeName(string? fileName, PrivateFileTypes.Kind kind)
     {
         var name = Path.GetFileNameWithoutExtension(fileName ?? "");
         var clean = new string(name.Where(character => char.IsLetterOrDigit(character) || character is '-' or '_' or ' ').ToArray()).Trim();

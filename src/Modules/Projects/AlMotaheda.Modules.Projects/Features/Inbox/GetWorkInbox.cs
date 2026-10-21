@@ -29,13 +29,14 @@ internal static class GetWorkInbox
 
     internal sealed record PersonRef(int UserId, string NameAr, string NameEn);
 
+    /// <param name="ProjectId"><c>null</c> for a company-wide record (a custody transfer, a price proposal, an HR request).</param>
     internal sealed record Item(
         string Reason,
         string RecordType,
-        int ProjectId,
-        string ProjectCode,
-        string ProjectNameAr,
-        string ProjectNameEn,
+        int? ProjectId,
+        string? ProjectCode,
+        string? ProjectNameAr,
+        string? ProjectNameEn,
         int RecordId,
         int? ParentId,
         DateOnly Date,
@@ -71,17 +72,16 @@ internal static class GetWorkInbox
             .Select(project => new { project.Id, project.Code, project.NameAr, project.NameEn })
             .ToDictionaryAsync(project => project.Id, cancellationToken);
 
+        // Every module is asked, even for a caller with no project: company-wide records (a transfer to decide, cash to
+        // receive, a price proposal, an HR request) have no project. A project record is kept only when the caller may see its project.
         var found = new List<WorkInboxItem>();
         var truncated = false;
-        if (projects.Count > 0)
+        var query = new WorkInboxQuery(httpContext.User, caller.UserId, projects.Keys.ToList(), SourceLimit);
+        foreach (var source in sources)
         {
-            var query = new WorkInboxQuery(httpContext.User, caller.UserId, projects.Keys.ToList(), SourceLimit);
-            foreach (var source in sources)
-            {
-                var part = await source.ListAsync(query, cancellationToken);
-                truncated |= part.GroupBy(item => (item.Reason, item.RecordType)).Any(group => group.Count() >= SourceLimit);
-                found.AddRange(part.Where(item => projects.ContainsKey(item.ProjectId)));
-            }
+            var part = await source.ListAsync(query, cancellationToken);
+            truncated |= part.GroupBy(item => (item.Reason, item.RecordType)).Any(group => group.Count() >= SourceLimit);
+            found.AddRange(part.Where(item => item.ProjectId is null || projects.ContainsKey(item.ProjectId.Value)));
         }
 
         var people = await users.FindAsync(
@@ -91,9 +91,9 @@ internal static class GetWorkInbox
             .OrderByDescending(item => item.Since)
             .Select(item =>
             {
-                var project = projects[item.ProjectId];
+                var project = item.ProjectId is { } projectId ? projects[projectId] : null;
                 var from = item.FromUserId is { } id && people.TryGetValue(id, out var person) ? new PersonRef(id, person.NameAr, person.NameEn) : null;
-                return new Item(item.Reason, item.RecordType, item.ProjectId, project.Code, project.NameAr, project.NameEn, item.RecordId, item.ParentId,
+                return new Item(item.Reason, item.RecordType, item.ProjectId, project?.Code, project?.NameAr, project?.NameEn, item.RecordId, item.ParentId,
                     item.Date, item.Since, item.Summary, item.Amount, from, item.Note);
             })
             .ToList();

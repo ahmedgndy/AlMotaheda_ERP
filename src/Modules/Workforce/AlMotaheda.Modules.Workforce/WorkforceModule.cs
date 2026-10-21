@@ -41,6 +41,7 @@ public sealed class WorkforceModule : IModule
         services.AddScoped<ILaborItemCosts, LaborItemCosts>();
         services.AddScoped<IProjectCostSource, LaborCostSource>();
         services.AddScoped<IWorkInboxSource, WorkforceInboxSource>();
+        services.AddScoped<IPersonalOverviewSource, Integration.WorkforcePersonalOverview>();
         services.AddScoped<IPaymentSource, WorkerPaymentSource>();
         services.AddScoped<IPayrollEntitlementSource, LaborEntitlementSource>();
         services.AddScoped<IProjectRecordOwnership, WorkforceRecordOwnership>();

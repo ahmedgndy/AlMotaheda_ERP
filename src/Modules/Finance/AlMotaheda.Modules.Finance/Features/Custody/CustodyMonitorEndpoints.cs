@@ -8,6 +8,7 @@ using AlMotaheda.Modules.Finance.Contracts;
 using AlMotaheda.Modules.Finance.Data;
 using AlMotaheda.Modules.Finance.Requests;
 using AlMotaheda.Modules.Finance.Security;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
@@ -128,7 +129,7 @@ internal static class CustodyMonitorEndpoints
             wantedStatus = Input.OptionalName<CustodyAccountStatus>(status, errors, "status");
         }
 
-        var paging = Paging.Parse(page, pageSize, errors);
+        Paging.Validate(page, pageSize, errors);
         if (errors.HasErrors)
         {
             return FinanceProblems.Validation(errors);
@@ -173,8 +174,8 @@ internal static class CustodyMonitorEndpoints
         var totals = new CustodyMonitorTotals(
             named.Sum(row => row.Posted), named.Sum(row => row.Pending), named.Sum(row => row.Owed), named.Sum(row => row.ReceivedInPeriod),
             named.Sum(row => row.SpentInPeriod), named.Sum(row => row.Unsupported), named.Count);
-        var pageRows = named.Skip((paging.Page - 1) * paging.PageSize).Take(paging.PageSize).ToList();
-        return TypedResults.Ok(new CustodyMonitorResponse(first, last, pageRows, paging.Page, paging.PageSize, named.Count, totals, policy.Value));
+        var pageRows = named.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        return TypedResults.Ok(new CustodyMonitorResponse(first, last, pageRows, page, pageSize, named.Count, totals, policy.Value));
     }
 
     internal static async Task<Results<Ok<CustodyMonitorDetail>, ValidationProblem, ProblemHttpResult>> GetAsync(
@@ -199,7 +200,7 @@ internal static class CustodyMonitorEndpoints
 
         var errors = new ValidationErrors();
         var (first, last) = Period(from, to, clock, errors);
-        var paging = Paging.Parse(page, pageSize, errors);
+        Paging.Validate(page, pageSize, errors);
         if (errors.HasErrors)
         {
             return FinanceProblems.Validation(errors);
@@ -212,7 +213,7 @@ internal static class CustodyMonitorEndpoints
         }
 
         var row = await RowAsync(account, first, last, ledgers, db, cancellationToken);
-        var statement = await ledgers.StatementPageAsync(account, from is null ? null : first, to is null ? null : last, paging.Page, paging.PageSize, cancellationToken);
+        var statement = await ledgers.StatementPageAsync(account, from is null ? null : first, to is null ? null : last, page, pageSize, cancellationToken);
         var transfers = await db.CustodyTransfers.AsNoTracking()
             .Where(transfer => (transfer.SourceAccountId == accountId || transfer.DestinationAccountId == accountId)
                                && (transfer.Status == CustodyTransferStatus.Requested || transfer.Status == CustodyTransferStatus.Approved || transfer.Status == CustodyTransferStatus.Disbursed))
@@ -241,8 +242,8 @@ internal static class CustodyMonitorEndpoints
             await views.ViewAsync(account, caller, cancellationToken),
             statement.Lines.Select(line => new CustodyMonitorLine(line.EntryDate, line.Kind, line.Status, line.Amount, line.SourceType, line.SourceId, line.Reference, line.Notes, line.HasEvidence, Person(line.ActorUserId), line.ProjectId)).ToList(),
             statement.TotalCount,
-            paging.Page,
-            paging.PageSize,
+            page,
+            pageSize,
             transfers.Select(transfer => new CustodyMonitorTransfer(transfer.Id, transfer.Number, transfer.Status.ToString(), transfer.Purpose, transfer.Amount, transfer.DestinationAccountId == accountId, transfer.RequestedAt, Person(transfer.RequestedBy))).ToList(),
             adjustments.Select(adjustment => new AdjustmentView(adjustment.Id, adjustment.AccountId, adjustment.CashCountId, adjustment.EntryDate, adjustment.Amount, adjustment.Reason, adjustment.EvidenceReference, adjustment.CreatedAt, Person(adjustment.CreatedBy), 0m)).ToList(),
             counts.Select(count => new CashCountView(count.Id, count.AccountId, count.CountDate, count.CountedAmount, count.BookBalance, count.Difference, count.Notes, count.EvidenceReference, count.CountedAt, Person(count.CountedBy))).ToList(),

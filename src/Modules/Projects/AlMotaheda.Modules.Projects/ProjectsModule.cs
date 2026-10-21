@@ -109,5 +109,6 @@ public sealed class ProjectsModule : IModule
         Features.Custody.CustodyEndpoints.Map(projects);
         SiteLocationEndpoints.Map(projects);
         GetWorkInbox.Map(api);
+        Features.Overview.PersonalOverview.Map(api);
     }
 }

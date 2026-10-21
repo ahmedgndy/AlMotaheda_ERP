@@ -130,25 +130,24 @@ internal sealed class ProjectsInboxSource(ProjectsDbContext db) : IWorkInboxSour
                 exception.SubmittedBy, null)));
         }
 
-        // Price Control: transactions priced above their range wait for an Executive's decision (catalog Approve,
-        // never the submitter). The variance is shown with catalog See money.
+        // Price Control: reference ranges proposed and waiting for the Executive (catalog Approve, never the requester). Company-wide.
         if (query.Caller.HasPermission(Prices.PricePermissions.Module, PermissionAction.Approve))
         {
-            var seesVariance = query.Caller.HasPermission(Prices.PricePermissions.Module, PermissionAction.SeeMoney);
-            var exceptions = await db.PriceExceptions.AsNoTracking()
-                .Where(exception => ids.Contains(exception.ProjectId) && exception.Status == PriceExceptionStatus.Pending && exception.SubmittedBy != me)
-                .OrderBy(exception => exception.SubmittedAt)
+            var seesPrices = query.Caller.HasPermission(Prices.PricePermissions.Module, PermissionAction.SeeMoney);
+            var ranges = await db.PriceRanges.AsNoTracking()
+                .Where(range => range.Status == PriceRangeStatus.Pending && range.RequestedBy != me)
+                .OrderBy(range => range.RequestedAt)
                 .Take(query.Limit)
-                .Select(exception => new
+                .Select(range => new
                 {
-                    exception.Id, exception.ProjectId, exception.TransactionDate, exception.SubmittedAt, exception.SubmittedBy, exception.VarianceTotal,
-                    exception.Summary, ItemNameAr = exception.PriceItem.NameAr, ItemNameEn = exception.PriceItem.NameEn,
+                    range.Id, range.PriceItemId, range.MinPrice, range.MaxPrice, range.EffectiveFrom, range.RequestedAt, range.RequestedBy, range.Reason,
+                    ItemNameAr = range.PriceItem.NameAr, ItemNameEn = range.PriceItem.NameEn, Unit = range.PriceItem.Unit,
                 })
                 .ToListAsync(cancellationToken);
-            items.AddRange(exceptions.Select(exception => new WorkInboxItem(
-                WorkInboxReasons.Review, WorkInboxRecordTypes.PriceException, exception.ProjectId, exception.Id, null, exception.TransactionDate,
-                exception.SubmittedAt, $"{exception.ItemNameAr} / {exception.ItemNameEn} · {exception.Summary}", seesVariance ? exception.VarianceTotal : null,
-                exception.SubmittedBy, null)));
+            items.AddRange(ranges.Select(range => new WorkInboxItem(
+                WorkInboxReasons.Review, WorkInboxRecordTypes.PriceRange, null, range.Id, range.PriceItemId, range.EffectiveFrom, range.RequestedAt,
+                seesPrices ? $"{range.ItemNameAr} / {range.ItemNameEn}: {range.MinPrice:0.00} – {range.MaxPrice:0.00} / {range.Unit} from {range.EffectiveFrom:yyyy-MM-dd}" : $"{range.ItemNameAr} / {range.ItemNameEn}",
+                seesPrices ? range.MaxPrice : null, range.RequestedBy, range.Reason)));
         }
 
         return items;

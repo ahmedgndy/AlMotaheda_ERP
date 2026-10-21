@@ -61,6 +61,18 @@ public static class WorkInboxRecordTypes
 
     /// <summary>A vehicle violation waiting for review (Fleet).</summary>
     public const string VehicleViolation = "VehicleViolation";
+
+    /// <summary>A custody transfer waiting for a decision, or cash to confirm receiving (company-wide unless it funds a project custody).</summary>
+    public const string CustodyTransfer = "CustodyTransfer";
+
+    /// <summary>A reference price range proposed and waiting for the Executive (company-wide).</summary>
+    public const string PriceRange = "PriceRange";
+
+    /// <summary>An employee's HR request waiting for HR, or answered and waiting for the employee (company-wide).</summary>
+    public const string HrRequest = "HrRequest";
+
+    /// <summary>A payment request waiting for the Executive's decision.</summary>
+    public const string PaymentRequest = "PaymentRequest";
 }
 
 /// <param name="Reason">One of <see cref="WorkInboxReasons"/>.</param>
@@ -75,7 +87,7 @@ public static class WorkInboxRecordTypes
 public sealed record WorkInboxItem(
     string Reason,
     string RecordType,
-    int ProjectId,
+    int? ProjectId,
     int RecordId,
     int? ParentId,
     DateOnly Date,
