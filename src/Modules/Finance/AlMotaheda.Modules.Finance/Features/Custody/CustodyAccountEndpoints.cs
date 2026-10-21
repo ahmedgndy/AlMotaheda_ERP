@@ -278,9 +278,9 @@ internal static class CustodyAccountEndpoints
         {
             errors.Add("kind", $"kind must be one of: {string.Join(", ", CustodyAccountKinds.All)}.");
         }
-        else if (kind is CustodyAccountKinds.PayrollBatch or CustodyAccountKinds.Office)
+        else if (kind is CustodyAccountKinds.PayrollBatch)
         {
-            errors.Add("kind", "A payroll batch account is opened with its batch; an office custody is opened in the Office module.");
+            errors.Add("kind", "A payroll batch account is opened with its batch.");
         }
 
         if (request.HolderUserId is < 1)
