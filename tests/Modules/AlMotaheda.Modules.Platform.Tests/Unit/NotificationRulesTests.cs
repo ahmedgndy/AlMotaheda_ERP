@@ -146,8 +146,13 @@ public sealed class NotificationRulesTests
     {
         const int requester = 51;
         const int accountant = 52;
-        var asked = Assert.Single(NotificationRules.For(Change("CustodyTransferAlert", "Added", null, null, ("RecipientUserId", Reviewer)), requester));
+        var asked = Assert.Single(NotificationRules.For(Change("CustodyTransferAlert", "Added", null, "Requested", ("RecipientUserId", Reviewer)), requester));
         Assert.Equal((Reviewer, NotificationTypes.TransferRequested, "تحويل عهدة بانتظار قرارك"), (asked.RecipientUserId, asked.Type, asked.TitleAr));
+
+        // The destination's holder is asked to confirm receiving the cash, not to decide on the transfer.
+        const int holder = 54;
+        var disbursed = Assert.Single(NotificationRules.For(Change("CustodyTransferAlert", "Added", null, "Disbursed", ("RecipientUserId", holder)), accountant));
+        Assert.Equal((holder, NotificationTypes.TransferReceivable, "تم صرف نقدية لعهدتك: أكّد الاستلام"), (disbursed.RecipientUserId, disbursed.Type, disbursed.TitleAr));
 
         var approved = Assert.Single(NotificationRules.For(Change("CustodyTransfer", "Modified", "Requested", "Approved", ("RequestedBy", requester), ("DecidedBy", Reviewer)), Reviewer));
         Assert.Equal((requester, NotificationTypes.RecordApproved, "تم اعتماد تحويل العهدة"), (approved.RecipientUserId, approved.Type, approved.TitleAr));

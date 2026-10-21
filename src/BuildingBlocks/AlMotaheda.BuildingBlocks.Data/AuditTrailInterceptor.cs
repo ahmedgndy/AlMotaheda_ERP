@@ -253,8 +253,9 @@ public sealed class AuditTrailInterceptor(IHttpContextAccessor httpContextAccess
                 Entity = entry.Metadata.ClrType.Name,
                 Action = action,
                 ProjectId = ReadInt(entry, "ProjectId", useOriginal: entry.State == EntityState.Deleted),
-                StatusBefore = entry.State == EntityState.Added ? null : Text(Original(entry, "Status")),
-                StatusAfter = entry.State == EntityState.Deleted ? null : Text(Current(entry, "Status")),
+                // A row with no Status but a Stage (an alert row) carries its stage as its status.
+                StatusBefore = entry.State == EntityState.Added ? null : Text(Original(entry, "Status") ?? Original(entry, "Stage")),
+                StatusAfter = entry.State == EntityState.Deleted ? null : Text(Current(entry, "Status") ?? Current(entry, "Stage")),
             };
 
             foreach (var property in entry.Properties)

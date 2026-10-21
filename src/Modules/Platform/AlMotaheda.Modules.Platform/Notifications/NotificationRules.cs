@@ -68,7 +68,9 @@ internal sealed record NotificationDraft(int RecipientUserId, string Type, strin
 /// </remarks>
 internal static class NotificationRules
 {
-    private sealed record Rule(string Entity, string? StatusAfter, string RecipientField, string Type);
+    /// <summary><paramref name="Stage"/> narrows a rule for added rows to those added in that stage (an alert row's
+    /// <c>Stage</c> is carried as its status).</summary>
+    private sealed record Rule(string Entity, string? StatusAfter, string RecipientField, string Type, string? Stage = null);
 
     /// <summary>The record names used in the titles, in English and Arabic.</summary>
     private static readonly IReadOnlyDictionary<string, (string En, string Ar)> Nouns = new Dictionary<string, (string, string)>
@@ -207,7 +209,8 @@ internal static class NotificationRules
 
         // Custody transfers (Finance): the Executives hear of a request and the destination's holder of a disbursement
         // (alert rows, saved with the transfer); the requester hears the decision, the receipt and a reversal.
-        new("CustodyTransferAlert", null, "RecipientUserId", NotificationTypes.TransferRequested),
+        new("CustodyTransferAlert", null, "RecipientUserId", NotificationTypes.TransferRequested, Stage: "Requested"),
+        new("CustodyTransferAlert", null, "RecipientUserId", NotificationTypes.TransferReceivable, Stage: "Disbursed"),
         new("CustodyTransfer", "Approved", "RequestedBy", NotificationTypes.RecordApproved),
         new("CustodyTransfer", "Rejected", "RequestedBy", NotificationTypes.RecordRejected),
         new("CustodyTransfer", "Received", "RequestedBy", NotificationTypes.TransferReceived),
@@ -297,7 +300,7 @@ internal static class NotificationRules
 
     private static bool Matches(Rule rule, EntityChange change) =>
         rule.StatusAfter is null
-            ? change.Action == "Added"
+            ? change.Action == "Added" && (rule.Stage is null || rule.Stage == change.StatusAfter)
             : change.Action == "Modified" && change.StatusAfter == rule.StatusAfter && change.StatusBefore != change.StatusAfter;
 
     private static IEnumerable<Rule> Reviewed(string entity, string recorderField, bool returns)
