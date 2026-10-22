@@ -39,7 +39,7 @@
 
   <!-- Reports: Excel (.xlsx) files built on the server. MIT licence. -->
   <ItemGroup Label="Reports">
-    <PackageVersion Include="ClosedXML" Version="0.105.0" />
+    <PackageVersion Include="ClosedXML" Version="0.105.1" />
   </ItemGroup>
 
   <!--
