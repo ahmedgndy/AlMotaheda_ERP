@@ -59,7 +59,8 @@
    (`Finance__CustodyPeriodCarryForward` = `RequireZeroBalance`) or carry the balance forward (shipped)?
 7. **Vehicle claims above an amount.** Should a claim above some amount need the Executive
    (`Fleet__ClaimExecutiveApprovalAbove`, shipped as 0: the accountant approves every claim)?
-8. **Vehicle GPS.** Which tracking provider, if any? Until one is integrated the location screens say so.
+8. **Vehicle GPS.** Decided 2026-10-22: the assigned driver's company phone is the tracker (no external provider);
+   positions visible to fleet Edit only. See `14-fleet-gps.md`.
 9. **Evidence policy.** Which custody expenses must have a document before they count as reconciled (today: flagged
    as unsupported on the central custody page, never blocked)? Should an approval be refused without one?
 10. **HR requests.** Which request types should HR act on automatically once approved (a leave approval is still a

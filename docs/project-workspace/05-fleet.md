@@ -2,7 +2,8 @@
 
 Module `AlMotaheda.Modules.Fleet`, schema `fleet`, permission module `equipment` (and `payments`).
 Read `00-overview.md` first. Vehicles, their drivers and operating custody, expense claims, violations and the GPS
-abstraction (permission modules `fleet` and `fuel`) are in `12-treasury-custody.md`.
+abstraction (permission modules `fleet` and `fuel`) are in `12-treasury-custody.md`; vehicle GPS tracking (drivers'
+phones, trips, stops, monitoring) is in `14-fleet-gps.md`.
 
 ## 1. Tables
 

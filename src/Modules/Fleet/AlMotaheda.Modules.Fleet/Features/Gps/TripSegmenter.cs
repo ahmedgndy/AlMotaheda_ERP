@@ -376,7 +376,8 @@ internal static class TripSegmenter
             {
                 var computed = Meters(accepted[index - 1], accepted[index]) / seconds * 3.6;
                 var reported = accepted[index].SpeedKmh;
-                var speed = reported is { } value && value >= 0 ? value : computed;
+                // A reported speed of 0 while the position moved is a phone that doesn't measure speed (emulators, some providers).
+                var speed = reported is { } value && value > 0 ? value : computed;
                 maxSpeed = Math.Max(maxSpeed ?? 0, speed);
             }
 
