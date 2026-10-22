@@ -11,9 +11,11 @@ mkdir -p "$out"
 
 dotnet tool restore >/dev/null
 
-# Platform first (every save writes its audit and outbox tables), then Access and Projects (other modules point to
-# their tables), Finance last (its second migration copies recorded payments into the ledger).
-modules=(Platform Access Projects Workforce Subcontractors Fleet Archive HR Procurement Reports Finance)
+# The order the API itself migrates in (src/Host/AlMotaheda.Api/ModuleCatalog.cs): Platform first (every save writes
+# its audit and outbox tables), then Access and Projects (other modules point to their tables), HR before Fleet
+# (vehicles and claims point to hr.Employee), Office before Finance, Finance last (its migrations copy recorded
+# payments into the ledger and link office custodies). Keep this list in step with ModuleCatalog.
+modules=(Platform Access Projects HR Workforce Subcontractors Fleet Archive Office Procurement Reports Finance)
 
 n=0
 for module in "${modules[@]}"; do

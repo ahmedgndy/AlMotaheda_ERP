@@ -104,3 +104,23 @@ Making the scripts locally (needs the .NET 10 SDK): `deploy/migration-scripts.sh
   (Dependabot opens a pull request when the base image changes).
 - **Secrets** are never in the image or the repository: they come from `deploy/.env`, environment variables, or
   GitHub Actions secrets. The workflows need none besides the built-in `GITHUB_TOKEN`.
+
+## App updates (El Motahedah Updater)
+
+The API serves a read-only folder of app-update files at `GET /api/app-updates/{channel}/{file}` (anonymous; off
+until `AppUpdates__RootPath` is set). On the server, mount a host folder read-only and point the setting at it, for
+example in the server's own compose override:
+
+```yaml
+services:
+  api:
+    environment:
+      AppUpdates__RootPath: /data/app-updates
+    volumes:
+      - /opt/almotaheda/updates:/data/app-updates:ro
+```
+
+The `erp-android` channel holds `manifest.json`, `manifest.json.sig` and the APK named in the manifest. They are
+produced on the release Mac by the Flutter repository's `tools/release/build-release.sh` and
+`tools/release/sign-manifest.sh` and copied there; the updater trusts them only through the manifest signature
+(the private signing key never leaves the release Mac).

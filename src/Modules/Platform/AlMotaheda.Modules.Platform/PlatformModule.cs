@@ -1,3 +1,4 @@
+using AlMotaheda.Modules.Platform.AppUpdates;
 using AlMotaheda.BuildingBlocks.Data;
 using AlMotaheda.BuildingBlocks.Modules;
 using AlMotaheda.BuildingBlocks.Time;
@@ -66,6 +67,9 @@ public sealed class PlatformModule : IModule
         services.AddScoped<BackupRunner>();
 
         // Order matters: hosted services start in registration order, so the migrations run before the dispatcher.
+        // App updates for the El Motahedah Updater: a read-only folder of signed manifests and APKs (off until set).
+        services.AddOptions<AppUpdateOptions>().Bind(configuration.GetSection(AppUpdateOptions.SectionName));
+
         services.AddHostedService<PlatformStartup>();
         services.AddHostedService<OutboxDispatcher>();
         services.AddHostedService<BackupService>();
@@ -73,7 +77,10 @@ public sealed class PlatformModule : IModule
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints)
     {
-        // Every endpoint of this module needs a signed-in user, whatever the host adds.
+        // Anonymous and read-only: the updater has no account; it trusts files only through the manifest signature.
+        AppUpdateEndpoints.Map(endpoints);
+
+        // Every other endpoint of this module needs a signed-in user, whatever the host adds.
         var api = endpoints.MapGroup("").WithTags(Name).RequireAuthorization();
 
         ListNotifications.Map(api);
