@@ -94,6 +94,28 @@ public sealed class VehicleCustodyTests(SqlServerFixture database)
     }
 
     [DatabaseFact]
+    public async Task A_driver_picks_the_fuel_from_the_price_list_without_seeing_its_prices()
+    {
+        await using var api = await ProjectsApi.StartAsync(database);
+        var cast = await VehicleCastAsync(api);
+        foreach (var (ar, en, unit, category) in new[] { ("بنزين 95", "Petrol 95", "Liter", "Fuel"), ("سولار", "Diesel", "Liter", "Fuel"), ("أسمنت", "Cement", "Bag", "CementAggregates") })
+        {
+            await Created(api, cast.Executive, "/api/price-items", new
+            {
+                nameAr = ar, nameEn = en, classification = "Material", unit, categoryCode = category, kind = "Range", minPrice = 10m, maxPrice = 20m,
+                currency = "EGP", effectiveFrom = Iso(Today(api).AddDays(-10)),
+            });
+        }
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await api.SendAsync(HttpMethod.Get, "/api/price-items", cast.Driver)).StatusCode);
+        var response = await api.SendAsync(HttpMethod.Get, "/api/fleet/fuel-types", cast.Driver);
+        await EnsureStatus(response, HttpStatusCode.OK);
+        var fuels = (await Json(response)).EnumerateArray().ToList();
+        Assert.Equal(["Diesel", "Petrol 95"], fuels.Select(fuel => fuel.GetProperty("nameEn").GetString()));
+        Assert.All(fuels, fuel => Assert.False(fuel.TryGetProperty("minPrice", out _)));
+    }
+
+    [DatabaseFact]
     public async Task The_driver_asks_for_cash_into_the_vehicle_and_the_usual_chain_pays_it()
     {
         await using var api = await ProjectsApi.StartAsync(database);

@@ -67,6 +67,12 @@ internal static class VehicleExpenseEndpoints
 
     internal sealed record ListResponse(IReadOnlyList<VehicleExpenseView> Items, int Page, int PageSize, int TotalCount, IReadOnlyDictionary<string, int> CountsByStatus);
 
+    /// <summary>A fuel of the company price list, as a driver picks it: no price range (the server compares the price).</summary>
+    internal sealed record FuelTypeView(int Id, string NameAr, string NameEn, string Unit);
+
+    /// <summary>The price list category of fuels.</summary>
+    internal const string FuelCategory = "Fuel";
+
     public static void Map(IEndpointRouteBuilder api)
     {
         api.MapGet("/vehicle-expenses", ListAsync)
@@ -79,6 +85,11 @@ internal static class VehicleExpenseEndpoints
             .WithName("GetVehicleExpense")
             .WithSummary("One claim with its evidence, flags and review");
 
+        api.MapGet("/fleet/fuel-types", FuelTypesAsync)
+            .RequireAnyPermission((FleetPermissions.Fuel, PermissionAction.View), (FleetPermissions.Fuel, PermissionAction.Create))
+            .WithName("ListFuelTypes")
+            .WithSummary("The fuels a fuel claim names (the active litre items of the price list's Fuel category), without prices");
+
         api.MapPost("/vehicle-expenses", SubmitAsync)
             .RequirePermission(FleetPermissions.Fuel, PermissionAction.Create)
             .WithName("SubmitVehicleExpense")
@@ -88,6 +99,17 @@ internal static class VehicleExpenseEndpoints
             .RequirePermission(FleetPermissions.Fuel, PermissionAction.Create)
             .WithName("ResubmitVehicleExpense")
             .WithSummary("Add the evidence a reviewer asked for and submit again (the submitter only); earlier evidence is kept");
+    }
+
+    /// <summary>A driver names the fuel without seeing the price list: its ranges are control data the server applies.</summary>
+    internal static async Task<Ok<List<FuelTypeView>>> FuelTypesAsync(IPriceControl priceControl, CompanyClock clock, CancellationToken cancellationToken)
+    {
+        var items = await priceControl.ListItemsAsync([FuelCategory], clock.Today, cancellationToken);
+        return TypedResults.Ok(items
+            .Where(listing => listing.Item.IsActive && listing.Item.Unit == MeasurementUnits.Liter)
+            .Select(listing => new FuelTypeView(listing.Item.Id, listing.Item.NameAr, listing.Item.NameEn, listing.Item.Unit))
+            .OrderBy(fuel => fuel.NameEn, StringComparer.Ordinal)
+            .ToList());
     }
 
     internal static async Task<Results<Ok<ListResponse>, ValidationProblem, ProblemHttpResult>> ListAsync(
