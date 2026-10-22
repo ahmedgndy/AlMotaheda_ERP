@@ -184,9 +184,9 @@ internal static class VehicleExpenseReview
 
             // The approved reading becomes the vehicle's trusted odometer when it is ahead.
             var vehicle = await db.Vehicles.SingleAsync(candidate => candidate.Id == tracked.VehicleId, cancellationToken);
-            if (tracked.OdometerKm > vehicle.OdometerKm)
+            if (tracked.OdometerKm is { } reading && reading > vehicle.OdometerKm)
             {
-                vehicle.OdometerKm = tracked.OdometerKm;
+                vehicle.OdometerKm = reading;
                 vehicle.OdometerUpdatedAt = now;
                 vehicle.OdometerUpdatedBy = caller.UserId;
             }

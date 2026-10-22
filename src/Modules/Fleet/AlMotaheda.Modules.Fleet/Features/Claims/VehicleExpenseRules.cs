@@ -82,10 +82,11 @@ internal static class VehicleExpenseRules
     /// <summary>
     /// The review flags of a new claim, from what is already recorded. <paramref name="sameInvoiceNo"/>,
     /// <paramref name="sameReceipt"/> and <paramref name="sameAmountSameDay"/> are the ids of other claims found;
-    /// <paramref name="lastOdometer"/> is the last trusted reading and its date.
+    /// <paramref name="lastOdometer"/> is the last trusted reading and its date. Without a reading (<paramref name="odometerKm"/>
+    /// null) the odometer checks are left to the reviewer, who reads the odometer photo.
     /// </summary>
     public static IReadOnlyList<ClaimFlag> Flags(
-        decimal odometerKm,
+        decimal? odometerKm,
         DateOnly expenseDate,
         (decimal Km, DateOnly? On) lastOdometer,
         decimal implausibleKmPerDay,
@@ -97,6 +98,11 @@ internal static class VehicleExpenseRules
         flags.AddRange(sameInvoiceNo.Select(id => new ClaimFlag(VehicleExpenseFlagKind.DuplicateInvoiceNo, "The same invoice number is on another claim.", id)));
         flags.AddRange(sameReceipt.Select(id => new ClaimFlag(VehicleExpenseFlagKind.DuplicateReceipt, "The same receipt photo is on another claim.", id)));
         flags.AddRange(sameAmountSameDay.Select(id => new ClaimFlag(VehicleExpenseFlagKind.SameAmountVehicleDay, "Another claim on this vehicle has the same amount on the same day.", id)));
+
+        if (odometerKm is null)
+        {
+            return flags;
+        }
 
         if (lastOdometer.Km > 0 && odometerKm <= lastOdometer.Km)
         {

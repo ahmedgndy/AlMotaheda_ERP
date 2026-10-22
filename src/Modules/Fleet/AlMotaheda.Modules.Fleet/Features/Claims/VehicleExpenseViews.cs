@@ -25,7 +25,7 @@ internal sealed record VehicleExpenseView(
     int? ProjectId,
     string Type,
     DateOnly ExpenseDate,
-    decimal OdometerKm,
+    decimal? OdometerKm,
     decimal? FuelQuantity,
     decimal? UnitPrice,
     decimal? Amount,

@@ -217,7 +217,8 @@ internal sealed class VehicleExpense
 
     public DateOnly ExpenseDate { get; set; }
 
-    public decimal OdometerKm { get; set; }
+    /// <summary>The odometer reading the driver gave, when given: the odometer photo is the evidence either way.</summary>
+    public decimal? OdometerKm { get; set; }
 
     /// <summary>Fuel only: litres and the price per litre; the amount is their product, set by the server.</summary>
     public decimal? FuelQuantity { get; set; }

@@ -137,7 +137,7 @@ internal sealed class VehicleExpenseConfiguration : IEntityTypeConfiguration<Veh
             table.HasCheckConstraint("CK_VehicleExpense_Status", $"[Status] IN ({SqlList.Of(Enum.GetNames<VehicleExpenseStatus>())})");
             table.HasCheckConstraint("CK_VehicleExpense_PostingStatus", $"[PostingStatus] IN ({SqlList.Of(Enum.GetNames<VehiclePostingStatus>())})");
             table.HasCheckConstraint("CK_VehicleExpense_Amount", "[Amount] > 0");
-            table.HasCheckConstraint("CK_VehicleExpense_Odometer", "[OdometerKm] >= 0");
+            table.HasCheckConstraint("CK_VehicleExpense_Odometer", "[OdometerKm] IS NULL OR [OdometerKm] >= 0");
             table.HasCheckConstraint("CK_VehicleExpense_Round", "[Round] >= 1");
 
             // Fuel has litres and a price per litre, and its amount is their product; every other type has neither.

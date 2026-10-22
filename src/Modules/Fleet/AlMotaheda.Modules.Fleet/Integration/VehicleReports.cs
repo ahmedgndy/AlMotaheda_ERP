@@ -117,7 +117,7 @@ internal sealed class VehicleReports(FleetDbContext db, IEmployeeDirectory emplo
         return new ReportData(claims.GroupBy(claim => claim.VehicleId).OrderBy(group => group.First().Vehicle.Plate).Select(group =>
         {
             decimal Of(params VehicleExpenseType[] types) => group.Where(claim => types.Contains(claim.Type)).Sum(claim => claim.Amount);
-            var readings = group.Select(claim => claim.OdometerKm).ToList();
+            var readings = group.Where(claim => claim.OdometerKm != null).Select(claim => claim.OdometerKm!.Value).ToList();
             return new ReportRow(new Dictionary<string, object?>
             {
                 ["plate"] = group.First().Vehicle.Plate,
@@ -130,7 +130,7 @@ internal sealed class VehicleReports(FleetDbContext db, IEmployeeDirectory emplo
                 ["claims"] = group.Count(),
                 ["distanceKm"] = readings.Count > 1 ? readings.Max() - readings.Min() : 0m,
             }, new ReportLink("vehicle", group.Key));
-        }).ToList(), "Only approved, posted claims are expenses; a custody funding is never one. Distance is between the lowest and highest odometer readings of the period's claims.");
+        }).ToList(), "Only approved, posted claims are expenses; a custody funding is never one. Distance is between the lowest and highest odometer readings given on the period's claims.");
     }
 
     private async Task<ReportData> ClaimsAsync(ReportQuery query, CancellationToken cancellationToken)

@@ -94,6 +94,30 @@ public sealed class VehicleCustodyTests(SqlServerFixture database)
     }
 
     [DatabaseFact]
+    public async Task A_claim_without_an_odometer_reading_is_accepted_with_its_photo_and_leaves_the_vehicle_reading_alone()
+    {
+        await using var api = await ProjectsApi.StartAsync(database);
+        var cast = await VehicleCastAsync(api);
+        await Transferred(api, cast, VehicleFunding(cast.AccountantAccount, cast.VehicleId, 1_000m));
+
+        var body = await ClaimBody(api, cast.Driver, cast.VehicleId, Today(api).AddDays(-1), 0m, 300m);
+        body.Remove("odometerKm");
+        var claim = await Submitted(api, cast.Driver, body);
+        Assert.Equal((JsonValueKind.Null, 0), (claim.GetProperty("odometerKm").ValueKind, claim.GetProperty("flags").GetArrayLength()));
+
+        var approved = await Reviewed(api, cast.Accountant, claim, "approve", "Photo checked");
+        Assert.Equal(("Approved", "Posted"), (approved.GetProperty("status").GetString(), approved.GetProperty("postingStatus").GetString()));
+        Assert.Equal(10_000m, (await Json(await api.SendAsync(HttpMethod.Get, $"/api/vehicles/{cast.VehicleId}", cast.Accountant))).GetProperty("odometerKm").GetDecimal());
+        Assert.Equal(700m, Figure(await Custody(api, cast.Accountant, cast.VehicleId), "posted"));
+
+        // The odometer photo is still required.
+        var noPhoto = await ClaimBody(api, cast.Driver, cast.VehicleId, Today(api).AddDays(-1), 0m, 50m);
+        noPhoto.Remove("odometerKm");
+        noPhoto.Remove("odometerAttachmentId");
+        Assert.Equal(HttpStatusCode.BadRequest, (await api.SendAsync(HttpMethod.Post, "/api/vehicle-expenses", cast.Driver, noPhoto)).StatusCode);
+    }
+
+    [DatabaseFact]
     public async Task A_rejected_claim_keeps_its_reason_and_evidence_and_hr_alone_decides_a_deduction_through_its_own_flow()
     {
         await using var api = await ProjectsApi.StartAsync(database);

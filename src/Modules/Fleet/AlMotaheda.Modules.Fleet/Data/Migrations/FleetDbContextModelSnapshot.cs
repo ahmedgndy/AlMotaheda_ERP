@@ -936,7 +936,7 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
                         .HasColumnType("varchar(20)")
                         .HasComputedColumnSql("CONCAT('VX-', REPLICATE('0', 6 - LEN([Id])), [Id])", true);
 
-                    b.Property<decimal>("OdometerKm")
+                    b.Property<decimal?>("OdometerKm")
                         .HasPrecision(18, 1)
                         .HasColumnType("decimal(18,1)");
 
@@ -1077,7 +1077,7 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
 
                             t.HasCheckConstraint("CK_VehicleExpense_Gps", "([GpsLatitude] IS NULL AND [GpsLongitude] IS NULL) OR ([GpsLatitude] IS NOT NULL AND [GpsLongitude] IS NOT NULL)");
 
-                            t.HasCheckConstraint("CK_VehicleExpense_Odometer", "[OdometerKm] >= 0");
+                            t.HasCheckConstraint("CK_VehicleExpense_Odometer", "[OdometerKm] IS NULL OR [OdometerKm] >= 0");
 
                             t.HasCheckConstraint("CK_VehicleExpense_Posting", "([PostingStatus] = 'NotPosted' AND [CustodyEntryId] IS NULL AND [PostedAt] IS NULL) OR ([PostingStatus] IN ('Posted', 'Reversed') AND [Status] = 'Approved' AND [CustodyEntryId] IS NOT NULL AND [PostedAt] IS NOT NULL)");
 

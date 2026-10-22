@@ -101,6 +101,10 @@ public sealed class VehicleRulesTests
         var fine = VehicleExpenseRules.Flags(10_400m, new DateOnly(2026, 10, 20), (10_000m, new DateOnly(2026, 10, 19)), 1_000m, [], [], []);
         Assert.Empty(fine);
         Assert.Empty(VehicleExpenseRules.Flags(100m, new DateOnly(2026, 10, 20), (0m, null), 1_000m, [], [], [])); // a new vehicle: nothing to compare with
+
+        // No reading given: the reviewer reads the odometer photo; only the duplicate checks run.
+        Assert.Empty(VehicleExpenseRules.Flags(null, new DateOnly(2026, 10, 20), (10_000m, new DateOnly(2026, 10, 19)), 1_000m, [], [], []));
+        Assert.Equal([VehicleExpenseFlagKind.DuplicateInvoiceNo], VehicleExpenseRules.Flags(null, new DateOnly(2026, 10, 20), (10_000m, null), 1_000m, [5], [], []).Select(flag => flag.Kind));
     }
 
     [Fact]

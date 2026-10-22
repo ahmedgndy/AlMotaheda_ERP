@@ -27,8 +27,8 @@ namespace AlMotaheda.Modules.Fleet.Features.Claims;
 /// </summary>
 /// <remarks>
 /// <list type="bullet">
-///   <item>Fuel: litres and price per litre; the amount is their product. Every claim carries an odometer reading, an
-///   odometer photo and an invoice or receipt photo (422 <c>evidence_required</c>).</item>
+///   <item>Fuel: litres and price per litre; the amount is their product. Every claim carries an odometer photo and an
+///   invoice or receipt photo; the odometer reading itself is optional (422 <c>evidence_required</c>).</item>
 ///   <item>Submitted: a Pending entry in the vehicle's custody (the exposure); the posted balance is unchanged until approval.</item>
 ///   <item>A fuel claim naming a Price Control item is compared with the price list at the expense date: above the
 ///   range under Block → 409 <c>price_above_range</c>; under ExecutiveApproval → a justification, and a case for the
@@ -233,7 +233,8 @@ internal static class VehicleExpenseEndpoints
             }
         }
 
-        var odometer = VehicleFields.Odometer(request.OdometerKm, errors, required: true);
+        // The reading is optional: the odometer photo is the evidence the reviewer checks.
+        var odometer = VehicleFields.Odometer(request.OdometerKm, errors, required: false);
         decimal? fuelQuantity = null, unitPrice = null, amount = null;
         if (type == VehicleExpenseType.Fuel)
         {
@@ -406,7 +407,7 @@ internal static class VehicleExpenseEndpoints
         }
 
         // The review flags, from what is already recorded. Information, never a block.
-        var flags = await FlagsAsync(db, vehicleId, expenseDate.Value, odometer!.Value, amount!.Value, invoiceNo, attachments, options, cancellationToken);
+        var flags = await FlagsAsync(db, vehicleId, expenseDate.Value, odometer, amount!.Value, invoiceNo, attachments, options, cancellationToken);
         if (verdict is not null)
         {
             if (verdict.IsAboveRange)
@@ -427,7 +428,7 @@ internal static class VehicleExpenseEndpoints
             ProjectId = projectId == 0 ? null : projectId,
             Type = type!.Value,
             ExpenseDate = expenseDate.Value,
-            OdometerKm = odometer.Value,
+            OdometerKm = odometer,
             FuelQuantity = fuelQuantity,
             UnitPrice = unitPrice,
             Amount = amount.Value,
@@ -569,7 +570,7 @@ internal static class VehicleExpenseEndpoints
     }
 
     private static async Task<IReadOnlyList<ClaimFlag>> FlagsAsync(
-        FleetDbContext db, int vehicleId, DateOnly expenseDate, decimal odometerKm, decimal amount, string? invoiceNo, IReadOnlyList<FleetAttachment> attachments,
+        FleetDbContext db, int vehicleId, DateOnly expenseDate, decimal? odometerKm, decimal amount, string? invoiceNo, IReadOnlyList<FleetAttachment> attachments,
         FleetOptions options, CancellationToken cancellationToken)
     {
         var sameInvoice = invoiceNo is null

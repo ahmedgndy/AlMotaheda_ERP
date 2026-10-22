@@ -90,12 +90,12 @@ internal static class VehicleQueries
     {
         var vehicle = await db.Vehicles.AsNoTracking().Where(candidate => candidate.Id == vehicleId).Select(candidate => new { candidate.OdometerKm, candidate.OdometerUpdatedAt }).SingleAsync(cancellationToken);
         var lastApproved = await db.VehicleExpenses.AsNoTracking()
-            .Where(expense => expense.VehicleId == vehicleId && expense.Status == VehicleExpenseStatus.Approved)
+            .Where(expense => expense.VehicleId == vehicleId && expense.Status == VehicleExpenseStatus.Approved && expense.OdometerKm != null)
             .OrderByDescending(expense => expense.OdometerKm)
             .Select(expense => new { expense.OdometerKm, expense.ExpenseDate })
             .FirstOrDefaultAsync(cancellationToken);
         return lastApproved is not null && lastApproved.OdometerKm >= vehicle.OdometerKm
-            ? (lastApproved.OdometerKm, lastApproved.ExpenseDate)
+            ? (lastApproved.OdometerKm!.Value, lastApproved.ExpenseDate)
             : (vehicle.OdometerKm, vehicle.OdometerUpdatedAt is { } at ? DateOnly.FromDateTime(at) : null);
     }
 }
