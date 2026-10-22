@@ -124,3 +124,10 @@ The `erp-android` channel holds `manifest.json`, `manifest.json.sig` and the APK
 produced on the release Mac by the Flutter repository's `tools/release/build-release.sh` and
 `tools/release/sign-manifest.sh` and copied there; the updater trusts them only through the manifest signature
 (the private signing key never leaves the release Mac).
+
+## Applying the migration scripts with sqlcmd
+
+`deploy/migration-scripts.sh` writes UTF-8 files with a byte-order mark, and the tables use filtered indexes and
+computed columns. With `sqlcmd`: pass `-I` (QUOTED_IDENTIFIER ON) and `-b` (stop on the first error), and strip the
+byte-order mark when piping a script in (`sed '1s/^\xEF\xBB\xBF//' 01-Platform.sql | sqlcmd ... -i /dev/stdin`).
+Apply the files in their numbered order. They are idempotent: running one again skips what is already applied.

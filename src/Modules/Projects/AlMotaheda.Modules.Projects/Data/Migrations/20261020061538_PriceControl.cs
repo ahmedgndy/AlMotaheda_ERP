@@ -147,12 +147,14 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
                 nullable: false,
                 defaultValue: 0);
 
+            // In EXEC: the idempotent script runs this in the same batch that adds CategoryId, and SQL Server checks the
+            // whole batch before it runs.
             migrationBuilder.Sql(
                 """
-                UPDATE item SET item.CategoryId = category.Id
+                EXEC(N'UPDATE item SET item.CategoryId = category.Id
                 FROM [projects].[PriceItem] item
                 JOIN [projects].[PriceCategory] category ON category.Code = item.Classification;
-                UPDATE [projects].[PriceItem] SET CategoryId = (SELECT Id FROM [projects].[PriceCategory] WHERE Code = 'Other') WHERE CategoryId = 0;
+                UPDATE [projects].[PriceItem] SET CategoryId = (SELECT Id FROM [projects].[PriceCategory] WHERE Code = ''Other'') WHERE CategoryId = 0;');
                 """);
 
             migrationBuilder.DropCheckConstraint(
@@ -491,9 +493,9 @@ namespace AlMotaheda.Modules.Projects.Data.Migrations
 
             migrationBuilder.Sql(
                 """
-                UPDATE item SET item.Classification = category.Code
+                EXEC(N'UPDATE item SET item.Classification = category.Code
                 FROM [projects].[PriceItem] item
-                JOIN [projects].[PriceCategory] category ON category.Id = item.CategoryId;
+                JOIN [projects].[PriceCategory] category ON category.Id = item.CategoryId;');
                 """);
 
             migrationBuilder.DropTable(

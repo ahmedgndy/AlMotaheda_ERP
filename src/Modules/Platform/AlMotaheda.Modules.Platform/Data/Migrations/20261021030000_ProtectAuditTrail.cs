@@ -18,14 +18,15 @@ internal sealed class ProtectAuditTrail : Migration
 
     protected override void Up(MigrationBuilder migrationBuilder)
     {
+        // In EXEC: CREATE TRIGGER must start its batch, and the idempotent script wraps every migration in an IF.
         migrationBuilder.Sql($"""
-            CREATE TRIGGER [platform].[{TriggerName}] ON [platform].[AuditEntry]
+            EXEC(N'CREATE TRIGGER [platform].[{TriggerName}] ON [platform].[AuditEntry]
             INSTEAD OF UPDATE, DELETE
             AS
             BEGIN
                 SET NOCOUNT ON;
-                THROW 50017, 'The audit trail is append-only: audit entries are never updated or deleted.', 1;
-            END
+                THROW 50017, ''The audit trail is append-only: audit entries are never updated or deleted.'', 1;
+            END');
             """);
     }
 
