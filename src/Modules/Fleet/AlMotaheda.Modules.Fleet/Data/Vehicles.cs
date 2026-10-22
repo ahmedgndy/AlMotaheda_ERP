@@ -34,6 +34,12 @@ internal sealed class Vehicle
 
     public VehicleGpsStatus GpsStatus { get; set; } = VehicleGpsStatus.NotConfigured;
 
+    /// <summary>
+    /// Whether the phone of the vehicle's assigned driver records the vehicle's positions (after the driver accepts
+    /// the tracking notice). On by default; a fleet manager turns it off and the phone stops at its next check.
+    /// </summary>
+    public bool TrackingEnabled { get; set; } = true;
+
     public string? Notes { get; set; }
 
     public DateTime CreatedAt { get; set; }
@@ -325,7 +331,14 @@ internal enum VehicleExpenseType
     Repair,
     Toll,
     Parking,
+
+    /// <summary>Cleaning.</summary>
     Wash,
+    Tires,
+    Oil,
+    SpareParts,
+    Insurance,
+    Licensing,
     Other,
 }
 

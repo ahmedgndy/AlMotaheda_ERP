@@ -265,6 +265,12 @@ internal static class VehicleExpenseEndpoints
             if (fuelQuantity is not null && unitPrice is not null)
             {
                 amount = VehicleExpenseRules.Amount(VehicleExpenseType.Fuel, fuelQuantity, unitPrice, null);
+
+                // The server computes the total; a total the client sends must agree with it (to the piastre).
+                if (request.Amount is { } sent && Math.Abs(sent - amount!.Value) > 0.01m)
+                {
+                    errors.Add("amount", $"The total {sent:0.00} doesn't match litres × price per litre ({amount:0.00}).");
+                }
             }
         }
         else if (type is not null)

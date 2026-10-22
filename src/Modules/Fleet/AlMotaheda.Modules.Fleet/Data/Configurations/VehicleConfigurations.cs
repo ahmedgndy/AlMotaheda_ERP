@@ -37,6 +37,7 @@ internal sealed class VehicleConfiguration : IEntityTypeConfiguration<Vehicle>
         builder.Property(vehicle => vehicle.GpsProvider).HasMaxLength(ProviderMaxLength);
         builder.Property(vehicle => vehicle.GpsDeviceId).HasMaxLength(DeviceMaxLength);
         builder.Property(vehicle => vehicle.Notes).HasMaxLength(NotesMaxLength).IsUnicode();
+        builder.Property(vehicle => vehicle.TrackingEnabled).HasDefaultValue(true).HasSentinel(true);
         builder.Property(vehicle => vehicle.RowVersion).IsRowVersion();
 
         builder.HasIndex(vehicle => vehicle.Plate).IsUnique().HasDatabaseName(PlateIndex);

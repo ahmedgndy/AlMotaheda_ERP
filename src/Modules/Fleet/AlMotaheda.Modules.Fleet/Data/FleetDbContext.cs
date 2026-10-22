@@ -36,6 +36,12 @@ internal sealed class FleetDbContext(DbContextOptions<FleetDbContext> options) :
     public DbSet<FleetAttachment> Attachments => Set<FleetAttachment>();
     public DbSet<VehicleViolation> VehicleViolations => Set<VehicleViolation>();
 
+    // Vehicle GPS: the driver's phone, its positions, each vehicle's latest state, and the stale alerts.
+    public DbSet<VehicleTrackingDevice> VehicleTrackingDevices => Set<VehicleTrackingDevice>();
+    public DbSet<VehicleGpsPoint> VehicleGpsPoints => Set<VehicleGpsPoint>();
+    public DbSet<VehicleTrackingState> VehicleTrackingStates => Set<VehicleTrackingState>();
+    public DbSet<VehicleTrackingAlert> VehicleTrackingAlerts => Set<VehicleTrackingAlert>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(Schema);

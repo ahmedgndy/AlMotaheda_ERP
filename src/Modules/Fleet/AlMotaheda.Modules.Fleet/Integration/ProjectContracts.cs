@@ -52,7 +52,8 @@ internal static class VehicleExpenseSettlement
             claim.Id,
             claim.VehicleId,
             claim.Type == VehicleExpenseType.Fuel ? EquipmentCostType.Fuel
-                : claim.Type == VehicleExpenseType.Maintenance ? EquipmentCostType.Maintenance
+                : claim.Type == VehicleExpenseType.Maintenance || claim.Type == VehicleExpenseType.Tires || claim.Type == VehicleExpenseType.Oil
+                  || claim.Type == VehicleExpenseType.SpareParts ? EquipmentCostType.Maintenance
                 : claim.Type == VehicleExpenseType.Repair ? EquipmentCostType.Repair : EquipmentCostType.Other,
             claim.Status == VehicleExpenseStatus.Approved ? EquipmentCostStatus.Approved : EquipmentCostStatus.Recorded,
             CostChannel.Custody,

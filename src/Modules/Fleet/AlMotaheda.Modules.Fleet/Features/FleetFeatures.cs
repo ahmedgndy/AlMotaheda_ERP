@@ -26,6 +26,11 @@ internal static class FleetFeatures
         services.AddScoped<VehicleViews>();
         services.AddScoped<VehicleExpenseViews>();
         services.AddScoped<ViolationViews>();
+
+        // Vehicle GPS from the driver's phone: ingestion, the monitoring views, the stale alerts.
+        services.AddScoped<DriverTracking>();
+        services.AddScoped<FleetMonitor>();
+        services.AddScoped<VehicleTrackingAlerts>();
     }
 
     /// <param name="api">The shared <c>/api</c> group. Routes under one project start with <c>/projects/{projectId:int}</c>.</param>
@@ -65,5 +70,6 @@ internal static class FleetFeatures
         VehicleExpenseReview.Map(api);
         VehicleViolationEndpoints.Map(api);
         VehicleLocationEndpoints.Map(api);
+        DriverTrackingEndpoints.Map(api);
     }
 }

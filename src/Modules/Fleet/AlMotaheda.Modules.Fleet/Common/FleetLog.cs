@@ -97,4 +97,26 @@ internal sealed partial class FleetLog(ILogger<FleetLog> logger)
 
     [LoggerMessage(EventId = 5153, Level = LogLevel.Information, Message = "User {ActorId} referred violation {ViolationId} to HR (referral {ReferralId})")]
     public partial void ViolationReferred(int actorId, int violationId, int referralId);
+
+    // Vehicle GPS (ids and counts only: never a position).
+    [LoggerMessage(EventId = 5201, Level = LogLevel.Information, Message = "User {UserId} accepted the vehicle tracking notice version {PolicyVersion} on device row {DeviceRowId}")]
+    public partial void TrackingPolicyAccepted(int userId, int policyVersion, int deviceRowId);
+
+    [LoggerMessage(EventId = 5202, Level = LogLevel.Information, Message = "User {UserId} uploaded vehicle positions: {Accepted} stored, {Duplicates} already stored, {Rejected} refused, {Heartbeats} heartbeats")]
+    public partial void TrackingBatch(int userId, int accepted, int duplicates, int rejected, int heartbeats);
+
+    [LoggerMessage(EventId = 5203, Level = LogLevel.Warning, Message = "Vehicle {VehicleId} stopped reporting positions; {Recipients} people told")]
+    public partial void VehicleSilent(int vehicleId, int recipients);
+
+    [LoggerMessage(EventId = 5204, Level = LogLevel.Information, Message = "Vehicle {VehicleId} reports positions again")]
+    public partial void VehicleReporting(int vehicleId);
+
+    [LoggerMessage(EventId = 5205, Level = LogLevel.Error, Message = "The vehicle tracking monitor round failed; it runs again on the next round")]
+    public partial void TrackingMonitorFailed(Exception exception);
+
+    [LoggerMessage(EventId = 5206, Level = LogLevel.Information, Message = "User {ActorId} turned vehicle tracking {State} for vehicle {VehicleId}")]
+    public partial void VehicleTrackingSwitched(int actorId, int vehicleId, string state);
+
+    [LoggerMessage(EventId = 5207, Level = LogLevel.Information, Message = "Deleted {Count} vehicle positions older than {Days} days")]
+    public partial void OldPositionsDeleted(int count, int days);
 }

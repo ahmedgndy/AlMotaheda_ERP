@@ -7,7 +7,7 @@ namespace AlMotaheda.Modules.Fleet.Tests.Api;
 
 /// <summary>
 /// Every vehicle endpoint over real HTTP without SQL Server: sign-in, the permission each one needs (fleet for the
-/// register, drivers, violations and custody; fuel for claims), validation, and the GPS answer with no provider.
+/// register, drivers, violations and custody; fuel for claims; fleet Edit for any vehicle position), and validation.
 /// </summary>
 public sealed class VehicleApiSecurityTests
 {
@@ -25,10 +25,15 @@ public sealed class VehicleApiSecurityTests
         { "POST", "/api/vehicles/1/drivers", "fleet:E" },
         { "POST", "/api/vehicles/1/drivers/2/end", "fleet:E" },
         { "GET", "/api/vehicles/1/custody", "fleet:V" },
-        { "GET", "/api/vehicles/1/location", "fleet:V" },
-        { "GET", "/api/vehicles/1/location-history", "fleet:V" },
-        { "GET", "/api/vehicles/1/trips", "fleet:V" },
+        { "GET", "/api/vehicles/1/location", "fleet:E" },
+        { "GET", "/api/vehicles/1/location-history", "fleet:E" },
+        { "GET", "/api/vehicles/1/trips", "fleet:E" },
+        { "PUT", "/api/vehicles/1/tracking", "fleet:E" },
+        { "GET", "/api/fleet/monitor", "fleet:E" },
         { "GET", "/api/fleet/gps-status", "fleet:V" },
+        { "GET", "/api/fleet/tracking/me", "fleet:V" },
+        { "PUT", "/api/fleet/tracking/me/policy", "fleet:V" },
+        { "POST", "/api/fleet/tracking/me/batch", "fleet:V" },
         { "GET", "/api/fleet/attachments/1/content", "fleet:V;fuel:V" },
         { "GET", "/api/vehicle-expenses", "fuel:V" },
         { "GET", "/api/vehicle-expenses/1", "fuel:V" },
@@ -101,18 +106,21 @@ public sealed class VehicleApiSecurityTests
     }
 
     [Fact]
-    public async Task With_no_provider_the_gps_status_says_so_and_invents_nothing()
+    public async Task The_gps_status_names_the_drivers_phone_and_fleet_view_alone_never_reads_a_position()
     {
         var (app, _) = await StartAsync();
         await using var _ = app;
-        var token = TestTokens.Create(role: "staff", permissions: [("fleet", "V")]);
+        var driver = TestTokens.Create(role: "staff", permissions: [("fleet", "V"), ("fuel", "VC")]);
 
-        var response = await Send(app, "GET", "/api/fleet/gps-status", token);
+        var response = await Send(app, "GET", "/api/fleet/gps-status", driver);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await Json(response);
-        Assert.Equal(("None", false, 0), (body.GetProperty("provider").GetString(), body.GetProperty("configured").GetBoolean(), body.GetProperty("trackedVehicles").GetInt32()));
-        Assert.Contains("No vehicle GPS provider", body.GetProperty("note").GetString());
+        Assert.Equal(("DriverPhone", true, 0), (body.GetProperty("provider").GetString(), body.GetProperty("configured").GetBoolean(), body.GetProperty("trackedVehicles").GetInt32()));
+        foreach (var path in new[] { "/api/fleet/monitor", "/api/vehicles/1/location", "/api/vehicles/1/location-history", "/api/vehicles/1/trips" })
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(app, "GET", path, driver)).StatusCode);
+        }
     }
 
     [Theory]
@@ -125,6 +133,10 @@ public sealed class VehicleApiSecurityTests
     [InlineData("POST", "/api/vehicle-expenses/1/reverse", "{}", new[] { "reason", "rowVersion" })]
     [InlineData("POST", "/api/vehicle-violations", "{\"category\":\"Jaywalking\",\"gpsLatitude\":1}", new[] { "category", "description", "gpsLatitude", "vehicleId", "violationDate" })]
     [InlineData("POST", "/api/vehicle-violations/1/review", "{\"outcome\":\"Recorded\"}", new[] { "note", "outcome", "rowVersion" })]
+    [InlineData("PUT", "/api/vehicles/1/tracking", "{}", new[] { "enabled", "rowVersion" })]
+    [InlineData("PUT", "/api/fleet/tracking/me/policy", "{\"deviceId\":\"bad id!\",\"platform\":\"Nokia\",\"policyVersion\":99}", new[] { "deviceId", "platform", "policyVersion" })]
+    [InlineData("POST", "/api/fleet/tracking/me/batch", "{\"points\":[]}", new[] { "deviceId" })]
+    [InlineData("POST", "/api/vehicle-expenses", "{\"vehicleId\":1,\"type\":\"Fuel\",\"expenseDate\":\"2026-10-01\",\"fuelQuantity\":40,\"unitPrice\":17.25,\"amount\":700,\"odometerAttachmentId\":1,\"invoiceAttachmentId\":2,\"idempotencyKey\":\"7e1e1e1e-1e1e-1e1e-1e1e-1e1e1e1e1e1e\"}", new[] { "amount" })]
     public async Task A_bad_form_lists_every_failing_field_before_any_database_work(string method, string path, string json, string[] fields)
     {
         var (app, database) = await StartAsync();

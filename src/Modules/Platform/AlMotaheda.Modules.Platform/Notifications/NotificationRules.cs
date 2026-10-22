@@ -50,6 +50,10 @@ internal static class NotificationTypes
     public const string OfficeCashDiscrepancy = "OfficeCashDiscrepancy";
     public const string OfficeSpendRequested = "OfficeSpendRequested";
     public const string LowBattery = "LowBattery";
+
+    // Vehicle GPS (Fleet module).
+    public const string VehicleTrackingLost = "VehicleTrackingLost";
+    public const string VehicleTrackingBack = "VehicleTrackingBack";
 }
 
 /// <summary>A notification to store: who gets it, its type and its title in both languages.</summary>
@@ -126,6 +130,7 @@ internal static class NotificationRules
         ["OfficeDiscrepancyAlert"] = ("cash count", "جرد النقدية"),
         ["OfficeSpendRequestedAlert"] = ("office repair or purchase request", "طلب صيانة أو شراء للمكتب"),
         ["LowBatteryAlert"] = ("location alert", "تنبيه الموقع"),
+        ["VehicleTrackingAlert"] = ("vehicle tracking alert", "تنبيه تتبع المركبة"),
     };
 
     /// <summary>StatusAfter <c>null</c> = the record was just added.</summary>
@@ -266,6 +271,11 @@ internal static class NotificationRules
         new("OfficeSpendRequestedAlert", null, "RecipientUserId", NotificationTypes.OfficeSpendRequested),
         // The phone said its battery is low while it could still report. Its recovery shows on the map only.
         new("LowBatteryAlert", null, "RecipientUserId", NotificationTypes.LowBattery),
+
+        // Vehicle GPS (Fleet module): one alert row per recipient, opened once per silence and closed once when
+        // positions arrive again. Closing because tracking is no longer expected ("Ended") tells nobody.
+        new("VehicleTrackingAlert", null, "RecipientUserId", NotificationTypes.VehicleTrackingLost),
+        new("VehicleTrackingAlert", "Recovered", "RecipientUserId", NotificationTypes.VehicleTrackingBack),
     ];
 
     /// <summary>The notifications one changed record causes. <paramref name="actorUserId"/> made the change.</summary>
@@ -360,6 +370,8 @@ internal static class NotificationRules
         NotificationTypes.OfficeCashDiscrepancy => ("A cash count does not match the custody balance", "جرد النقدية لا يطابق رصيد العهدة"),
         NotificationTypes.OfficeSpendRequested => ("An office repair or purchase request is waiting for review", "طلب صيانة أو شراء للمكتب بانتظار المراجعة"),
         NotificationTypes.LowBattery => ("A site engineer's phone battery is low", "بطارية هاتف مهندس الموقع منخفضة"),
+        NotificationTypes.VehicleTrackingLost => ("A vehicle stopped reporting its position", "توقفت مركبة عن إرسال موقعها"),
+        NotificationTypes.VehicleTrackingBack => ("A vehicle is reporting its position again", "عادت المركبة لإرسال موقعها"),
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown notification type."),
     };
 }

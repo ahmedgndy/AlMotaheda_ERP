@@ -54,6 +54,7 @@ internal sealed record VehicleView(
     decimal OdometerKm,
     DateTime? OdometerUpdatedAt,
     string GpsStatus,
+    bool TrackingEnabled,
     string? GpsProvider,
     string? GpsDeviceId,
     string? Notes,
@@ -100,7 +101,7 @@ internal sealed class VehicleViews(FleetDbContext db, IUserDirectory users, IEmp
             return new VehicleView(
                 vehicle.Id, vehicle.Equipment.AssetNo, vehicle.Equipment.NameAr, vehicle.Equipment.NameEn, vehicle.Plate, vehicle.Type.ToString(), vehicle.ModelYear,
                 vehicle.FuelType.ToString(), vehicle.Equipment.Ownership.ToString(), vehicle.Equipment.Condition.ToString(), vehicle.Equipment.Status.ToString(),
-                vehicle.OdometerKm, vehicle.OdometerUpdatedAt, vehicle.GpsStatus.ToString(), vehicle.GpsProvider, vehicle.GpsDeviceId, vehicle.Notes,
+                vehicle.OdometerKm, vehicle.OdometerUpdatedAt, vehicle.GpsStatus.ToString(), vehicle.TrackingEnabled, vehicle.GpsProvider, vehicle.GpsDeviceId, vehicle.Notes,
                 driver is null ? null : DriverAssignmentView.From(driver, driverRefs, seesMoney), projects.GetValueOrDefault(vehicle.Id),
                 seesMoney ? figures.Posted : null, seesMoney ? figures.Pending : null, figures.PendingCount,
                 vehicle.CreatedAt, FleetPerson.From(vehicle.CreatedBy, people), vehicle.UpdatedAt, RowVersions.Format(vehicle.RowVersion));
@@ -145,7 +146,7 @@ internal static partial class VehicleEndpoints
         api.MapGet("/vehicles", ListAsync)
             .RequirePermission(FleetPermissions.Fleet, PermissionAction.View)
             .WithName("ListVehicles")
-            .WithSummary("The vehicles (search: plate, asset no., names; status; page, pageSize)");
+            .WithSummary("The vehicles (search: plate, asset no., names; status; driverEmployeeId: the current driver; page, pageSize)");
 
         api.MapGet("/vehicles/{vehicleId:int}", GetAsync)
             .RequirePermission(FleetPermissions.Fleet, PermissionAction.View)
@@ -190,7 +191,7 @@ internal static partial class VehicleEndpoints
 
     internal static async Task<Results<Ok<ListResponse>, ValidationProblem, ProblemHttpResult>> ListAsync(
         HttpContext httpContext, FleetDbContext db, VehicleViews views, CancellationToken cancellationToken,
-        string? search = null, string? status = null, int page = 1, int pageSize = Paging.DefaultPageSize)
+        string? search = null, string? status = null, int? driverEmployeeId = null, int page = 1, int pageSize = Paging.DefaultPageSize)
     {
         if (FleetCaller.From(httpContext.User) is not { } caller)
         {
@@ -216,6 +217,11 @@ internal static partial class VehicleEndpoints
         if (wantedStatus is { } wanted)
         {
             query = query.Where(vehicle => vehicle.Equipment.Status == wanted);
+        }
+
+        if (driverEmployeeId is { } driverId)
+        {
+            query = query.Where(vehicle => db.VehicleDriverAssignments.Any(assignment => assignment.VehicleId == vehicle.Id && assignment.EndDate == null && assignment.DriverEmployeeId == driverId));
         }
 
         var totalCount = await query.CountAsync(cancellationToken);

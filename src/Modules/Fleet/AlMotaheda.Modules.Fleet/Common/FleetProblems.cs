@@ -41,6 +41,7 @@ internal static class FleetProblems
     public const string PriceExceptionRejected = "price_exception_rejected";
     public const string NotVehicle = "not_a_vehicle";
     public const string AlreadyPosted = "already_posted";
+    public const string VehicleTrackingNoticeNotAccepted = "vehicle_tracking_notice_not_accepted";
 
     public static ValidationProblem Validation(ValidationErrors errors) => ApiProblem.Validation(errors.ToDictionary());
 
@@ -185,4 +186,8 @@ internal static class FleetProblems
     /// <summary>Another change to the same records held its lock for too long; safe to retry.</summary>
     public static ProblemHttpResult TryAgainLater() =>
         ApiProblem.Create(StatusCodes.Status503ServiceUnavailable, Busy, "Another change is still running. Try again in a moment.");
+
+    /// <summary>Positions from a phone where the driver hasn't accepted the current tracking notice: nothing is kept.</summary>
+    public static ProblemHttpResult TrackingNoticeNotAccepted() =>
+        Conflict(VehicleTrackingNoticeNotAccepted, "Accept the vehicle tracking notice on this phone first. Nothing was stored.");
 }

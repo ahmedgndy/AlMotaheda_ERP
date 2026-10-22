@@ -15,8 +15,8 @@ namespace AlMotaheda.Modules.Fleet.Tests.Database;
 /// <summary>
 /// Vehicles on SQL Server: a vehicle's operating custody is funded through Finance with the driver accountable; the
 /// driver claims with evidence; the Accountant approves once (also under concurrency), rejects keeping everything, or
-/// refers to HR, which alone decides whether anything is deducted; drivers change without rewriting history; and the
-/// GPS endpoints tell the truth when no provider is configured.
+/// refers to HR, which alone decides whether anything is deducted; and drivers change without rewriting history.
+/// Vehicle GPS is in <see cref="VehicleGpsTrackingTests"/>.
 /// </summary>
 [Collection(SqlServerCollection.Name)]
 public sealed class VehicleCustodyTests(SqlServerFixture database)
@@ -297,29 +297,6 @@ public sealed class VehicleCustodyTests(SqlServerFixture database)
         fuel["idempotencyKey"] = Guid.NewGuid().ToString();
         var filled = await Submitted(api, cast.OtherDriver, fuel);
         Assert.Equal((620m, "WithinRange", 16m), (filled.GetProperty("amount").GetDecimal(), filled.GetProperty("priceCheck").GetString(), filled.GetProperty("referenceMaxPrice").GetDecimal()));
-    }
-
-    [DatabaseFact]
-    public async Task Without_a_gps_provider_the_location_endpoints_say_not_configured_and_show_nothing_invented()
-    {
-        await using var api = await ProjectsApi.StartAsync(database);
-        var cast = await VehicleCastAsync(api);
-
-        // U: fleet View reads the truthful answer; the HR user, with no fleet right, reads nothing.
-        var location = await Json(await api.SendAsync(HttpMethod.Get, $"/api/vehicles/{cast.VehicleId}/location", cast.Manager));
-        Assert.Equal(("NotConfigured", "None", false, "NotConfigured"), (location.GetProperty("status").GetString(), location.GetProperty("provider").GetString(),
-            location.GetProperty("providerConfigured").GetBoolean(), location.GetProperty("vehicleGpsStatus").GetString()));
-        Assert.Equal(JsonValueKind.Null, location.GetProperty("data").ValueKind);
-        var history = await Json(await api.SendAsync(HttpMethod.Get, $"/api/vehicles/{cast.VehicleId}/location-history?from={Iso(Today(api).AddDays(-7))}&to={Iso(Today(api))}", cast.Engineer));
-        Assert.Equal(("NotConfigured", 0), (history.GetProperty("status").GetString(), history.GetProperty("data").GetArrayLength()));
-        var trips = await Json(await api.SendAsync(HttpMethod.Get, $"/api/vehicles/{cast.VehicleId}/trips?from={Iso(Today(api).AddDays(-7))}&to={Iso(Today(api))}", cast.Engineer));
-        Assert.Equal(("NotConfigured", 0), (trips.GetProperty("status").GetString(), trips.GetProperty("data").GetArrayLength()));
-        var status = await Json(await api.SendAsync(HttpMethod.Get, "/api/fleet/gps-status", cast.Manager));
-        Assert.Equal(("None", false, 0), (status.GetProperty("provider").GetString(), status.GetProperty("configured").GetBoolean(), status.GetProperty("trackedVehicles").GetInt32()));
-
-        var (_, hr) = await api.CreateSignedInUserAsync(cast.Executive, "hr");
-        Assert.Equal(HttpStatusCode.Forbidden, (await api.SendAsync(HttpMethod.Get, $"/api/vehicles/{cast.VehicleId}/location", hr)).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await api.SendAsync(HttpMethod.Get, "/api/fleet/gps-status", hr)).StatusCode);
     }
 
     /// <summary>

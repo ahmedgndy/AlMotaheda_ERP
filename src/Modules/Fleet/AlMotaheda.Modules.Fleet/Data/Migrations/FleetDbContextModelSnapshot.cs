@@ -657,6 +657,11 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
+                    b.Property<bool>("TrackingEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -1091,7 +1096,7 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
 
                             t.HasCheckConstraint("CK_VehicleExpense_Status", "[Status] IN ('Submitted', 'Approved', 'Rejected', 'EvidenceRequested', 'Escalated')");
 
-                            t.HasCheckConstraint("CK_VehicleExpense_Type", "[Type] IN ('Fuel', 'Maintenance', 'Repair', 'Toll', 'Parking', 'Wash', 'Other')");
+                            t.HasCheckConstraint("CK_VehicleExpense_Type", "[Type] IN ('Fuel', 'Maintenance', 'Repair', 'Toll', 'Parking', 'Wash', 'Tires', 'Oil', 'SpareParts', 'Insurance', 'Licensing', 'Other')");
                         });
                 });
 
@@ -1157,6 +1162,269 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
                     b.ToTable("VehicleExpenseFlag", "fleet", t =>
                         {
                             t.HasCheckConstraint("CK_VehicleExpenseFlag_Kind", "[Kind] IN ('DuplicateInvoiceNo', 'DuplicateReceipt', 'SameAmountVehicleDay', 'OdometerNotIncreasing', 'ImplausibleDistance', 'PriceAboveRange', 'NoReferencePrice')");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VehicleGpsPoint", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int?>("AccuracyMeters")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("AltitudeMeters")
+                        .HasPrecision(7, 1)
+                        .HasColumnType("decimal(7,1)");
+
+                    b.Property<int>("AssignmentId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ClientPointId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("DeviceId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DriverEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<short?>("HeadingDegrees")
+                        .HasColumnType("smallint");
+
+                    b.Property<decimal>("Latitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<decimal>("Longitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<long?>("Sequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal?>("SpeedKmh")
+                        .HasPrecision(6, 1)
+                        .HasColumnType("decimal(6,1)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("VehicleId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignmentId");
+
+                    b.HasIndex("DeviceId");
+
+                    b.HasIndex(new[] { "RecordedAt" }, "IX_VehicleGpsPoint_RecordedAt");
+
+                    b.HasIndex(new[] { "VehicleId", "RecordedAt" }, "IX_VehicleGpsPoint_Vehicle_RecordedAt");
+
+                    b.HasIndex(new[] { "UserId", "ClientPointId" }, "UX_VehicleGpsPoint_User_ClientPoint")
+                        .IsUnique();
+
+                    b.ToTable("VehicleGpsPoint", "fleet", t =>
+                        {
+                            t.HasCheckConstraint("CK_VehicleGpsPoint_Accuracy", "[AccuracyMeters] IS NULL OR [AccuracyMeters] >= 0");
+
+                            t.HasCheckConstraint("CK_VehicleGpsPoint_Heading", "[HeadingDegrees] IS NULL OR [HeadingDegrees] BETWEEN 0 AND 360");
+
+                            t.HasCheckConstraint("CK_VehicleGpsPoint_Position", "[Latitude] BETWEEN -90 AND 90 AND [Longitude] BETWEEN -180 AND 180");
+
+                            t.HasCheckConstraint("CK_VehicleGpsPoint_Speed", "[SpeedKmh] IS NULL OR [SpeedKmh] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VehicleTrackingAlert", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("DriverEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<DateTime?>("LastPointAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("RecipientUserId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<int>("VehicleId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "VehicleId", "RecipientUserId" }, "UX_VehicleTrackingAlert_Open")
+                        .IsUnique()
+                        .HasFilter("[Status] = 'Open'");
+
+                    b.ToTable("VehicleTrackingAlert", "fleet", t =>
+                        {
+                            t.HasCheckConstraint("CK_VehicleTrackingAlert_Status", "[Status] IN ('Open', 'Recovered', 'Ended')");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VehicleTrackingDevice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AppVersion")
+                        .HasMaxLength(40)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(40)");
+
+                    b.Property<bool?>("BatteryCharging")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("BatteryPercent")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DeviceId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<bool?>("GpsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LastHeartbeatAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<DateTime?>("LastHeartbeatReceivedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<DateTime?>("LastUploadAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("PendingPoints")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Permission")
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<DateTime>("PolicyAcceptedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("PolicyVersion")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("TrackingState")
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "UserId", "DeviceId" }, "UX_VehicleTrackingDevice_User_Device")
+                        .IsUnique();
+
+                    b.ToTable("VehicleTrackingDevice", "fleet", t =>
+                        {
+                            t.HasCheckConstraint("CK_VehicleTrackingDevice_Battery", "[BatteryPercent] IS NULL OR [BatteryPercent] BETWEEN 0 AND 100");
+
+                            t.HasCheckConstraint("CK_VehicleTrackingDevice_Pending", "[PendingPoints] IS NULL OR [PendingPoints] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VehicleTrackingState", b =>
+                {
+                    b.Property<int>("VehicleId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("LastAccuracyMeters")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("LastDriverEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("LastLatitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<decimal?>("LastLongitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<DateTime?>("LastPointAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<DateTime?>("LastReceivedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<decimal?>("LastSpeedKmh")
+                        .HasPrecision(6, 1)
+                        .HasColumnType("decimal(6,1)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("SilentSince")
+                        .HasColumnType("datetime2(3)");
+
+                    b.HasKey("VehicleId")
+                        .HasName("PK_VehicleTrackingState");
+
+                    b.ToTable("VehicleTrackingState", "fleet", t =>
+                        {
+                            t.HasCheckConstraint("CK_VehicleTrackingState_Position", "([LastLatitude] IS NULL AND [LastLongitude] IS NULL) OR ([LastLatitude] BETWEEN -90 AND 90 AND [LastLongitude] BETWEEN -180 AND 180)");
                         });
                 });
 
@@ -1458,6 +1726,45 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
                     b.HasOne("AlMotaheda.Modules.Fleet.Data.VehicleExpense", null)
                         .WithMany("Flags")
                         .HasForeignKey("ExpenseId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VehicleGpsPoint", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Fleet.Data.VehicleDriverAssignment", null)
+                        .WithMany()
+                        .HasForeignKey("AssignmentId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("AlMotaheda.Modules.Fleet.Data.VehicleTrackingDevice", null)
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("AlMotaheda.Modules.Fleet.Data.Vehicle", null)
+                        .WithMany()
+                        .HasForeignKey("VehicleId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VehicleTrackingAlert", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Fleet.Data.Vehicle", null)
+                        .WithMany()
+                        .HasForeignKey("VehicleId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AlMotaheda.Modules.Fleet.Data.VehicleTrackingState", b =>
+                {
+                    b.HasOne("AlMotaheda.Modules.Fleet.Data.Vehicle", null)
+                        .WithOne()
+                        .HasForeignKey("AlMotaheda.Modules.Fleet.Data.VehicleTrackingState", "VehicleId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
                 });

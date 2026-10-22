@@ -19,7 +19,7 @@ public sealed class DatabaseSchemaTests
         using var db = CreateContext();
 
         Assert.False(db.Database.HasPendingModelChanges(), "The model changed without a migration. Run dotnet ef migrations add.");
-        Assert.Equal(["InitialFleet", "EquipmentCostAdjustments", "EquipmentCostWorkItem", "VehiclesAndCustody", "ClaimOdometerOptional"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
+        Assert.Equal(["InitialFleet", "EquipmentCostAdjustments", "EquipmentCostWorkItem", "VehiclesAndCustody", "ClaimOdometerOptional", "VehicleGpsTracking"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
     }
 
     [Fact]
@@ -41,6 +41,10 @@ public sealed class DatabaseSchemaTests
         Assert.Contains("CREATE TABLE [fleet].[VehicleExpenseAlert]", script);
         Assert.Contains("CREATE TABLE [fleet].[FleetAttachment]", script);
         Assert.Contains("CREATE TABLE [fleet].[VehicleViolation]", script);
+        Assert.Contains("CREATE TABLE [fleet].[VehicleGpsPoint]", script);
+        Assert.Contains("CREATE TABLE [fleet].[VehicleTrackingDevice]", script);
+        Assert.Contains("CREATE TABLE [fleet].[VehicleTrackingState]", script);
+        Assert.Contains("CREATE TABLE [fleet].[VehicleTrackingAlert]", script);
     }
 
     [Theory]
@@ -94,6 +98,15 @@ public sealed class DatabaseSchemaTests
     [InlineData("CONSTRAINT [CK_VehicleViolation_Status] CHECK ([Status] IN ('Recorded', 'UnderReview', 'Resolved', 'Dismissed'))")]
     [InlineData("[OdometerKm] decimal(18,1) NOT NULL")]
     [InlineData("[FuelQuantity] decimal(18,3) NULL")]
+    // Vehicle GPS: each queued position stored once, a vehicle's day read by an index, one open alert per recipient.
+    [InlineData("CREATE UNIQUE INDEX [UX_VehicleGpsPoint_User_ClientPoint] ON [fleet].[VehicleGpsPoint] ([UserId], [ClientPointId])")]
+    [InlineData("CREATE INDEX [IX_VehicleGpsPoint_Vehicle_RecordedAt] ON [fleet].[VehicleGpsPoint] ([VehicleId], [RecordedAt])")]
+    [InlineData("CONSTRAINT [CK_VehicleGpsPoint_Position] CHECK ([Latitude] BETWEEN -90 AND 90 AND [Longitude] BETWEEN -180 AND 180)")]
+    [InlineData("[Latitude] decimal(9,6) NOT NULL")]
+    [InlineData("CREATE UNIQUE INDEX [UX_VehicleTrackingDevice_User_Device] ON [fleet].[VehicleTrackingDevice] ([UserId], [DeviceId])")]
+    [InlineData("CREATE UNIQUE INDEX [UX_VehicleTrackingAlert_Open] ON [fleet].[VehicleTrackingAlert] ([VehicleId], [RecipientUserId]) WHERE [Status] = 'Open'")]
+    [InlineData("CONSTRAINT [FK_VehicleGpsPoint_VehicleDriverAssignment_AssignmentId] FOREIGN KEY ([AssignmentId]) REFERENCES [fleet].[VehicleDriverAssignment] ([Id])")]
+    [InlineData("[TrackingEnabled] bit NOT NULL DEFAULT CAST(1 AS bit)")]
     public void Script_contains_the_approved_constraints_and_indexes(string expected)
     {
         using var db = CreateContext();

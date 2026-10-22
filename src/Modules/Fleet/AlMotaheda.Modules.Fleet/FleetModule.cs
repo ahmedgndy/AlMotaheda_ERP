@@ -44,7 +44,7 @@ public sealed class FleetModule : IModule
         services.AddScoped<IReportSource, FleetReports>();
         services.AddScoped<IReportSource, VehicleReports>();
 
-        // Vehicles: policies, the evidence store, the custody ledger for Finance, Price Control, GPS (no provider yet).
+        // Vehicles: policies, the evidence store, the custody ledger for Finance, Price Control.
         services.AddOptions<FleetOptions>().Bind(configuration.GetSection(FleetOptions.SectionName)).ValidateOnStart();
         services.AddSingleton<IValidateOptions<FleetOptions>, FleetOptionsValidator>();
         services.AddOptions<FleetStorageOptions>().Bind(configuration.GetSection(FleetStorageOptions.SectionName)).ValidateOnStart();
@@ -53,10 +53,10 @@ public sealed class FleetModule : IModule
         services.AddSingleton<IFleetFileStore, LocalFleetFileStore>();
         services.AddScoped<ICustodyLedgerSource, VehicleCustodyLedgerSource>();
         services.AddScoped<IPriceExceptionSource, VehicleExpensePriceExceptionSource>();
-        services.AddSingleton<IVehicleLocationProvider, NullVehicleLocationProvider>();
         FleetFeatures.AddServices(services);
 
         services.AddHostedService<FleetStartup>();
+        services.AddHostedService<VehicleTrackingWorker>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints)
