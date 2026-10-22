@@ -118,8 +118,8 @@ internal sealed class LedgerEntryConfiguration : IEntityTypeConfiguration<Ledger
             table.HasCheckConstraint("CK_LedgerEntry_Account", $"[Account] IN ({SqlList.Of(Enum.GetNames<LedgerAccount>())})");
             table.HasCheckConstraint("CK_LedgerEntry_Amount", "[Amount] <> 0");
 
-            // Every entry comes from a paid request or from an internal custody transfer; a custody entry names its account.
-            table.HasCheckConstraint("CK_LedgerEntry_Origin", "[PaymentRequestId] IS NOT NULL OR [CustodyTransferId] IS NOT NULL");
+            // Every entry comes from a paid request, an internal custody transfer or a treasury deposit; a custody entry names its account.
+            table.HasCheckConstraint("CK_LedgerEntry_Origin", "[PaymentRequestId] IS NOT NULL OR [CustodyTransferId] IS NOT NULL OR [TreasuryDepositId] IS NOT NULL");
             table.HasCheckConstraint("CK_LedgerEntry_CustodyAccount", "([Account] = 'Custody' AND [CustodyAccountId] IS NOT NULL) OR ([Account] <> 'Custody' AND [CustodyAccountId] IS NULL)");
         });
 
@@ -132,6 +132,7 @@ internal sealed class LedgerEntryConfiguration : IEntityTypeConfiguration<Ledger
         builder.HasOne<LedgerEntry>().WithMany().HasForeignKey(entry => entry.ReversesEntryId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<CustodyTransfer>().WithMany().HasForeignKey(entry => entry.CustodyTransferId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<CustodyAccount>().WithMany().HasForeignKey(entry => entry.CustodyAccountId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<TreasuryDeposit>().WithMany().HasForeignKey(entry => entry.TreasuryDepositId).OnDelete(DeleteBehavior.Restrict);
 
         // An entry is reversed at most once.
         builder.HasIndex(entry => entry.ReversesEntryId).IsUnique().HasFilter("[ReversesEntryId] IS NOT NULL")
@@ -143,7 +144,35 @@ internal sealed class LedgerEntryConfiguration : IEntityTypeConfiguration<Ledger
         builder.HasIndex(entry => new { entry.CounterpartyType, entry.CounterpartyId, entry.EntryDate }, "IX_LedgerEntry_Counterparty");
         builder.HasIndex(entry => entry.PaymentRequestId, "IX_LedgerEntry_PaymentRequestId");
         builder.HasIndex(entry => entry.CustodyTransferId, "IX_LedgerEntry_CustodyTransferId");
+        builder.HasIndex(entry => entry.TreasuryDepositId, "IX_LedgerEntry_TreasuryDepositId");
         builder.HasIndex(entry => new { entry.CustodyAccountId, entry.EntryDate }, "IX_LedgerEntry_CustodyAccount_Date");
         builder.HasIndex(entry => new { entry.Account, entry.EntryDate }, "IX_LedgerEntry_Account_Date");
+    }
+}
+
+internal sealed class TreasuryDepositConfiguration : IEntityTypeConfiguration<TreasuryDeposit>
+{
+    public const string IdempotencyKeyIndex = "UX_TreasuryDeposit_IdempotencyKey";
+    public const int SourceMaxLength = 200;
+    public const int ReferenceMaxLength = 100;
+    public const int NotesMaxLength = 500;
+
+    public void Configure(EntityTypeBuilder<TreasuryDeposit> builder)
+    {
+        builder.ToTable(nameof(TreasuryDeposit), table =>
+        {
+            table.HasCheckConstraint("CK_TreasuryDeposit_Account", "[Account] IN ('Bank', 'Cash')");
+            table.HasCheckConstraint("CK_TreasuryDeposit_Amount", "[Amount] > 0");
+        });
+
+        builder.Property(deposit => deposit.Number).HasMaxLength(20)
+            .HasComputedColumnSql("CONCAT('TD-', REPLICATE('0', 6 - LEN([Id])), [Id])", stored: true);
+        builder.Property(deposit => deposit.Account).HasConversion<string>().HasMaxLength(30);
+        builder.Property(deposit => deposit.Source).HasMaxLength(SourceMaxLength).IsUnicode();
+        builder.Property(deposit => deposit.Reference).HasMaxLength(ReferenceMaxLength).IsUnicode();
+        builder.Property(deposit => deposit.Notes).HasMaxLength(NotesMaxLength).IsUnicode();
+
+        builder.HasIndex(deposit => deposit.IdempotencyKey).IsUnique().HasDatabaseName(IdempotencyKeyIndex);
+        builder.HasIndex(deposit => new { deposit.Account, deposit.DepositDate }, "IX_TreasuryDeposit_Account_Date");
     }
 }

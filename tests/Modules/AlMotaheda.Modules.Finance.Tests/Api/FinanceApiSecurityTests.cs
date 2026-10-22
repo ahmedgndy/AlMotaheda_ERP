@@ -26,6 +26,8 @@ public sealed class FinanceApiSecurityTests
         // The treasury and the custody hierarchy.
         { "GET", "/api/treasury", "finance:F" },
         { "PUT", "/api/treasury/Cash/opening-balance", "finance:A" },
+        { "POST", "/api/treasury/Cash/deposits", "finance:A" },
+        { "GET", "/api/treasury/deposits", "finance:F" },
         { "GET", "/api/custody-accounts", "custody:V" },
         { "GET", "/api/custody-accounts/1", "custody:V" },
         { "POST", "/api/custody-accounts", "custody:A" },
@@ -95,6 +97,17 @@ public sealed class FinanceApiSecurityTests
         var accountant = TestTokens.Create(role: "accountant", permissions: [("finance", "VCEAF")]);
 
         var response = await Send(app, "PUT", "/api/treasury/Cash/opening-balance", accountant, new { openingBalance = 1_000_000m, openingDate = "2026-01-01", rowVersion = RowVersion });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_deposit_into_the_treasury_needs_an_executive_not_only_the_permission()
+    {
+        await using var app = await TestApplication.StartAsync();
+        var accountant = TestTokens.Create(role: "accountant", permissions: [("finance", "VCEAF")]);
+
+        var response = await Send(app, "POST", "/api/treasury/Cash/deposits", accountant, new { amount = 50_000m, source = "Owner capital", idempotencyKey = Guid.NewGuid() });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }

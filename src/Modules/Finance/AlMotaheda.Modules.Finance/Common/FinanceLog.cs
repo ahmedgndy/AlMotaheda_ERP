@@ -22,6 +22,9 @@ internal sealed partial class FinanceLog(ILogger<FinanceLog> logger)
     [LoggerMessage(EventId = 8011, Level = LogLevel.Information, Message = "User {ActorId} set the opening balance of treasury account {Account}")]
     public partial void OpeningBalanceSet(int actorId, string account);
 
+    [LoggerMessage(EventId = 8012, Level = LogLevel.Information, Message = "User {ActorId} recorded treasury deposit {DepositId} into {Account}")]
+    public partial void DepositRecorded(int actorId, int depositId, string account);
+
     [LoggerMessage(EventId = 8021, Level = LogLevel.Information, Message = "User {ActorId} opened custody account {AccountId} ({Kind}) for holder {HolderUserId}")]
     public partial void CustodyAccountOpened(int actorId, int accountId, string kind, int? holderUserId);
 

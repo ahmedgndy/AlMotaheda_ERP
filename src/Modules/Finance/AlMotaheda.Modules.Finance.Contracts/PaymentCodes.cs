@@ -54,6 +54,12 @@ public static class PaymentPurposes
 
     public static IReadOnlyList<string> All { get; } = [SupplierInvoices, WorkerWages, SubcontractWork, SubcontractAdvance, EquipmentCost, Salaries, CustodyAdvance, CustodyReturn, OfficeCustodyAdvance];
 
+    /// <summary>
+    /// Money put into the treasury from outside (owner capital, a loan, a client's payment): money in, never income and
+    /// never a payment. Only a ledger entry's purpose: a deposit is not a payment request.
+    /// </summary>
+    public const string TreasuryDeposit = "TreasuryDeposit";
+
     /// <summary>An internal movement between the treasury and a custody, or between custodies: counted zero times as expense.</summary>
     public static bool IsInternalTransfer(string purpose) => purpose is CustodyAdvance or CustodyReturn;
 }
@@ -80,6 +86,9 @@ public static class PaymentSourceTypes
     public const string SalarySheetPayment = "SalarySheetPayment";
 
     /// <summary>Cash handed to a custody (Projects writes the custody funding when the request is paid).</summary>
+    /// <summary>A deposit into the treasury (Finance's own <c>TreasuryDeposit</c>); also the counterparty type of its entry.</summary>
+    public const string TreasuryDeposit = "TreasuryDeposit";
+
     public const string CustodyFunding = "CustodyFunding";
 
     /// <summary>

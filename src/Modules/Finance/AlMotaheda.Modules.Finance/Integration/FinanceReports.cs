@@ -121,8 +121,10 @@ internal sealed class FinanceReports(FinanceDbContext db, IVisibleProjects proje
             .Select(group =>
             {
                 // Payments are the money out of the treasury less their reversals; custody advances and returns are
-                // internal transfers, shown apart and never counted as expense; there is no money in yet (no income records).
-                var payments = group.Where(entry => !PaymentPurposes.IsInternalTransfer(entry.Purpose) && entry.Account != LedgerAccount.Custody);
+                // internal transfers, shown apart and never counted as expense; money in is what Executives deposited
+                // (owner capital, loans, client payments), never income.
+                var moneyIn = group.Where(entry => entry.Purpose == PaymentPurposes.TreasuryDeposit).Sum(entry => entry.Amount);
+                var payments = group.Where(entry => !PaymentPurposes.IsInternalTransfer(entry.Purpose) && entry.Purpose != PaymentPurposes.TreasuryDeposit && entry.Account != LedgerAccount.Custody);
                 var moneyOut = -payments.Sum(entry => entry.Amount);
                 var internalOut = -group.Where(entry => PaymentPurposes.IsInternalTransfer(entry.Purpose) && entry.Amount < 0).Sum(entry => entry.Amount);
                 var internalIn = group.Where(entry => PaymentPurposes.IsInternalTransfer(entry.Purpose) && entry.Amount > 0).Sum(entry => entry.Amount);
@@ -132,12 +134,12 @@ internal sealed class FinanceReports(FinanceDbContext db, IVisibleProjects proje
                     ["period"] = PeriodLabel(group.Key, period),
                     ["periodStart"] = group.Key,
                     ["periodEnd"] = PeriodEnd(group.Key, period),
-                    ["moneyIn"] = 0m,
+                    ["moneyIn"] = moneyIn,
                     ["moneyOut"] = moneyOut,
                     ["internalOut"] = internalOut,
                     ["internalIn"] = internalIn,
                     ["paidFromCustody"] = fromCustody,
-                    ["net"] = -moneyOut - internalOut + internalIn,
+                    ["net"] = moneyIn - moneyOut - internalOut + internalIn,
                     ["entries"] = group.Count(),
                 }, new ReportLink("report", Report: Ledger, Filters: new Dictionary<string, string>
                 {
@@ -147,7 +149,7 @@ internal sealed class FinanceReports(FinanceDbContext db, IVisibleProjects proje
             })
             .ToList();
 
-        return new ReportData(rows, "Money in is 0: client income is not recorded in the system yet. Internal transfers (custody advances and returns) move cash inside the company and are never an expense; payments out of a custody were already drawn from the treasury. Weeks start on Saturday.");
+        return new ReportData(rows, "Money in is what was deposited into the treasury (owner capital, loans, client payments): money in, never income; client income itself is not recorded in the system yet. Internal transfers (custody advances and returns) move cash inside the company and are never an expense; payments out of a custody were already drawn from the treasury. Weeks start on Saturday.");
     }
 
     private async Task<ReportData> LedgerAsync(ReportQuery query, IReadOnlySet<int>? visible, CancellationToken cancellationToken)
@@ -162,6 +164,10 @@ internal sealed class FinanceReports(FinanceDbContext db, IVisibleProjects proje
             .OrderBy(row => row.entry.EntryDate).ThenBy(row => row.entry.Id)
             .ToListAsync(cancellationToken);
         var names = await PayeeNamesAsync(entries.Where(row => row.entry.CounterpartyType != PayeeTypes.CustodyAccount).Select(row => (row.SourceType, row.entry.CounterpartyId)), cancellationToken);
+        var depositIds = entries.Where(row => row.entry.TreasuryDepositId != null).Select(row => row.entry.TreasuryDepositId!.Value).Distinct().ToList();
+        var deposits = depositIds.Count == 0
+            ? new Dictionary<int, string>()
+            : await db.TreasuryDeposits.AsNoTracking().Where(deposit => depositIds.Contains(deposit.Id)).ToDictionaryAsync(deposit => deposit.Id, deposit => $"{deposit.Number} {deposit.Source}", cancellationToken);
         var custodyIds = entries.Where(row => row.entry.CounterpartyType == PayeeTypes.CustodyAccount).Select(row => row.entry.CounterpartyId).Distinct().ToList();
         var custodies = custodyIds.Count == 0
             ? new Dictionary<int, string>()
@@ -173,9 +179,11 @@ internal sealed class FinanceReports(FinanceDbContext db, IVisibleProjects proje
             ["entryId"] = (int)row.entry.Id,
             ["account"] = row.entry.Account.ToString(),
             ["purpose"] = row.entry.Purpose,
-            ["kind"] = PaymentPurposes.IsInternalTransfer(row.entry.Purpose) ? "Internal transfer" : "Payment",
+            ["kind"] = row.entry.Purpose == PaymentPurposes.TreasuryDeposit ? "Deposit" : PaymentPurposes.IsInternalTransfer(row.entry.Purpose) ? "Internal transfer" : "Payment",
             ["counterpartyType"] = row.entry.CounterpartyType,
-            ["counterparty"] = row.entry.CounterpartyType == PayeeTypes.CustodyAccount
+            ["counterparty"] = row.entry.TreasuryDepositId is { } depositId
+                ? deposits.GetValueOrDefault(depositId) ?? $"#{depositId}"
+                : row.entry.CounterpartyType == PayeeTypes.CustodyAccount
                 ? custodies.GetValueOrDefault(row.entry.CounterpartyId) ?? $"#{row.entry.CounterpartyId}"
                 : names.GetValueOrDefault((row.SourceType, row.entry.CounterpartyId))?.NameEn ?? $"#{row.entry.CounterpartyId}",
             ["projectId"] = row.entry.ProjectId,

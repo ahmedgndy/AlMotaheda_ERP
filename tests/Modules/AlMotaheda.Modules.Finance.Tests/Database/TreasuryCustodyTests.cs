@@ -228,6 +228,43 @@ public sealed class TreasuryCustodyTests(SqlServerFixture database)
         Assert.Equal(-100m, Rows(recon).Single(cells => cells.GetProperty("detail").GetString() == "Cash count" && cells.GetProperty("number").GetString() == account.GetProperty("number").GetString()).Money("difference"));
     }
 
+    [DatabaseFact]
+    public async Task An_executive_puts_money_into_bank_or_cash_and_it_is_money_in_never_a_payment()
+    {
+        await using var api = await ProjectsApi.StartAsync(database);
+        var cast = await api.CastAsync();
+        var before = await Treasury(api, cast.Executive, "Cash");
+        await EnsureStatus(await api.SendAsync(HttpMethod.Put, "/api/treasury/Cash/opening-balance", cast.Executive, Opening(10_000m, before)), HttpStatusCode.OK);
+
+        // 50,000 owner capital into Cash; the same form twice is one deposit; the accountant can't deposit.
+        var key = Guid.NewGuid();
+        object Deposit(decimal amount, Guid id, string? date = null) => new { amount, depositDate = date, source = "Owner capital", reference = "RCPT-77", idempotencyKey = id };
+        var created = await api.SendAsync(HttpMethod.Post, "/api/treasury/Cash/deposits", cast.Executive, Deposit(50_000m, key));
+        await EnsureStatus(created, HttpStatusCode.Created);
+        var deposit = await Json(created);
+        Assert.StartsWith("TD-", deposit.GetProperty("number").GetString());
+        Assert.Equal(("Cash", 50_000m, "Owner capital"), (deposit.GetProperty("account").GetString(), deposit.Money("amount"), deposit.GetProperty("source").GetString()));
+        var again = await api.SendAsync(HttpMethod.Post, "/api/treasury/Cash/deposits", cast.Executive, Deposit(50_000m, key));
+        Assert.Equal((HttpStatusCode.OK, deposit.Id()), (again.StatusCode, (await Json(again)).Id()));
+        Assert.Equal(HttpStatusCode.Forbidden, (await api.SendAsync(HttpMethod.Post, "/api/treasury/Cash/deposits", cast.Accountant, Deposit(1m, Guid.NewGuid()))).StatusCode);
+
+        // A date before the account's opening date would not count: refused.
+        Assert.Equal(HttpStatusCode.BadRequest, (await api.SendAsync(HttpMethod.Post, "/api/treasury/Cash/deposits", cast.Executive, Deposit(5m, Guid.NewGuid(), "2025-12-31"))).StatusCode);
+
+        // The balance and money in show it; Bank is untouched; the list has it.
+        var cash = await Treasury(api, cast.Executive, "Cash");
+        Assert.Equal((60_000m, 50_000m, 0m), (cash.Money("balance"), cash.Money("moneyIn"), cash.Money("moneyOut")));
+        Assert.Equal(0m, (await Treasury(api, cast.Executive, "Bank")).Money("balance"));
+        var list = await Json(await api.SendAsync(HttpMethod.Get, "/api/treasury/deposits?account=Cash", cast.Executive));
+        Assert.Equal(deposit.Id(), Assert.Single(list.GetProperty("items").EnumerateArray()).Id());
+
+        // The reports: money in, never a payment.
+        var movement = Rows(await Report(api, cast.Executive, $"FIN-CASH?from={Iso(Today.AddDays(-1))}&to={Iso(Today)}")).Single();
+        Assert.Equal((50_000m, 0m), (movement.Money("moneyIn"), movement.Money("moneyOut")));
+        var line = Rows(await Report(api, cast.Executive, $"FIN-LEDGER?from={Iso(Today.AddDays(-1))}&to={Iso(Today)}")).Single();
+        Assert.Equal(("Deposit", $"{deposit.GetProperty("number").GetString()} Owner capital"), (line.GetProperty("kind").GetString(), line.GetProperty("counterparty").GetString()));
+    }
+
     private static object Opening(decimal amount, JsonElement treasury) =>
         new { openingBalance = amount, openingDate = "2026-01-01", notes = "Opening per the auditors", rowVersion = treasury.GetProperty("rowVersion").GetString() };
 

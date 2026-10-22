@@ -99,6 +99,7 @@ internal static class LiveScopes
         ["ContractVariation"] = new(["Subcontracts", "Obligations", .. ProjectCost], true, [Finance]),
         // The treasury and the custody hierarchy (Finance): company-wide money screens; an engineer's transfer also refreshes their project's custody.
         ["TreasuryAccount"] = new(["Treasury", "CompanyDashboard"], true, [Finance]),
+        ["TreasuryDeposit"] = new(["Treasury", "TreasuryDeposits", "CompanyDashboard"], true, [Finance]),
         ["CustodyAccount"] = new(["CustodyAccounts", "Treasury"], true, [Finance]),
         ["CustodyMovement"] = new(["CustodyAccounts", "CustodyStatement", "PayrollBatches"], true, [Finance]),
         ["CustodyTransfer"] = new(["CustodyTransfers", "CustodyAccounts", "Treasury", "Custody", "PayrollBatches"], true, [Finance]),

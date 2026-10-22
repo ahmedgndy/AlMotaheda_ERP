@@ -34,6 +34,9 @@ internal sealed class LedgerEntry
     /// <summary>The internal transfer that moved the money, when it was not a payment request.</summary>
     public int? CustodyTransferId { get; set; }
 
+    /// <summary>The deposit that brought the money into the treasury (<see cref="TreasuryDeposit"/>).</summary>
+    public int? TreasuryDepositId { get; set; }
+
     /// <summary>For <see cref="LedgerAccount.Custody"/>: the custody account the money left, instead of the treasury.</summary>
     public int? CustodyAccountId { get; set; }
 

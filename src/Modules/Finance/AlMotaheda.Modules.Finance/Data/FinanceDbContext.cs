@@ -15,6 +15,7 @@ internal sealed class FinanceDbContext(DbContextOptions<FinanceDbContext> option
 
     // The treasury and the custody hierarchy (docs/project-workspace/12-treasury-custody.md).
     public DbSet<TreasuryAccount> TreasuryAccounts => Set<TreasuryAccount>();
+    public DbSet<TreasuryDeposit> TreasuryDeposits => Set<TreasuryDeposit>();
     public DbSet<CustodyAccount> CustodyAccounts => Set<CustodyAccount>();
     public DbSet<CustodyMovement> CustodyMovements => Set<CustodyMovement>();
     public DbSet<CustodyTransfer> CustodyTransfers => Set<CustodyTransfer>();

@@ -764,6 +764,9 @@ namespace AlMotaheda.Modules.Finance.Data.Migrations
                         .IsUnicode(false)
                         .HasColumnType("varchar(30)");
 
+                    b.Property<int?>("TreasuryDepositId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ReversesEntryId")
@@ -785,6 +788,8 @@ namespace AlMotaheda.Modules.Finance.Data.Migrations
 
                     b.HasIndex(new[] { "ProjectId", "EntryDate" }, "IX_LedgerEntry_Project_Date");
 
+                    b.HasIndex(new[] { "TreasuryDepositId" }, "IX_LedgerEntry_TreasuryDepositId");
+
                     b.ToTable("LedgerEntry", "finance", t =>
                         {
                             t.HasCheckConstraint("CK_LedgerEntry_Account", "[Account] IN ('Bank', 'Cash', 'Custody')");
@@ -793,7 +798,7 @@ namespace AlMotaheda.Modules.Finance.Data.Migrations
 
                             t.HasCheckConstraint("CK_LedgerEntry_CustodyAccount", "([Account] = 'Custody' AND [CustodyAccountId] IS NOT NULL) OR ([Account] <> 'Custody' AND [CustodyAccountId] IS NULL)");
 
-                            t.HasCheckConstraint("CK_LedgerEntry_Origin", "[PaymentRequestId] IS NOT NULL OR [CustodyTransferId] IS NOT NULL");
+                            t.HasCheckConstraint("CK_LedgerEntry_Origin", "[PaymentRequestId] IS NOT NULL OR [CustodyTransferId] IS NOT NULL OR [TreasuryDepositId] IS NOT NULL");
                         });
                 });
 
@@ -1309,6 +1314,75 @@ namespace AlMotaheda.Modules.Finance.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AlMotaheda.Modules.Finance.Data.TreasuryDeposit", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Account")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateOnly>("DepositDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)")
+                        .HasComputedColumnSql("CONCAT('TD-', REPLICATE('0', 6 - LEN([Id])), [Id])", true);
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("RecordedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_TreasuryDeposit_IdempotencyKey");
+
+                    b.HasIndex(new[] { "Account", "DepositDate" }, "IX_TreasuryDeposit_Account_Date");
+
+                    b.ToTable("TreasuryDeposit", "finance", t =>
+                        {
+                            t.HasCheckConstraint("CK_TreasuryDeposit_Account", "[Account] IN ('Bank', 'Cash')");
+
+                            t.HasCheckConstraint("CK_TreasuryDeposit_Amount", "[Amount] > 0");
+                        });
+                });
+
             modelBuilder.Entity("AlMotaheda.Modules.Finance.Data.CustodyAccount", b =>
                 {
                     b.HasOne("AlMotaheda.Modules.Finance.Data.CustodyAccount", null)
@@ -1436,6 +1510,11 @@ namespace AlMotaheda.Modules.Finance.Data.Migrations
                     b.HasOne("AlMotaheda.Modules.Finance.Data.LedgerEntry", null)
                         .WithMany()
                         .HasForeignKey("ReversesEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("AlMotaheda.Modules.Finance.Data.TreasuryDeposit", null)
+                        .WithMany()
+                        .HasForeignKey("TreasuryDepositId")
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 

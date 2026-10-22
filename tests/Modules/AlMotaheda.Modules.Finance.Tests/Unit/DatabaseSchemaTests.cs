@@ -18,7 +18,7 @@ public sealed class DatabaseSchemaTests
         using var db = CreateContext();
 
         Assert.False(db.Database.HasPendingModelChanges(), "The model changed without a migration. Run dotnet ef migrations add.");
-        Assert.Equal(["InitialFinance", "ImportExistingPayments", "SalaryPayments", "CustodyFunding", "OfficeCustodyFunding", "TreasuryAndCustody", "CustodyAdjustmentDisputes", "OfficeAndTreasuryCodes"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
+        Assert.Equal(["InitialFinance", "ImportExistingPayments", "SalaryPayments", "CustodyFunding", "OfficeCustodyFunding", "TreasuryAndCustody", "CustodyAdjustmentDisputes", "OfficeAndTreasuryCodes", "TreasuryDeposits"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
     }
 
     [Theory]
@@ -40,7 +40,9 @@ public sealed class DatabaseSchemaTests
     [InlineData("CREATE TABLE [finance].[CustodyAdjustment]")]
     [InlineData("CREATE TABLE [finance].[CustodyPeriodClose]")]
     [InlineData("[PaymentRequestId] int NULL")]
-    [InlineData("CONSTRAINT [CK_LedgerEntry_Origin] CHECK ([PaymentRequestId] IS NOT NULL OR [CustodyTransferId] IS NOT NULL)")]
+    [InlineData("CONSTRAINT [CK_LedgerEntry_Origin] CHECK ([PaymentRequestId] IS NOT NULL OR [CustodyTransferId] IS NOT NULL OR [TreasuryDepositId] IS NOT NULL)")]
+    [InlineData("CONSTRAINT [CK_TreasuryDeposit_Amount] CHECK ([Amount] > 0)")]
+    [InlineData("CONSTRAINT [CK_TreasuryDeposit_Account] CHECK ([Account] IN ('Bank', 'Cash'))")]
     [InlineData("CONSTRAINT [CK_LedgerEntry_CustodyAccount] CHECK (([Account] = 'Custody' AND [CustodyAccountId] IS NOT NULL) OR ([Account] <> 'Custody' AND [CustodyAccountId] IS NULL))")]
     [InlineData("CONSTRAINT [CK_LedgerEntry_Account] CHECK ([Account] IN ('Bank', 'Cash', 'Custody'))")]
     [InlineData("CONSTRAINT [CK_PaymentRequest_CustodySource] CHECK ([SourceCustodyAccountId] IS NULL OR [Method] = 'Cash')")]
