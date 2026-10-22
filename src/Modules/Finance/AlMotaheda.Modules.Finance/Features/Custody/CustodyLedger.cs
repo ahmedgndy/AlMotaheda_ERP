@@ -109,6 +109,11 @@ internal sealed class CustodyLedgers(FinanceDbContext db, IEnumerable<ICustodyLe
     public ICustodyLedgerSource? SourceOf(string kind) =>
         CustodyAccountKinds.IsLedgeredByFinance(kind) ? null : sources.SingleOrDefault(source => source.Kind == kind);
 
+    /// <summary>Whether <paramref name="userId"/> answers for the account now: its holder, or the person its ledger module names (a vehicle's driver).</summary>
+    public async Task<bool> IsAccountableAsync(CustodyAccount account, int userId, CancellationToken cancellationToken) =>
+        account.HolderUserId == userId
+        || (account.ReferenceId is { } reference && SourceOf(account.Kind) is { } source && await source.IsAccountableAsync(reference, account.HolderUserId, userId, cancellationToken));
+
     /// <summary>The target of an external kind, validated by its module (exists, the holder may hold it).</summary>
     public async Task<CustodyTarget?> FindTargetAsync(string kind, int referenceId, int? holderUserId, CancellationToken cancellationToken) =>
         SourceOf(kind) is { } source ? await source.FindAsync(referenceId, holderUserId, cancellationToken) : null;

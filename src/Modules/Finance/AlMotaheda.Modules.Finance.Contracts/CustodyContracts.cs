@@ -61,6 +61,13 @@ public interface ICustodyLedgerSource
 
     /// <summary>One page of the custody's statement, newest first, between two optional dates.</summary>
     Task<CustodyStatementPage> StatementAsync(int referenceId, int? holderUserId, DateOnly? from, DateOnly? to, int page, int pageSize, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Whether <paramref name="userId"/> answers for this custody now and may ask for it to be topped up: its holder,
+    /// or for a kind with no holder user the person the owning module names (a vehicle's current driver).
+    /// </summary>
+    Task<bool> IsAccountableAsync(int referenceId, int? holderUserId, int userId, CancellationToken cancellationToken) =>
+        Task.FromResult(holderUserId == userId);
 }
 
 /// <summary>

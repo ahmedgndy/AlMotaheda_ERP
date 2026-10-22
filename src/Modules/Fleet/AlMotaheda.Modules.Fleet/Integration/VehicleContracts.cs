@@ -4,6 +4,7 @@ using AlMotaheda.Modules.Fleet.Common;
 using AlMotaheda.Modules.Fleet.Data;
 using AlMotaheda.Modules.Fleet.Data.Configurations;
 using AlMotaheda.Modules.Fleet.Features.Vehicles;
+using AlMotaheda.Modules.HR.Contracts;
 using AlMotaheda.Modules.Projects.Contracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -21,9 +22,23 @@ internal sealed class VehicleCustodyLedgerSource(
     FleetDbContext db,
     IConfiguration configuration,
     CompanyClock clock,
+    IEmployeeDirectory employees,
     FleetLog log) : ICustodyLedgerSource
 {
     public string Kind => CustodyAccountKinds.Vehicle;
+
+    /// <summary>A vehicle's cash is answered for by its current driver (the open driver assignment).</summary>
+    public async Task<bool> IsAccountableAsync(int referenceId, int? holderUserId, int userId, CancellationToken cancellationToken)
+    {
+        var driver = await VehicleQueries.CurrentDriver(db, referenceId).Select(assignment => (int?)assignment.DriverEmployeeId).FirstOrDefaultAsync(cancellationToken);
+        if (driver is null)
+        {
+            return false;
+        }
+
+        var employee = (await employees.FindAsync([driver.Value], cancellationToken)).GetValueOrDefault(driver.Value);
+        return employee is { IsActive: true } && employee.UserId == userId;
+    }
 
     public async Task<CustodyTarget?> FindAsync(int referenceId, int? holderUserId, CancellationToken cancellationToken)
     {

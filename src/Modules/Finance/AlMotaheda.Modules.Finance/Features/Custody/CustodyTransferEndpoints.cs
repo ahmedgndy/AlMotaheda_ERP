@@ -39,6 +39,10 @@ internal static class CustodyTransferEndpoints
         string? EvidenceReference,
         string? IdempotencyKey);
 
+    /// <summary>Asking for cash into a custody one answers for (a driver for the vehicle's cash), from the account that funds it.</summary>
+    /// <param name="AccountId">The custody account; or name it by <paramref name="AccountKind"/> and <paramref name="ReferenceId"/> (a vehicle's id).</param>
+    internal sealed record TopUpRequest(int? AccountId, string? AccountKind, int? ReferenceId, decimal? Amount, string? Notes, string? IdempotencyKey);
+
     internal sealed record DecisionRequest(string? Note, string? RowVersion);
 
     internal sealed record MoveRequest(string? On, string? Reference, string? Note, string? RowVersion);
@@ -63,6 +67,11 @@ internal static class CustodyTransferEndpoints
             .RequireAnyPermission((FinancePermissions.Custody, PermissionAction.Create), (FinancePermissions.Custody, PermissionAction.Approve))
             .WithName("RequestCustodyTransfer")
             .WithSummary("Ask for a transfer: treasury → custody (an advance), custody → custody (a distribution), custody → parent or treasury (a return). Idempotent by idempotencyKey");
+
+        api.MapPost("/custody-top-ups", TopUpAsync)
+            .RequirePermission(FinancePermissions.Custody, PermissionAction.Create)
+            .WithName("RequestCustodyTopUp")
+            .WithSummary("Ask for cash into a custody you answer for (its holder; a vehicle's current driver), from the account that funds it. The usual chain follows: an Executive approves, the payer pays out, the cash is confirmed received. Idempotent by idempotencyKey");
 
         var transfers = api.MapGroup("/custody-transfers/{transferId:int}");
 
@@ -184,8 +193,95 @@ internal static class CustodyTransferEndpoints
     /// under the source account. A payroll distribution is checked against the batch's allocation and the owing
     /// module's entitlement (409 <c>over_distribution</c>). Nothing moves until it is disbursed and received.
     /// </summary>
-    internal static async Task<Results<Created<CustodyTransferView>, Ok<CustodyTransferView>, ValidationProblem, ProblemHttpResult>> RequestAsync(
+    internal static Task<Results<Created<CustodyTransferView>, Ok<CustodyTransferView>, ValidationProblem, ProblemHttpResult>> RequestAsync(
         RequestBody request,
+        HttpContext httpContext,
+        FinanceDbContext db,
+        CustodyLedgers ledgers,
+        CustodyTransferWorkflow workflow,
+        PayrollBatchRules batches,
+        IUserDirectory users,
+        CompanyClock clock,
+        FinanceLog log,
+        CancellationToken cancellationToken) =>
+        CreateAsync(request, null, httpContext, db, ledgers, workflow, batches, users, clock, log, cancellationToken);
+
+    /// <summary>
+    /// A top-up: the caller answers for the account (<see cref="CustodyLedgers.IsAccountableAsync"/>) and asks for cash
+    /// from its parent, the account that funded it. Only the asking is opened to them: an Executive approves as for any
+    /// transfer, the parent's holder or a reviewer pays it out, and it is confirmed received as usual.
+    /// </summary>
+    internal static async Task<Results<Created<CustodyTransferView>, Ok<CustodyTransferView>, ValidationProblem, ProblemHttpResult>> TopUpAsync(
+        TopUpRequest request,
+        HttpContext httpContext,
+        FinanceDbContext db,
+        CustodyLedgers ledgers,
+        CustodyTransferWorkflow workflow,
+        PayrollBatchRules batches,
+        IUserDirectory users,
+        CompanyClock clock,
+        FinanceLog log,
+        CancellationToken cancellationToken)
+    {
+        if (FinanceCaller.From(httpContext.User) is not { } caller)
+        {
+            return ApiProblem.ForbiddenResult();
+        }
+
+        var kind = Input.Clean(request.AccountKind);
+        if (request.AccountId is null && (kind is null || request.ReferenceId is null))
+        {
+            var missing = new ValidationErrors();
+            missing.Add("accountId", "Name the custody: accountId, or accountKind with referenceId.");
+            return FinanceProblems.Validation(missing);
+        }
+
+        var account = request.AccountId is { } accountId
+            ? await db.CustodyAccounts.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == accountId, cancellationToken)
+            : await db.CustodyAccounts.AsNoTracking().FirstOrDefaultAsync(
+                candidate => candidate.Kind == kind && candidate.ReferenceId == request.ReferenceId && candidate.Status == CustodyAccountStatus.Active, cancellationToken);
+        if (account is null && request.AccountId is null)
+        {
+            var none = new ValidationErrors();
+            none.Add("referenceId", "This custody has no cash account yet: the accountant opens it by handing cash on to it.");
+            return FinanceProblems.Validation(none);
+        }
+
+        var accountable = account is not null && await ledgers.IsAccountableAsync(account, caller.UserId, cancellationToken);
+        if (account is null || !(accountable || CustodyAccountViews.MaySee(caller, account)))
+        {
+            return FinanceProblems.CustodyAccountNotFound();
+        }
+
+        if (!accountable)
+        {
+            return FinanceProblems.OnlyTheHolder("ask for cash into it");
+        }
+
+        if (account.Status == CustodyAccountStatus.Closed)
+        {
+            return FinanceProblems.AccountClosed();
+        }
+
+        if (account.ParentAccountId is not { } parentId)
+        {
+            var errors = new ValidationErrors();
+            errors.Add("accountId", "This custody has no account that funds it; ask the accountant to hand cash on to it first.");
+            return FinanceProblems.Validation(errors);
+        }
+
+        var body = new RequestBody(
+            new EndpointRequest("Custody", null, parentId, null, null, null),
+            new EndpointRequest("Custody", null, account.Id, null, null, null),
+            request.Amount, PaymentPurposes.CustodyAdvance, null, null, request.Notes, null, null, request.IdempotencyKey);
+        return await CreateAsync(body, account.Id, httpContext, db, ledgers, workflow, batches, users, clock, log, cancellationToken);
+    }
+
+    /// <param name="topUpOf">Set for a top-up the caller may ask for (checked by <see cref="TopUpAsync"/>): the source is
+    /// then the parent of that account, which the caller need not hold.</param>
+    private static async Task<Results<Created<CustodyTransferView>, Ok<CustodyTransferView>, ValidationProblem, ProblemHttpResult>> CreateAsync(
+        RequestBody request,
+        int? topUpOf,
         HttpContext httpContext,
         FinanceDbContext db,
         CustodyLedgers ledgers,
@@ -258,13 +354,13 @@ internal static class CustodyTransferEndpoints
         if (source.Kind == TransferEndpointKind.Custody)
         {
             sourceAccount = await db.CustodyAccounts.SingleOrDefaultAsync(account => account.Id == source.AccountId, cancellationToken);
-            if (sourceAccount is null || !CustodyAccountViews.MaySee(caller, sourceAccount))
+            if (sourceAccount is null || (topUpOf is null && !CustodyAccountViews.MaySee(caller, sourceAccount)))
             {
                 errors.Add("source.accountId", "The source custody account was not found.");
                 return FinanceProblems.Validation(errors);
             }
 
-            if (!CustodyAccountViews.MayOperate(caller, sourceAccount))
+            if (topUpOf is null && !CustodyAccountViews.MayOperate(caller, sourceAccount))
             {
                 return FinanceProblems.OnlyTheHolder("ask for a transfer out of it");
             }

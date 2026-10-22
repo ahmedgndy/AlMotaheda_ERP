@@ -94,6 +94,40 @@ public sealed class VehicleCustodyTests(SqlServerFixture database)
     }
 
     [DatabaseFact]
+    public async Task The_driver_asks_for_cash_into_the_vehicle_and_the_usual_chain_pays_it()
+    {
+        await using var api = await ProjectsApi.StartAsync(database);
+        var cast = await VehicleCastAsync(api);
+        object Ask(decimal amount, string key) => new { accountKind = "Vehicle", referenceId = cast.VehicleId, amount, notes = "Fuel for the week", idempotencyKey = key };
+
+        // Before any funding the vehicle has no cash account: the driver is told who opens it.
+        Assert.Equal(HttpStatusCode.BadRequest, (await api.SendAsync(HttpMethod.Post, "/api/custody-top-ups", cast.Driver, Ask(500m, Guid.NewGuid().ToString()))).StatusCode);
+
+        await Transferred(api, cast, VehicleFunding(cast.AccountantAccount, cast.VehicleId, 1_000m));
+        var key = Guid.NewGuid().ToString();
+        var asked = await Created(api, cast.Driver, "/api/custody-top-ups", Ask(500m, key));
+        Assert.Equal(("Requested", cast.AccountantAccount, 500m), (asked.GetProperty("status").GetString(), asked.GetProperty("sourceAccountId").GetInt32(), asked.GetProperty("amount").GetDecimal()));
+        var again = await api.SendAsync(HttpMethod.Post, "/api/custody-top-ups", cast.Driver, Ask(500m, key));
+        Assert.Equal((HttpStatusCode.OK, asked.Id()), (again.StatusCode, (await Json(again)).Id()));
+
+        // Only the vehicle's driver asks; the driver sees the request; the requester never approves it.
+        Assert.Equal(HttpStatusCode.NotFound, (await api.SendAsync(HttpMethod.Post, "/api/custody-top-ups", cast.OtherDriver, Ask(100m, Guid.NewGuid().ToString()))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await api.SendAsync(HttpMethod.Get, $"/api/custody-transfers/{asked.Id()}", cast.Driver)).StatusCode);
+
+        // The Executive approves, the accountant pays out and confirms: the vehicle holds 1,500.
+        var transfer = asked;
+        foreach (var (session, step) in new[] { (cast.Executive, "approve"), (cast.Accountant, "disburse"), (cast.Accountant, "receive") })
+        {
+            var response = await api.SendAsync(HttpMethod.Post, $"/api/custody-transfers/{transfer.Id()}/{step}", session, new { rowVersion = transfer.GetProperty("rowVersion").GetString() });
+            await EnsureStatus(response, HttpStatusCode.OK);
+            transfer = await Json(response);
+        }
+
+        Assert.Equal("Received", transfer.GetProperty("status").GetString());
+        Assert.Equal(1_500m, Figure(await Custody(api, cast.Driver, cast.VehicleId), "posted"));
+    }
+
+    [DatabaseFact]
     public async Task A_claim_without_an_odometer_reading_is_accepted_with_its_photo_and_leaves_the_vehicle_reading_alone()
     {
         await using var api = await ProjectsApi.StartAsync(database);

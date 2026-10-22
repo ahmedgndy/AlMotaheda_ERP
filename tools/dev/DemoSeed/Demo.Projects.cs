@@ -65,6 +65,8 @@ internal sealed partial class Demo
             ("bricks", "طوب أحمر", "Red clay bricks", "Masonry", "Brick", 2.2m, 2.8m),
             ("diesel", "سولار", "Diesel", "Fuel", "Liter", 13.5m, 15.5m),
             ("petrol", "بنزين 92", "Petrol 92", "Fuel", "Liter", 15, 17.5m),
+            ("petrol95", "بنزين 95", "Petrol 95", "Fuel", "Liter", 17, 19.5m),
+            ("petrol80", "بنزين 80", "Petrol 80", "Fuel", "Liter", 13.5m, 15.75m),
             ("internet", "اشتراك إنترنت المكتب", "Office internet subscription", "Internet", "Subscription", 1200, 1600),
             ("paper", "ورق تصوير A4 (رزمة)", "A4 copy paper (ream)", "OfficeExpenses", "Piece", 180, 230),
             ("meal", "وجبة عامل", "Worker meal", "Meals", "Meal", 60, 90),
