@@ -88,10 +88,17 @@ app.MapGet("/accounts", () => Results.Content(AccountsPage.Render(options.Accoun
 
 var files = new PhysicalFileProvider(Path.GetFullPath(options.Web));
 app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = files });
-app.UseStaticFiles(new StaticFileOptions { FileProvider = files, ServeUnknownFileTypes = true });
+// A rebuilt app must reach every tab on its next reload: nothing is cached.
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = files,
+    ServeUnknownFileTypes = true,
+    OnPrepareResponse = context => context.Context.Response.Headers.CacheControl = "no-cache, no-store",
+});
 app.MapFallback(async context =>
 {
     context.Response.ContentType = "text/html";
+    context.Response.Headers.CacheControl = "no-cache, no-store";
     await context.Response.SendFileAsync(files.GetFileInfo("index.html"));
 });
 

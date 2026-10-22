@@ -13,7 +13,7 @@ web="$flutter_project/build/web"
 
 if [[ ! -f "$web/index.html" || "${REBUILD:-0}" == "1" ]]; then
   echo "Building the Flutter web app in $flutter_project ..."
-  (cd "$flutter_project" && flutter build web --release --no-web-resources-cdn --dart-define=API_BASE_URL=/)
+  (cd "$flutter_project" && flutter build web --release --no-web-resources-cdn --pwa-strategy=none --dart-define=API_BASE_URL=/)
 fi
 
 accounts=()
