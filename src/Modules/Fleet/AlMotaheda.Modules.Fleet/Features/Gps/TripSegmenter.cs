@@ -90,12 +90,18 @@ internal sealed record MotionSettings(int MaxAccuracyMeters, int StopRadiusMeter
 /// <item>A trip runs from the last position of one stop to the first position of the next. Its distance is the sum
 /// of great-circle distances between consecutive accepted positions (not across gaps). A movement shorter than
 /// <see cref="MotionSettings.MinTripMeters"/> between two stops at the same place is drift: the two stops are one.</item>
+/// <item>A trip never runs from one driver to the next, nor through a silence longer than
+/// <see cref="TripBreakMinutes"/>: the positions are cut there and each piece is segmented on its own, so a route is
+/// always the route of the driver who recorded it.</item>
 /// </list>
 /// The speed the phone reports is only shown, never used to decide movement.
 /// </summary>
 internal static class TripSegmenter
 {
     private const double EarthRadiusMeters = 6_371_008.8;
+
+    /// <summary>A silence longer than this ends the trip, whatever the positions before and after (rule 6).</summary>
+    internal const int TripBreakMinutes = 120;
 
     public static GpsTimeline Segment(IEnumerable<GpsSample> samples, MotionSettings settings)
     {
@@ -107,30 +113,48 @@ internal static class TripSegmenter
         }
 
         var gapSeconds = settings.GapMinutes * 60.0;
-        var clusters = Clusters(accepted, settings, gapSeconds);
         var stopSeconds = settings.StopMinutes * 60.0;
 
-        // Clusters long enough are stops; the rest is movement between them.
-        var stops = clusters.Where(cluster => cluster.Seconds >= stopSeconds).ToList();
-        stops = MergeDrift(accepted, stops, settings, gapSeconds);
-
+        // Each stint (one driver, no silence longer than TripBreakMinutes) is segmented on its own: a trip never
+        // runs from one driver to the next, nor through hours nobody knows about.
         var trips = new List<GpsTrip>();
-        var startIndex = 0;
-        var startedAtDataStart = true;
-        foreach (var stop in stops)
+        var stopViews = new List<GpsStopInterval>();
+        List<Cluster> clusters = [];
+        List<GpsRoutePoint> lastStint = [];
+        var stints = Stints(accepted);
+        for (var stintIndex = 0; stintIndex < stints.Count; stintIndex++)
         {
-            if (stop.First > startIndex)
+            var stint = stints[stintIndex];
+            var isLast = stintIndex == stints.Count - 1;
+            clusters = Clusters(stint, settings, gapSeconds);
+
+            // Clusters long enough are stops; the rest is movement between them.
+            var stops = clusters.Where(cluster => cluster.Seconds >= stopSeconds).ToList();
+            stops = MergeDrift(stint, stops, settings, gapSeconds);
+
+            var startIndex = 0;
+            var startedAtDataStart = true;
+            foreach (var stop in stops)
             {
-                AddTrip(trips, accepted, startIndex, stop.First, settings, gapSeconds, startedAtDataStart, ongoing: false);
+                if (stop.First > startIndex)
+                {
+                    AddTrip(trips, stint, startIndex, stop.First, settings, gapSeconds, startedAtDataStart, ongoing: false);
+                }
+
+                startIndex = stop.Last;
+                startedAtDataStart = false;
             }
 
-            startIndex = stop.Last;
-            startedAtDataStart = false;
-        }
+            if (startIndex < stint.Count - 1)
+            {
+                // Only the latest stint can still be under way; an earlier one ended where its data ended.
+                AddTrip(trips, stint, startIndex, stint.Count - 1, settings, gapSeconds, startedAtDataStart, ongoing: isLast, endsAtDataEnd: true);
+            }
 
-        if (startIndex < accepted.Count - 1)
-        {
-            AddTrip(trips, accepted, startIndex, accepted.Count - 1, settings, gapSeconds, startedAtDataStart, ongoing: true);
+            var lastIndex = stint.Count - 1;
+            stopViews.AddRange(stops.Select(stop => new GpsStopInterval(
+                stint[stop.First].At, stint[stop.Last].At, stop.Latitude, stop.Longitude, stop.Last - stop.First + 1, stop.HasGap, isLast && stop.Last == lastIndex)));
+            lastStint = stint;
         }
 
         var gaps = new List<GpsDataGap>();
@@ -142,11 +166,7 @@ internal static class TripSegmenter
             }
         }
 
-        var lastIndex = accepted.Count - 1;
-        var stopViews = stops.Select(stop => new GpsStopInterval(
-            accepted[stop.First].At, accepted[stop.Last].At, stop.Latitude, stop.Longitude, stop.Last - stop.First + 1, stop.HasGap, stop.Last == lastIndex)).ToList();
-
-        return new GpsTimeline(accepted, trips, stopViews, gaps, ordered.Count, inaccurate, implausible, duplicates, Motion(accepted, clusters, stopViews, trips, stopSeconds));
+        return new GpsTimeline(accepted, trips, stopViews, gaps, ordered.Count, inaccurate, implausible, duplicates, Motion(lastStint, clusters, stopViews, trips, stopSeconds));
     }
 
     /// <summary>Great-circle distance in metres (haversine).</summary>
@@ -249,6 +269,27 @@ internal static class TripSegmenter
     private sealed record Cluster(int First, int Last, double Latitude, double Longitude, bool HasGap, double Seconds);
 
     /// <summary>Runs of consecutive positions that stay within the stop radius of their running centre.</summary>
+    /// <summary>
+    /// The accepted positions cut where the driver changes or nothing was received for longer than
+    /// <see cref="TripBreakMinutes"/>: each piece is segmented on its own.
+    /// </summary>
+    private static List<List<GpsRoutePoint>> Stints(List<GpsRoutePoint> accepted)
+    {
+        var stints = new List<List<GpsRoutePoint>> { new() { accepted[0] } };
+        for (var index = 1; index < accepted.Count; index++)
+        {
+            var (previous, point) = (accepted[index - 1], accepted[index]);
+            if (point.DriverEmployeeId != previous.DriverEmployeeId || (point.At - previous.At).TotalMinutes > TripBreakMinutes)
+            {
+                stints.Add([]);
+            }
+
+            stints[^1].Add(point);
+        }
+
+        return stints;
+    }
+
     private static List<Cluster> Clusters(List<GpsRoutePoint> accepted, MotionSettings settings, double gapSeconds)
     {
         var clusters = new List<Cluster>();
@@ -344,7 +385,8 @@ internal static class TripSegmenter
         return (measured, unmeasured, gapTime);
     }
 
-    private static void AddTrip(List<GpsTrip> trips, List<GpsRoutePoint> accepted, int from, int to, MotionSettings settings, double gapSeconds, bool startedAtDataStart, bool ongoing)
+    private static void AddTrip(
+        List<GpsTrip> trips, List<GpsRoutePoint> accepted, int from, int to, MotionSettings settings, double gapSeconds, bool startedAtDataStart, bool ongoing, bool endsAtDataEnd = false)
     {
         if (to <= from)
         {
@@ -354,7 +396,7 @@ internal static class TripSegmenter
         var (measured, unmeasured, gapTime) = Measure(accepted, from, to, gapSeconds);
 
         // Drift at the edge of the data (before the first stop, after the last one) is not a trip.
-        if ((startedAtDataStart || ongoing) && measured + unmeasured < settings.MinTripMeters)
+        if ((startedAtDataStart || ongoing || endsAtDataEnd) && measured + unmeasured < settings.MinTripMeters)
         {
             return;
         }

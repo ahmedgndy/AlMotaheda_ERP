@@ -175,6 +175,38 @@ public sealed class TripSegmenterTests
     }
 
     [Fact]
+    public void A_driver_change_ends_the_trip_so_each_route_stays_with_the_driver_who_recorded_it()
+    {
+        // Hany drives 6 minutes and hands over without a stop; Samir drives on from the same place.
+        var hany = Drive(0, 6, Lat0).Select(sample => sample with { DriverEmployeeId = 10 });
+        var samir = Drive(7, 6, Lat0 + 7 * Step).Select(sample => sample with { DriverEmployeeId = 20 });
+
+        var timeline = TripSegmenter.Segment(hany.Concat(samir), Settings);
+
+        Assert.Equal(2, timeline.Trips.Count);
+        Assert.All(timeline.Trips[0].Segments.SelectMany(run => run), point => Assert.Equal(10, point.DriverEmployeeId));
+        Assert.All(timeline.Trips[1].Segments.SelectMany(run => run), point => Assert.Equal(20, point.DriverEmployeeId));
+        Assert.False(timeline.Trips[0].Ongoing);
+        Assert.True(timeline.Trips[1].Ongoing);
+        Assert.Equal("Moving", timeline.Motion.State);
+    }
+
+    [Fact]
+    public void Hours_without_any_position_end_the_trip_while_a_short_gap_does_not()
+    {
+        // Positions in the evening, then nothing for 14 hours (the phone was off), then positions in the morning elsewhere.
+        var samples = Drive(0, 6, Lat0).Concat(Drive(14 * 60, 6, Lat0 + 0.2)).ToList();
+
+        var timeline = TripSegmenter.Segment(samples, Settings);
+
+        Assert.Equal(2, timeline.Trips.Count);
+        Assert.Equal((T0, T0.AddMinutes(6)), (timeline.Trips[0].StartedAt, timeline.Trips[0].EndedAt));
+        Assert.Equal(T0.AddMinutes(14 * 60), timeline.Trips[1].StartedAt);
+        Assert.Single(timeline.Gaps);
+        Assert.All(timeline.Trips, trip => Assert.Equal(0, trip.Gaps));
+    }
+
+    [Fact]
     public void A_trip_across_midnight_is_one_trip()
     {
         var midnight = new DateTime(2026, 10, 21, 22, 0, 0, DateTimeKind.Utc); // 00:00 in Cairo (UTC+2)

@@ -162,7 +162,7 @@ internal sealed class DriverTracking(
             ? []
             : await db.VehicleDriverAssignments.AsNoTracking()
                 .Where(assignment => assignment.DriverEmployeeId == employee.Id)
-                .Select(assignment => new AssignmentWindow(assignment.Id, assignment.VehicleId, assignment.StartDate, assignment.EndDate, assignment.AssignedAt, assignment.Vehicle.TrackingEnabled))
+                .Select(assignment => new AssignmentWindow(assignment.Id, assignment.VehicleId, assignment.StartDate, assignment.EndDate, assignment.AssignedAt, assignment.EndedAt, assignment.Vehicle.TrackingEnabled))
                 .ToListAsync(cancellationToken);
 
         var rejected = new List<RejectedVehiclePoint>();
@@ -258,9 +258,15 @@ internal sealed class DriverTracking(
         }
     }
 
-    private sealed record AssignmentWindow(int Id, int VehicleId, DateOnly StartDate, DateOnly? EndDate, DateTime AssignedAt, bool TrackingEnabled)
+    private sealed record AssignmentWindow(int Id, int VehicleId, DateOnly StartDate, DateOnly? EndDate, DateTime AssignedAt, DateTime? EndedAt, bool TrackingEnabled)
     {
-        public bool Covers(DateOnly day) => StartDate <= day && (EndDate is null || EndDate >= day);
+        /// <summary>
+        /// The stay covers a position of [day] taken at [recordedAt]. On its last day a stay ended at a known moment
+        /// covers only what was taken before that moment: after a hand-over the former driver's phone no longer moves
+        /// the vehicle, while what it recorded (and queued offline) before the hand-over still belongs to the stay.
+        /// </summary>
+        public bool Covers(DateOnly day, DateTime recordedAt) =>
+            StartDate <= day && (EndDate is null || EndDate > day || (EndDate == day && (EndedAt is null || recordedAt < EndedAt)));
     }
 
     /// <summary>
@@ -272,7 +278,7 @@ internal sealed class DriverTracking(
     private (AssignmentWindow? Assignment, string? Refusal) Resolve(List<AssignmentWindow> assignments, int? taggedId, DateTime recordedAt)
     {
         var day = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(recordedAt, clock.Zone));
-        var covering = assignments.Where(assignment => assignment.Covers(day)).ToList();
+        var covering = assignments.Where(assignment => assignment.Covers(day, recordedAt)).ToList();
         if (taggedId is { } tag && assignments.All(assignment => assignment.Id != tag))
         {
             return (null, "assignment");

@@ -118,6 +118,40 @@ public sealed class VehicleGpsTrackingTests(SqlServerFixture database)
     }
 
     [DatabaseFact]
+    public async Task A_hand_over_today_stops_the_former_drivers_phone_at_that_moment_and_keeps_what_it_queued_before()
+    {
+        await using var api = await ProjectsApi.StartAsync(database);
+        var cast = await CastAsync(api);
+        await AcceptAsync(api, cast.Driver, cast.DeviceId);
+        var today = Clock(api).Today;
+
+        // Hany hands the pickup to Samir today, in the middle of the day.
+        var open = (await Ok(api, HttpMethod.Get, $"/api/vehicles/{cast.PickupId}/drivers", cast.Executive)).GetProperty("items")[0];
+        var handOver = Now(api);
+        await Ok(api, HttpMethod.Post, $"/api/vehicles/{cast.PickupId}/drivers/{open.Id()}/end", cast.Executive,
+            new { endDate = Iso(today), rowVersion = open.GetProperty("rowVersion").GetString() });
+        await Created(api, cast.Executive, $"/api/vehicles/{cast.PickupId}/drivers", new { driverEmployeeId = cast.OtherDriverEmployee, startDate = Iso(today) });
+
+        // Hany's phone then uploads its queue: what it recorded before the hand-over, and two positions taken after.
+        var before = Drive(handOver.AddMinutes(-20), 5, Lat0).ToList();
+        var after = Drive(Now(api).AddSeconds(30), 1, Lat0 + 0.3).ToList();
+        var result = await Ok(api, HttpMethod.Post, "/api/fleet/tracking/me/batch", cast.Driver,
+            Batch(cast.DeviceId, before.Concat(after).Select(point => point with { AssignmentId = open.Id() })));
+        Assert.Equal(before.Count, result.GetProperty("accepted").GetInt32());
+        Assert.Equal(["noAssignment", "noAssignment"], result.GetProperty("rejected").EnumerateArray().Select(row => row.GetProperty("reason").GetString()!));
+
+        // The pickup's latest position is Hany's last one before the hand-over, kept with Hany; nothing moved it after.
+        var stored = await api.FleetQueryAsync(db => db.VehicleGpsPoints.OrderBy(point => point.RecordedAt).ToListAsync());
+        Assert.All(stored, point => Assert.Equal((cast.PickupId, cast.DriverEmployee, open.Id()), (point.VehicleId, point.DriverEmployeeId, point.AssignmentId)));
+        var location = await Ok(api, HttpMethod.Get, $"/api/vehicles/{cast.PickupId}/location", cast.Executive);
+        Assert.Equal(before[^1].Latitude, location.GetProperty("lastPosition").GetProperty("latitude").GetDouble(), 6);
+
+        // And Hany's phone is no longer asked to track the pickup.
+        var config = await Ok(api, HttpMethod.Get, $"/api/fleet/tracking/me?deviceId={cast.DeviceId}", cast.Driver);
+        Assert.False(config.GetProperty("subject").GetBoolean());
+    }
+
+    [DatabaseFact]
     public async Task Only_fleet_managers_read_positions_and_tracking_switched_off_keeps_nothing()
     {
         await using var api = await ProjectsApi.StartAsync(database);
