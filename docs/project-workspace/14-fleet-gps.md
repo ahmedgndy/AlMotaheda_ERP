@@ -51,6 +51,12 @@ stored. A position that arrives days late therefore rebuilds its day by itself, 
 - Days follow the company time zone (`Projects:TimeZone`, Africa/Cairo); stored times are UTC. A trip across
   midnight is one trip, shown on both days with "began the day before" / "continues the next day"; each day's totals
   count only the stretches that end inside it.
+- A trip never runs from one driver to the next, nor through more than 2 hours without a position
+  (`TripSegmenter.TripBreakMinutes`): the positions are cut there and each piece is segmented on its own, so a
+  route is always the route of the driver who recorded it.
+- A position is filed under the stay that covers its capture time. On the day a stay ends, it covers only what was
+  recorded before the moment it was ended (`EndedAt`): after a hand-over the former driver's phone no longer moves
+  the vehicle, while what it queued offline before the hand-over still belongs to that stay.
 - Motion now (`Moving`, `SuspectedStop`, `Stopped`) is computed only from live positions; otherwise `Unknown`.
 - Health: `NotTracked`, `NoDriver`, `NotSetUp`, `NoData`, `Live`, `Delayed`, then once stale `PermissionBlocked`,
   `GpsOff`, `TrackingStopped`, `NoFix` **only when the phone reported it after its last position** (source `Device`),
