@@ -586,7 +586,7 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
                         {
                             t.HasCheckConstraint("CK_FleetAttachment_Owner", "([OwnerType] IS NULL AND [OwnerId] IS NULL) OR ([OwnerType] IN ('VehicleExpense', 'VehicleViolation') AND [OwnerId] IS NOT NULL)");
 
-                            t.HasCheckConstraint("CK_FleetAttachment_Purpose", "[Purpose] IN ('Odometer', 'Invoice', 'Receipt', 'Violation', 'Supporting')");
+                            t.HasCheckConstraint("CK_FleetAttachment_Purpose", "[Purpose] IN ('Odometer', 'Invoice', 'Receipt', 'Violation', 'Supporting', 'PumpDisplay', 'VehicleAtPump')");
 
                             t.HasCheckConstraint("CK_FleetAttachment_Sha256", "LEN([Sha256]) = 64 AND [Sha256] COLLATE Latin1_General_BIN NOT LIKE '%[^0-9a-f]%'");
 
@@ -603,6 +603,9 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
                         .HasColumnType("datetime2(3)");
 
                     b.Property<int>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("FuelPriceItemId")
                         .HasColumnType("int");
 
                     b.Property<string>("FuelType")
@@ -887,6 +890,14 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("AmountSource")
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<DateTime?>("CapturedAt")
+                        .HasColumnType("datetime2(3)");
+
                     b.Property<int>("CreatedBy")
                         .HasColumnType("int");
 
@@ -898,6 +909,10 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
 
                     b.Property<int>("DriverEmployeeId")
                         .HasColumnType("int");
+
+                    b.Property<decimal?>("EffectiveUnitPrice")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<DateOnly>("ExpenseDate")
                         .HasColumnType("date");
@@ -940,6 +955,32 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
                         .IsUnicode(false)
                         .HasColumnType("varchar(20)")
                         .HasComputedColumnSql("CONCAT('VX-', REPLICATE('0', 6 - LEN([Id])), [Id])", true);
+
+                    b.Property<decimal?>("OcrAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("OcrConfidence")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("decimal(5,4)");
+
+                    b.Property<string>("OcrEngine")
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<decimal?>("OcrLiters")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<string>("OcrText")
+                        .HasMaxLength(1000)
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal?>("OcrUnitPrice")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<decimal?>("OdometerKm")
                         .HasPrecision(18, 1)
@@ -1061,6 +1102,11 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
                         .IsUnique()
                         .HasDatabaseName("UX_VehicleExpense_Number");
 
+                    b.HasIndex("VehicleId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_VehicleExpense_OutstandingFuel")
+                        .HasFilter("[Type] = 'Fuel' AND [CapturedAt] IS NOT NULL AND [Status] IN ('Submitted', 'Escalated', 'EvidenceRequested')");
+
                     b.HasIndex(new[] { "DriverEmployeeId" }, "IX_VehicleExpense_DriverEmployeeId");
 
                     b.HasIndex(new[] { "InvoiceNo" }, "IX_VehicleExpense_InvoiceNo")
@@ -1076,11 +1122,15 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
                         {
                             t.HasCheckConstraint("CK_VehicleExpense_Amount", "[Amount] > 0");
 
+                            t.HasCheckConstraint("CK_VehicleExpense_AmountSource", "[AmountSource] IS NULL OR [AmountSource] IN ('Ocr', 'ManualCorrection')");
+
                             t.HasCheckConstraint("CK_VehicleExpense_Approved", "[Status] <> 'Approved' OR [PostingStatus] <> 'NotPosted'");
 
-                            t.HasCheckConstraint("CK_VehicleExpense_Fuel", "([Type] = 'Fuel' AND [FuelQuantity] IS NOT NULL AND [UnitPrice] IS NOT NULL AND [FuelQuantity] > 0 AND [UnitPrice] > 0 AND ABS([Amount] - ROUND([FuelQuantity] * [UnitPrice], 2)) < 0.01) OR ([Type] <> 'Fuel' AND [FuelQuantity] IS NULL AND [UnitPrice] IS NULL)");
+                            t.HasCheckConstraint("CK_VehicleExpense_Fuel", "([Type] = 'Fuel' AND [CapturedAt] IS NULL AND [FuelQuantity] IS NOT NULL AND [UnitPrice] IS NOT NULL AND [FuelQuantity] > 0 AND [UnitPrice] > 0 AND ABS([Amount] - ROUND([FuelQuantity] * [UnitPrice], 2)) < 0.01) OR ([Type] = 'Fuel' AND [CapturedAt] IS NOT NULL AND [AmountSource] IS NOT NULL AND [UnitPrice] IS NULL AND ([FuelQuantity] IS NULL OR [FuelQuantity] > 0)) OR ([Type] <> 'Fuel' AND [FuelQuantity] IS NULL AND [UnitPrice] IS NULL AND [CapturedAt] IS NULL AND [AmountSource] IS NULL)");
 
                             t.HasCheckConstraint("CK_VehicleExpense_Gps", "([GpsLatitude] IS NULL AND [GpsLongitude] IS NULL) OR ([GpsLatitude] IS NOT NULL AND [GpsLongitude] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_VehicleExpense_OcrConfidence", "[OcrConfidence] IS NULL OR ([OcrConfidence] >= 0 AND [OcrConfidence] <= 1)");
 
                             t.HasCheckConstraint("CK_VehicleExpense_Odometer", "[OdometerKm] IS NULL OR [OdometerKm] >= 0");
 
@@ -1161,7 +1211,7 @@ namespace AlMotaheda.Modules.Fleet.Data.Migrations
 
                     b.ToTable("VehicleExpenseFlag", "fleet", t =>
                         {
-                            t.HasCheckConstraint("CK_VehicleExpenseFlag_Kind", "[Kind] IN ('DuplicateInvoiceNo', 'DuplicateReceipt', 'SameAmountVehicleDay', 'OdometerNotIncreasing', 'ImplausibleDistance', 'PriceAboveRange', 'NoReferencePrice')");
+                            t.HasCheckConstraint("CK_VehicleExpenseFlag_Kind", "[Kind] IN ('DuplicateInvoiceNo', 'DuplicateReceipt', 'SameAmountVehicleDay', 'OdometerNotIncreasing', 'ImplausibleDistance', 'PriceAboveRange', 'NoReferencePrice', 'PriceNotValidated', 'AmountManuallyEntered', 'PumpReadingInconsistent', 'LowReadingConfidence', 'PhotoQuality')");
                         });
                 });
 

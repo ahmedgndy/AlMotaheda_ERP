@@ -39,6 +39,7 @@ public sealed class VehicleApiSecurityTests
         { "GET", "/api/vehicle-expenses/1", "fuel:V" },
         { "POST", "/api/vehicle-expenses", "fuel:C" },
         { "POST", "/api/vehicle-expenses/1/resubmit", "fuel:C" },
+        { "GET", "/api/vehicles/1/fuel-claim", "fuel:V;fuel:C" },
         { "POST", "/api/vehicle-expenses/1/approve", "fuel:A" },
         { "POST", "/api/vehicle-expenses/1/reject", "fuel:A" },
         { "POST", "/api/vehicle-expenses/1/request-evidence", "fuel:A" },
@@ -127,7 +128,7 @@ public sealed class VehicleApiSecurityTests
     [InlineData("POST", "/api/vehicles", "{\"plate\":\"\",\"type\":\"Boat\",\"fuelType\":\"Coal\",\"modelYear\":1900,\"odometerKm\":-1}", new[] { "assetNo", "fuelType", "modelYear", "nameAr", "nameEn", "odometerKm", "plate", "type" })]
     [InlineData("POST", "/api/vehicles/1/drivers", "{\"startDate\":\"2999-01-01\"}", new[] { "driverEmployeeId", "startDate" })]
     [InlineData("POST", "/api/vehicles/1/odometer", "{}", new[] { "odometerKm", "rowVersion" })]
-    [InlineData("POST", "/api/vehicle-expenses", "{\"type\":\"Fuel\",\"expenseDate\":\"2999-01-01\",\"fuelQuantity\":0}", new[] { "expenseDate", "fuelQuantity", "idempotencyKey", "invoiceAttachmentId", "odometerAttachmentId", "unitPrice", "vehicleId" })]
+    [InlineData("POST", "/api/vehicle-expenses", "{\"type\":\"Fuel\",\"expenseDate\":\"2999-01-01\",\"fuelQuantity\":0}", new[] { "amount", "capturedAt", "fuelQuantity", "idempotencyKey", "invoiceAttachmentId", "pumpDisplayAttachmentId", "reading", "vehicleAtPumpAttachmentId", "vehicleId" })]
     [InlineData("POST", "/api/vehicle-expenses", "{\"vehicleId\":1,\"type\":\"Toll\",\"expenseDate\":\"2026-10-01\",\"odometerKm\":10,\"fuelQuantity\":5,\"priceItemId\":3,\"odometerAttachmentId\":1,\"invoiceAttachmentId\":2,\"idempotencyKey\":\"7e1e1e1e-1e1e-1e1e-1e1e-1e1e1e1e1e1e\"}", new[] { "amount", "fuelQuantity", "priceItemId" })]
     [InlineData("POST", "/api/vehicle-expenses/1/reject", "{}", new[] { "note", "rowVersion" })]
     [InlineData("POST", "/api/vehicle-expenses/1/reverse", "{}", new[] { "reason", "rowVersion" })]
@@ -136,7 +137,7 @@ public sealed class VehicleApiSecurityTests
     [InlineData("PUT", "/api/vehicles/1/tracking", "{}", new[] { "enabled", "rowVersion" })]
     [InlineData("PUT", "/api/fleet/tracking/me/policy", "{\"deviceId\":\"bad id!\",\"platform\":\"Nokia\",\"policyVersion\":99}", new[] { "deviceId", "platform", "policyVersion" })]
     [InlineData("POST", "/api/fleet/tracking/me/batch", "{\"points\":[]}", new[] { "deviceId" })]
-    [InlineData("POST", "/api/vehicle-expenses", "{\"vehicleId\":1,\"type\":\"Fuel\",\"expenseDate\":\"2026-10-01\",\"fuelQuantity\":40,\"unitPrice\":17.25,\"amount\":700,\"odometerAttachmentId\":1,\"invoiceAttachmentId\":2,\"idempotencyKey\":\"7e1e1e1e-1e1e-1e1e-1e1e-1e1e1e1e1e1e\"}", new[] { "amount" })]
+    [InlineData("POST", "/api/vehicle-expenses", "{\"vehicleId\":1,\"type\":\"Fuel\",\"expenseDate\":\"2026-10-01\",\"fuelQuantity\":40,\"unitPrice\":17.25,\"amount\":700,\"odometerAttachmentId\":1,\"invoiceAttachmentId\":2,\"idempotencyKey\":\"7e1e1e1e-1e1e-1e1e-1e1e-1e1e1e1e1e1e\"}", new[] { "capturedAt", "fuelQuantity", "pumpDisplayAttachmentId", "reading", "unitPrice", "vehicleAtPumpAttachmentId" })]
     public async Task A_bad_form_lists_every_failing_field_before_any_database_work(string method, string path, string json, string[] fields)
     {
         var (app, database) = await StartAsync();

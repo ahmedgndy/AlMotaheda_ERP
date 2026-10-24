@@ -96,7 +96,7 @@ internal static class VehicleExpenseRules
     {
         var flags = new List<ClaimFlag>();
         flags.AddRange(sameInvoiceNo.Select(id => new ClaimFlag(VehicleExpenseFlagKind.DuplicateInvoiceNo, "The same invoice number is on another claim.", id)));
-        flags.AddRange(sameReceipt.Select(id => new ClaimFlag(VehicleExpenseFlagKind.DuplicateReceipt, "The same receipt photo is on another claim.", id)));
+        flags.AddRange(sameReceipt.Select(id => new ClaimFlag(VehicleExpenseFlagKind.DuplicateReceipt, "The same receipt or pump photo is on another claim.", id)));
         flags.AddRange(sameAmountSameDay.Select(id => new ClaimFlag(VehicleExpenseFlagKind.SameAmountVehicleDay, "Another claim on this vehicle has the same amount on the same day.", id)));
 
         if (odometerKm is null)

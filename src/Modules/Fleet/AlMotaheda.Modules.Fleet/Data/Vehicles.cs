@@ -23,6 +23,13 @@ internal sealed class Vehicle
 
     public VehicleFuelType FuelType { get; set; }
 
+    /// <summary>
+    /// The Price Control item (<c>projects.PriceItem</c>, a litre item of the Fuel category) the vehicle's fuel claims are
+    /// compared with, set by a fleet manager: Diesel, or the petrol grade. Unset, the server takes the only active fuel item
+    /// whose English name starts with <see cref="FuelType"/>, when there is exactly one.
+    /// </summary>
+    public int? FuelPriceItemId { get; set; }
+
     /// <summary>The last trusted odometer reading (an approved claim, a hand-over). Never decreases.</summary>
     public decimal OdometerKm { get; set; }
     public DateTime? OdometerUpdatedAt { get; set; }
@@ -223,12 +230,37 @@ internal sealed class VehicleExpense
 
     public DateOnly ExpenseDate { get; set; }
 
-    /// <summary>The odometer reading the driver gave, when given: the odometer photo is the evidence either way.</summary>
+    /// <summary>The odometer reading the driver gave, when given: the odometer photo is the evidence either way (claims other than fuel).</summary>
     public decimal? OdometerKm { get; set; }
 
-    /// <summary>Fuel only: litres and the price per litre; the amount is their product, set by the server.</summary>
+    /// <summary>
+    /// Fuel only. A claim of the earlier form (no <see cref="CapturedAt"/>): litres and the price per litre the driver typed,
+    /// the amount their product. A camera claim: the litres read from the pump display when they could be read, no typed
+    /// price; <see cref="EffectiveUnitPrice"/> is the amount over the litres, computed by the server.
+    /// </summary>
     public decimal? FuelQuantity { get; set; }
     public decimal? UnitPrice { get; set; }
+
+    /// <summary>A camera fuel claim with the litres read: amount ÷ litres (4 decimals), the price compared with Price Control.</summary>
+    public decimal? EffectiveUnitPrice { get; set; }
+
+    /// <summary>
+    /// When the driver photographed the fill on the phone (UTC): the claim's own moment, kept as captured even when the
+    /// phone was offline and sent it hours later (<see cref="SubmittedAt"/> is when the server received it). Set on camera
+    /// fuel claims only; the expense date is its company date.
+    /// </summary>
+    public DateTime? CapturedAt { get; set; }
+
+    /// <summary>How the amount of a camera fuel claim was obtained: read from the pump display, or corrected by hand. <c>null</c> on earlier claims.</summary>
+    public VehicleExpenseAmountSource? AmountSource { get; set; }
+
+    /// <summary>What the phone's text recognition read on the pump display, as it read it (also when the driver corrected the amount), and how sure it was (0–1).</summary>
+    public decimal? OcrAmount { get; set; }
+    public decimal? OcrLiters { get; set; }
+    public decimal? OcrUnitPrice { get; set; }
+    public decimal? OcrConfidence { get; set; }
+    public string? OcrEngine { get; set; }
+    public string? OcrText { get; set; }
 
     public decimal Amount { get; set; }
 
@@ -301,6 +333,13 @@ internal sealed class VehicleExpense
     /// <summary>Waiting for a reviewer.</summary>
     public bool InReview => _status is VehicleExpenseStatus.Submitted or VehicleExpenseStatus.Escalated;
 
+    /// <summary>
+    /// The statuses of a claim that is not reviewed to the end: waiting for a reviewer, or returned to its submitter for
+    /// correction. A vehicle has at most one fuel claim in them (a filtered unique index for camera claims, and the check
+    /// under the vehicle's lock for every claim).
+    /// </summary>
+    public static IReadOnlyList<VehicleExpenseStatus> Outstanding { get; } = [VehicleExpenseStatus.Submitted, VehicleExpenseStatus.Escalated, VehicleExpenseStatus.EvidenceRequested];
+
     public void Review(VehicleExpenseStatus outcome, int reviewerId, DateTime now, string? note)
     {
         _status = Flow.Move(_status, outcome);
@@ -318,6 +357,14 @@ internal sealed class VehicleExpense
         ReviewedAt = null;
         ReviewedBy = null;
         ReviewNote = null;
+        UpdatedAt = now;
+        UpdatedBy = userId;
+    }
+
+    /// <summary>A corrected fuel claim whose price is now above the range, off any project: only an Executive decides it.</summary>
+    public void EscalateForPrice(int userId, DateTime now)
+    {
+        _status = Flow.Move(_status, VehicleExpenseStatus.Escalated);
         UpdatedAt = now;
         UpdatedBy = userId;
     }
@@ -361,6 +408,22 @@ internal enum VehicleExpenseStatus
 }
 
 /// <summary>Stored by name.</summary>
+internal enum VehicleExpenseAmountSource
+{
+    /// <summary>Read by the phone's on-device text recognition from the pump display photo, with confidence, unchanged by the driver.</summary>
+    Ocr,
+
+    /// <summary>Typed by the driver because the display couldn't be read reliably: the reading (if any) is kept beside it, and the reviewer is told.</summary>
+    ManualCorrection,
+}
+
+/// <summary>The price check of a camera fuel claim that couldn't be made: no litres read, or no price item linked to the vehicle's fuel. Never a pass.</summary>
+internal static class VehiclePriceChecks
+{
+    public const string Incomplete = "Incomplete";
+}
+
+/// <summary>Stored by name.</summary>
 internal enum VehiclePostingStatus
 {
     NotPosted,
@@ -398,6 +461,21 @@ internal enum VehicleExpenseFlagKind
     ImplausibleDistance,
     PriceAboveRange,
     NoReferencePrice,
+
+    /// <summary>The price per litre of a camera fuel claim couldn't be compared with Price Control (no litres read, no fuel item).</summary>
+    PriceNotValidated,
+
+    /// <summary>The driver typed the amount: the display couldn't be read reliably.</summary>
+    AmountManuallyEntered,
+
+    /// <summary>The readings disagree: litres × the display's price per litre is not the amount.</summary>
+    PumpReadingInconsistent,
+
+    /// <summary>The phone's reading came with low confidence.</summary>
+    LowReadingConfidence,
+
+    /// <summary>The phone's own photo checks found a problem the driver kept after retaking (dim, blurry, unreadable receipt).</summary>
+    PhotoQuality,
 }
 
 /// <summary>One alert to one person (the accountants, the Executives) that a claim was submitted. Saved with the claim; the outbox turns it into a notification.</summary>
@@ -453,6 +531,12 @@ internal enum FleetAttachmentPurpose
     Receipt,
     Violation,
     Supporting,
+
+    /// <summary>Fuel: a close-up of the pump display with the total paid (and the litres and price per litre when it shows them).</summary>
+    PumpDisplay,
+
+    /// <summary>Fuel: the vehicle beside the pump.</summary>
+    VehicleAtPump,
 }
 
 internal static class FleetAttachmentOwners

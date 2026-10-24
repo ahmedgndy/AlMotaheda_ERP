@@ -12,7 +12,10 @@ namespace AlMotaheda.Modules.Fleet.Features.Claims;
 
 internal sealed record ClaimFlagView(int Id, string Kind, string Detail, int? RelatedExpenseId);
 
-/// <summary>A claim as the screens show it. Amounts are <c>null</c> for a caller who may not see money (and is not its claimant).</summary>
+/// <summary>
+/// A claim as the screens show it. Amounts are <c>null</c> for a caller who may not see money (and is not its claimant).
+/// <c>SubmittedAt</c> is when the server received it; <c>CapturedAt</c> (camera fuel claims) when its photos were taken.
+/// </summary>
 internal sealed record VehicleExpenseView(
     int Id,
     string Number,
@@ -58,7 +61,14 @@ internal sealed record VehicleExpenseView(
     string? ReviewNote,
     IReadOnlyList<ClaimFlagView> Flags,
     IReadOnlyList<FleetAttachmentView> Attachments,
-    string RowVersion);
+    string RowVersion,
+    DateTime? CapturedAt,
+    string? AmountSource,
+    decimal? OcrAmount,
+    decimal? OcrLiters,
+    decimal? OcrUnitPrice,
+    decimal? OcrConfidence,
+    decimal? EffectiveUnitPrice);
 
 /// <summary>Builds claim views with one lookup per page for people, drivers and price cases.</summary>
 internal sealed class VehicleExpenseViews(FleetDbContext db, IUserDirectory users, IEmployeeDirectory employees, IPriceControl priceControl)
@@ -96,7 +106,9 @@ internal sealed class VehicleExpenseViews(FleetDbContext db, IUserDirectory user
                 claim.SubmittedAt, FleetPerson.From(claim.CreatedBy, people), claim.ReviewedAt, FleetPerson.FromOptional(claim.ReviewedBy, people), claim.ReviewNote,
                 claim.Flags.OrderBy(flag => flag.Id).Select(flag => new ClaimFlagView(flag.Id, flag.Kind.ToString(), flag.Detail, flag.RelatedExpenseId)).ToList(),
                 attachments.Where(attachment => attachment.OwnerId == claim.Id).Select(FleetAttachmentView.From).ToList(),
-                RowVersions.Format(claim.RowVersion));
+                RowVersions.Format(claim.RowVersion),
+                claim.CapturedAt, claim.AmountSource?.ToString(), seesMoney ? claim.OcrAmount : null, claim.OcrLiters, seesMoney ? claim.OcrUnitPrice : null, claim.OcrConfidence,
+                seesMoney ? claim.EffectiveUnitPrice : null);
         }).ToList();
     }
 }

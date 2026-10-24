@@ -22,17 +22,25 @@ namespace AlMotaheda.Modules.Fleet.Features.Claims;
 /// <summary>
 /// Vehicle expense claims: <c>GET /api/vehicle-expenses</c> and <c>/{id}</c> (fuel View: your own, every one with
 /// See money or Approve), <c>POST /api/vehicle-expenses</c> (fuel Create: the vehicle's driver on that day, or a
-/// fleet manager on their behalf) and <c>POST /{id}/resubmit</c> (the submitter, after an evidence request). The
-/// custody account is always the vehicle's: nobody chooses it, nobody claims against another vehicle's cash.
+/// fleet manager on their behalf), <c>POST /{id}/resubmit</c> (the submitter, after an evidence request) and
+/// <c>GET /api/vehicles/{id}/fuel-claim</c> (the vehicle's fuel and its outstanding fuel claim). The custody account
+/// is always the vehicle's: nobody chooses it, nobody claims against another vehicle's cash.
 /// </summary>
 /// <remarks>
 /// <list type="bullet">
-///   <item>Fuel: litres and price per litre; the amount is their product. Every claim carries an odometer photo and an
-///   invoice or receipt photo; the odometer reading itself is optional (422 <c>evidence_required</c>).</item>
+///   <item>Fuel (the camera claim): three photos (the receipt, the pump display, the vehicle at the pump), the total read
+///   from the display on the phone with its reading (or corrected by hand, said so), and the moment it was captured,
+///   which gives the expense date. No fuel, price or station is typed: the fuel is the vehicle's, the price per litre is
+///   amount ÷ litres computed here (422 <c>evidence_required</c> without the photos).</item>
+///   <item>One fuel claim per vehicle not reviewed to the end (Submitted, Escalated, EvidenceRequested): another is
+///   refused with 409 <c>fuel_claim_outstanding</c>, under the vehicle's lock and by a filtered unique index. A claim
+///   returned for correction is resubmitted, never replaced.</item>
+///   <item>Every other type: the amount, an odometer photo and an invoice or receipt photo; the odometer reading is optional.</item>
 ///   <item>Submitted: a Pending entry in the vehicle's custody (the exposure); the posted balance is unchanged until approval.</item>
-///   <item>A fuel claim naming a Price Control item is compared with the price list at the expense date: above the
-///   range under Block → 409 <c>price_above_range</c>; under ExecutiveApproval → a justification, and a case for the
-///   Executive when the vehicle is on a project, else the claim is Escalated to the Executive directly.</item>
+///   <item>A fuel claim is compared with the vehicle's fuel in Price Control at the expense date when the litres were
+///   read: above the range under Block → 409 <c>price_above_range</c>; under ExecutiveApproval → a case for the
+///   Executive when the vehicle is on a project, else the claim is Escalated to the Executive directly. Without litres
+///   or a fuel item the check is Incomplete, flagged, and never counts as passed.</item>
 ///   <item>Review flags (same invoice, same receipt, same amount and day, odometer not increasing, implausible distance)
 ///   are shown to the reviewer; none of them blocks.</item>
 ///   <item>The accountants and the Executives hear of a new claim (alert rows saved with it).</item>
@@ -61,9 +69,29 @@ internal static class VehicleExpenseEndpoints
         int? InvoiceAttachmentId,
         IReadOnlyList<int>? SupportingAttachmentIds,
         GpsPoint? Gps,
-        string? IdempotencyKey);
+        string? IdempotencyKey,
+        string? CapturedAt = null,
+        int? PumpDisplayAttachmentId = null,
+        int? VehicleAtPumpAttachmentId = null,
+        AmountReadingRequest? Reading = null);
 
-    internal sealed record ResubmitRequest(string? Notes, int? OdometerAttachmentId, int? InvoiceAttachmentId, IReadOnlyList<int>? SupportingAttachmentIds, string? RowVersion);
+    /// <summary>
+    /// The correction of a claim returned for it: the photos asked for (added, the earlier ones kept) and, for a camera
+    /// fuel claim, a new pump display photo may come with a new <paramref name="Amount"/> and <paramref name="Reading"/>.
+    /// </summary>
+    internal sealed record ResubmitRequest(
+        string? Notes,
+        int? OdometerAttachmentId,
+        int? InvoiceAttachmentId,
+        IReadOnlyList<int>? SupportingAttachmentIds,
+        string? RowVersion,
+        int? PumpDisplayAttachmentId = null,
+        int? VehicleAtPumpAttachmentId = null,
+        decimal? Amount = null,
+        AmountReadingRequest? Reading = null);
+
+    /// <summary>The reason a fuel price case carries: the driver no longer writes one.</summary>
+    internal const string FuelPriceReason = "Price per litre computed by the server from the pump display photo (total ÷ litres).";
 
     internal sealed record ListResponse(IReadOnlyList<VehicleExpenseView> Items, int Page, int PageSize, int TotalCount, IReadOnlyDictionary<string, int> CountsByStatus);
 
@@ -98,7 +126,12 @@ internal static class VehicleExpenseEndpoints
         api.MapPost("/vehicle-expenses/{claimId:int}/resubmit", ResubmitAsync)
             .RequirePermission(FleetPermissions.Fuel, PermissionAction.Create)
             .WithName("ResubmitVehicleExpense")
-            .WithSummary("Add the evidence a reviewer asked for and submit again (the submitter only); earlier evidence is kept");
+            .WithSummary("Add the evidence a reviewer asked for and submit again (the submitter only); earlier evidence is kept. A camera fuel claim may come with a new pump reading");
+
+        api.MapGet("/vehicles/{vehicleId:int}/fuel-claim", FuelClaimState.GetAsync)
+            .RequireAnyPermission((FleetPermissions.Fuel, PermissionAction.View), (FleetPermissions.Fuel, PermissionAction.Create))
+            .WithName("GetVehicleFuelClaimState")
+            .WithSummary("The vehicle's fuel (its Price Control item) and its fuel claim waiting for review or correction, if any: whether a new fuel claim can be made");
     }
 
     /// <summary>A driver names the fuel without seeing the price list: its ranges are control data the server applies.</summary>
@@ -242,7 +275,26 @@ internal static class VehicleExpenseEndpoints
         }
 
         var type = Input.RequiredName<VehicleExpenseType>(request.Type, errors, "type");
-        var expenseDate = Input.RequiredDate(request.ExpenseDate, errors, "expenseDate", "The expense date");
+        var fuel = type == VehicleExpenseType.Fuel;
+
+        // A fuel claim's date is the company date of the moment its photos were taken (kept as captured when it was sent
+        // later from the phone's queue); any other claim names its date.
+        DateTime? capturedAt = null;
+        DateOnly? expenseDate;
+        if (fuel)
+        {
+            capturedAt = FuelClaimRules.CapturedAt(request.CapturedAt, clock.UtcNow, options.MaxClaimAgeDays, errors);
+            expenseDate = capturedAt is { } moment ? DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(moment, clock.Zone)) : null;
+            if (Input.OptionalDate(request.ExpenseDate, errors, "expenseDate", "The expense date") is { } namedDate && expenseDate is { } captured && namedDate != captured)
+            {
+                errors.Add("expenseDate", "A fuel claim's date is the day its photos were taken.");
+            }
+        }
+        else
+        {
+            expenseDate = Input.RequiredDate(request.ExpenseDate, errors, "expenseDate", "The expense date");
+        }
+
         if (expenseDate is { } date)
         {
             if (date > clock.Today)
@@ -257,21 +309,28 @@ internal static class VehicleExpenseEndpoints
 
         // The reading is optional: the odometer photo is the evidence the reviewer checks.
         var odometer = VehicleFields.Odometer(request.OdometerKm, errors, required: false);
-        decimal? fuelQuantity = null, unitPrice = null, amount = null;
-        if (type == VehicleExpenseType.Fuel)
+        decimal? amount = null;
+        FuelReading? reading = null;
+        if (fuel)
         {
-            fuelQuantity = NumberInput.RequiredQuantity(request.FuelQuantity, errors, "fuelQuantity", "The litres");
-            unitPrice = NumberInput.RequiredMoney(request.UnitPrice, errors, "unitPrice", "The price per litre");
-            if (fuelQuantity is not null && unitPrice is not null)
+            // The total comes from the pump display; litres and the price per litre are never typed, and the fuel is the vehicle's.
+            if (request.FuelQuantity is not null)
             {
-                amount = VehicleExpenseRules.Amount(VehicleExpenseType.Fuel, fuelQuantity, unitPrice, null);
-
-                // The server computes the total; a total the client sends must agree with it (to the piastre).
-                if (request.Amount is { } sent && Math.Abs(sent - amount!.Value) > 0.01m)
-                {
-                    errors.Add("amount", $"The total {sent:0.00} doesn't match litres × price per litre ({amount:0.00}).");
-                }
+                errors.Add("fuelQuantity", "A fuel claim's litres are read from the pump display photo, never typed.");
             }
+
+            if (request.UnitPrice is not null)
+            {
+                errors.Add("unitPrice", "A fuel claim's price per litre is computed by the server from the pump display reading, never typed.");
+            }
+
+            if (request.PriceItemId is not null)
+            {
+                errors.Add("priceItemId", "A fuel claim is compared with the vehicle's own fuel in Price Control; it names no price item.");
+            }
+
+            reading = FuelClaimRules.Reading(request.Amount, request.Reading, errors);
+            amount = reading?.Amount;
         }
         else if (type is not null)
         {
@@ -284,6 +343,11 @@ internal static class VehicleExpenseEndpoints
             if (request.PriceItemId is not null)
             {
                 errors.Add("priceItemId", "Only a fuel claim is compared with the price list.");
+            }
+
+            if (request.PumpDisplayAttachmentId is not null || request.VehicleAtPumpAttachmentId is not null || request.Reading is not null || Input.Clean(request.CapturedAt) is not null)
+            {
+                errors.Add("pumpDisplayAttachmentId", "The pump photos and reading are for fuel claims only.");
             }
         }
 
@@ -301,7 +365,7 @@ internal static class VehicleExpenseEndpoints
             errors.Add("priceItemId", "priceItemId must be a price item id.");
         }
 
-        if (request.OdometerAttachmentId is null or < 1)
+        if (!fuel && request.OdometerAttachmentId is null or < 1)
         {
             errors.Add("odometerAttachmentId", "The odometer photo is required.");
         }
@@ -309,6 +373,16 @@ internal static class VehicleExpenseEndpoints
         if (request.InvoiceAttachmentId is null or < 1)
         {
             errors.Add("invoiceAttachmentId", "The invoice or receipt photo is required.");
+        }
+
+        if (fuel && request.PumpDisplayAttachmentId is null or < 1)
+        {
+            errors.Add("pumpDisplayAttachmentId", "The close-up photo of the pump display is required.");
+        }
+
+        if (fuel && request.VehicleAtPumpAttachmentId is null or < 1)
+        {
+            errors.Add("vehicleAtPumpAttachmentId", "The photo of the vehicle beside the pump is required.");
         }
 
         var gps = Gps(request.Gps, errors);
@@ -364,15 +438,23 @@ internal static class VehicleExpenseEndpoints
             }
         }
 
+        // One fuel claim per vehicle waits for review or correction at a time: told before anything else is checked,
+        // and checked again under the vehicle's lock below.
+        if (fuel && await OutstandingFuelAsync(db, vehicleId, cancellationToken) is { } waiting)
+        {
+            return FleetProblems.OutstandingFuelClaim(waiting.Id, waiting.Number, waiting.Status.ToString());
+        }
+
         // The evidence: uploaded by the caller, of the right kind, not bound elsewhere.
-        var attachmentIds = new[] { request.OdometerAttachmentId!.Value, request.InvoiceAttachmentId!.Value }.Concat(request.SupportingAttachmentIds ?? []).Distinct().ToList();
+        var attachmentIds = new[] { request.OdometerAttachmentId, request.InvoiceAttachmentId, request.PumpDisplayAttachmentId, request.VehicleAtPumpAttachmentId }
+            .OfType<int>().Concat(request.SupportingAttachmentIds ?? []).Distinct().ToList();
         var (attachments, refused) = await AttachmentBinding.LoadAsync(db, attachmentIds, caller.UserId, FleetAttachmentOwners.VehicleExpense, null, cancellationToken);
         if (refused is not null)
         {
             return refused;
         }
 
-        if (attachments.SingleOrDefault(attachment => attachment.Id == request.OdometerAttachmentId) is not { Purpose: FleetAttachmentPurpose.Odometer })
+        if ((!fuel || request.OdometerAttachmentId is not null) && attachments.SingleOrDefault(attachment => attachment.Id == request.OdometerAttachmentId) is not { Purpose: FleetAttachmentPurpose.Odometer })
         {
             return FleetProblems.EvidenceMissing("an odometer photo (purpose Odometer)");
         }
@@ -382,42 +464,29 @@ internal static class VehicleExpenseEndpoints
             return FleetProblems.EvidenceMissing("an invoice or receipt photo (purpose Invoice or Receipt)");
         }
 
-        // Price Control for fuel naming a price item: compared at the expense date; the comparison is kept as made.
-        PriceVerdict? verdict = null;
-        var escalateForPrice = false;
-        if (request.PriceItemId is { } priceItemId)
+        if (fuel && attachments.SingleOrDefault(attachment => attachment.Id == request.PumpDisplayAttachmentId) is not { Purpose: FleetAttachmentPurpose.PumpDisplay })
         {
-            var items = await priceControl.FindItemsAsync([priceItemId], cancellationToken);
-            if (!items.TryGetValue(priceItemId, out var item) || !item.IsActive)
+            return FleetProblems.EvidenceMissing("a close-up photo of the pump display (purpose PumpDisplay)");
+        }
+
+        if (fuel && attachments.SingleOrDefault(attachment => attachment.Id == request.VehicleAtPumpAttachmentId) is not { Purpose: FleetAttachmentPurpose.VehicleAtPump })
+        {
+            return FleetProblems.EvidenceMissing("a photo of the vehicle beside the pump (purpose VehicleAtPump)");
+        }
+
+        // Price Control for fuel: the vehicle's fuel, amount ÷ litres, compared at the expense date; the comparison is kept as made.
+        FuelPricing? pricing = null;
+        if (fuel)
+        {
+            pricing = await FuelPrices.PriceAsync(priceControl, vehicle, expenseDate.Value, reading!, cancellationToken);
+            if (pricing.Blocked)
             {
-                errors.Add("priceItemId", "The price item was not found or is inactive.");
-                return FleetProblems.Validation(errors);
-            }
-
-            verdict = await priceControl.CheckAsync(new PriceCheckRequest(priceItemId, request.SupplierId, expenseDate.Value, MeasurementUnits.Liter, unitPrice!.Value, fuelQuantity!.Value), cancellationToken);
-            if (verdict.Result == PriceVerdict.UnitMismatch)
-            {
-                errors.Add("priceItemId", $"The price item is per {item.Unit}, not per litre, so the price can't be compared.");
-                return FleetProblems.Validation(errors);
-            }
-
-            if (verdict.IsAboveRange)
-            {
-                if (verdict.Blocked)
-                {
-                    return FleetProblems.AboveRangeBlocked(unitPrice.Value, verdict.MaxPrice ?? 0);
-                }
-
-                if (justification is null)
-                {
-                    errors.Add("priceJustification", $"The price per litre is {verdict.VariancePerUnit:0.00} above the highest reference price {verdict.MaxPrice:0.00}: say why.");
-                    return FleetProblems.Validation(errors);
-                }
-
-                escalateForPrice = verdict.Gates;
+                return FleetProblems.AboveRangeBlocked(pricing.EffectiveUnitPrice!.Value, pricing.Verdict!.MaxPrice ?? 0);
             }
         }
 
+        var verdict = pricing?.Verdict;
+        var escalateForPrice = pricing?.Escalate ?? false;
         var projectId = await VehicleQueries.ProjectOn(db, vehicleId, expenseDate.Value).FirstOrDefaultAsync(cancellationToken);
         var now = clock.UtcNow;
 
@@ -434,18 +503,17 @@ internal static class VehicleExpenseEndpoints
             return TypedResults.Ok((await views.LoadAsync(first.Id, caller, me?.Id, cancellationToken))!);
         }
 
+        // And the vehicle's outstanding fuel claim: another phone, another driver or a second tap may have landed meanwhile.
+        if (fuel && await OutstandingFuelAsync(db, vehicleId, cancellationToken) is { } landed)
+        {
+            return FleetProblems.OutstandingFuelClaim(landed.Id, landed.Number, landed.Status.ToString());
+        }
+
         // The review flags, from what is already recorded. Information, never a block.
         var flags = await FlagsAsync(db, vehicleId, expenseDate.Value, odometer, amount!.Value, invoiceNo, attachments, options, cancellationToken);
-        if (verdict is not null)
+        if (pricing is not null)
         {
-            if (verdict.IsAboveRange)
-            {
-                flags = [.. flags, new ClaimFlag(VehicleExpenseFlagKind.PriceAboveRange, $"{verdict.VariancePerUnit:0.00} per litre above the reference maximum {verdict.MaxPrice:0.00} ({verdict.VariancePercent:0.00}%).")];
-            }
-            else if (verdict.Result == PriceVerdict.NoReference)
-            {
-                flags = [.. flags, new ClaimFlag(VehicleExpenseFlagKind.NoReferencePrice, "No reference price range applies to this item on the expense date.")];
-            }
+            flags = [.. flags, .. pricing.Flags, .. FuelClaimRules.ReadingFlags(reading!)];
         }
 
         var claim = new VehicleExpense
@@ -457,15 +525,23 @@ internal static class VehicleExpenseEndpoints
             Type = type!.Value,
             ExpenseDate = expenseDate.Value,
             OdometerKm = odometer,
-            FuelQuantity = fuelQuantity,
-            UnitPrice = unitPrice,
+            FuelQuantity = reading?.OcrLiters,
+            EffectiveUnitPrice = pricing?.EffectiveUnitPrice,
             Amount = amount.Value,
+            CapturedAt = capturedAt,
+            AmountSource = reading?.Source,
+            OcrAmount = reading?.OcrAmount,
+            OcrLiters = reading?.OcrLiters,
+            OcrUnitPrice = reading?.OcrUnitPrice,
+            OcrConfidence = reading?.Confidence,
+            OcrEngine = reading?.Engine,
+            OcrText = reading?.Text,
             VendorName = vendor,
             SupplierId = request.SupplierId,
             InvoiceNo = invoiceNo,
             Notes = notes,
-            PriceItemId = request.PriceItemId,
-            PriceCheck = verdict?.Result,
+            PriceItemId = pricing?.PriceItemId,
+            PriceCheck = pricing?.PriceCheck,
             ReferenceMaxPrice = verdict?.MaxPrice,
             PriceJustification = justification,
             GpsLatitude = gps?.Latitude,
@@ -494,6 +570,14 @@ internal static class VehicleExpenseEndpoints
             var first = await db.VehicleExpenses.AsNoTracking().SingleAsync(candidate => candidate.IdempotencyKey == key, cancellationToken);
             return first.CreatedBy == caller.UserId ? TypedResults.Ok((await views.LoadAsync(first.Id, caller, me?.Id, cancellationToken))!) : FleetProblems.KeyUsedElsewhere();
         }
+        catch (DbUpdateException exception) when (SqlViolations.IsUnique(exception, VehicleExpenseConfiguration.OutstandingFuelIndex))
+        {
+            // The database's own guard, should the lock ever be bypassed.
+            await transaction.RollbackAsync(cancellationToken);
+            db.ChangeTracker.Clear();
+            var open = await OutstandingFuelAsync(db, vehicleId, cancellationToken);
+            return open is null ? FleetProblems.TryAgainLater() : FleetProblems.OutstandingFuelClaim(open.Id, open.Number, open.Status.ToString());
+        }
 
         AttachmentBinding.Bind(attachments, FleetAttachmentOwners.VehicleExpense, claim.Id, now);
 
@@ -519,8 +603,8 @@ internal static class VehicleExpenseEndpoints
         if (escalateForPrice && projectId != 0 && verdict is not null)
         {
             claim.PriceExceptionId = await priceControl.OpenExceptionAsync(
-                new PriceExceptionDraft(PriceExceptionSources.VehicleExpense, claim.Id, projectId, request.SupplierId, request.PriceItemId!.Value, verdict, MeasurementUnits.Liter,
-                    fuelQuantity!.Value, unitPrice!.Value, justification, $"{claim.Number} fuel {vehicle.Plate}", expenseDate.Value, caller.UserId),
+                new PriceExceptionDraft(PriceExceptionSources.VehicleExpense, claim.Id, projectId, request.SupplierId, pricing!.PriceItemId!.Value, verdict, MeasurementUnits.Liter,
+                    reading!.OcrLiters!.Value, pricing.EffectiveUnitPrice!.Value, justification ?? FuelPriceReason, $"{claim.Number} fuel {vehicle.Plate}", expenseDate.Value, caller.UserId),
                 SharedTransaction.Of(db), cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
         }
@@ -530,10 +614,15 @@ internal static class VehicleExpenseEndpoints
         return TypedResults.Created($"/api/vehicle-expenses/{claim.Id}", (await views.LoadAsync(claim.Id, caller, me?.Id, cancellationToken))!);
     }
 
-    /// <summary>After an evidence request: more photos are added (never replacing the earlier ones) and the claim is submitted again.</summary>
+    /// <summary>
+    /// After an evidence request (returned for correction): more photos are added (never replacing the earlier ones) and
+    /// the same claim is submitted again; no second claim is made. A camera fuel claim may come with a new pump display
+    /// photo and a new reading: the amount, the price check and the pending custody entry follow it, the earlier reading
+    /// stays in the flags' history and the photos.
+    /// </summary>
     internal static async Task<Results<Ok<VehicleExpenseView>, ValidationProblem, ProblemHttpResult>> ResubmitAsync(
-        int claimId, ResubmitRequest request, HttpContext httpContext, FleetDbContext db, VehicleExpenseViews views, IEmployeeDirectory employees, CompanyClock clock, FleetLog log,
-        CancellationToken cancellationToken)
+        int claimId, ResubmitRequest request, HttpContext httpContext, FleetDbContext db, VehicleExpenseViews views, IEmployeeDirectory employees, IPriceControl priceControl,
+        CompanyClock clock, FleetLog log, CancellationToken cancellationToken)
     {
         if (FleetCaller.From(httpContext.User) is not { } caller)
         {
@@ -543,10 +632,21 @@ internal static class VehicleExpenseEndpoints
         var errors = new ValidationErrors();
         var notes = Input.OptionalText(request.Notes, VehicleExpenseConfiguration.NotesMaxLength, errors, "notes", "Notes");
         var rowVersion = RowVersions.Parse(request.RowVersion, errors);
-        var ids = new[] { request.OdometerAttachmentId, request.InvoiceAttachmentId }.OfType<int>().Concat(request.SupportingAttachmentIds ?? []).Distinct().ToList();
+        var ids = new[] { request.OdometerAttachmentId, request.InvoiceAttachmentId, request.PumpDisplayAttachmentId, request.VehicleAtPumpAttachmentId }
+            .OfType<int>().Concat(request.SupportingAttachmentIds ?? []).Distinct().ToList();
         if (ids.Count == 0)
         {
             errors.Add("attachments", "Add at least one photo the reviewer asked for.");
+        }
+
+        FuelReading? reading = null;
+        if (request.Reading is not null || request.Amount is not null)
+        {
+            reading = FuelClaimRules.Reading(request.Amount, request.Reading, errors);
+            if (request.PumpDisplayAttachmentId is null)
+            {
+                errors.Add("pumpDisplayAttachmentId", "A new reading comes with the new pump display photo it was read from.");
+            }
         }
 
         if (errors.HasErrors)
@@ -554,12 +654,19 @@ internal static class VehicleExpenseEndpoints
             return FleetProblems.Validation(errors);
         }
 
-        var claim = await db.VehicleExpenses.Include(candidate => candidate.Flags).SingleOrDefaultAsync(candidate => candidate.Id == claimId, cancellationToken);
-        if (claim is null)
+        var found = await db.VehicleExpenses.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == claimId, cancellationToken);
+        if (found is null)
         {
             return FleetProblems.ClaimNotFound();
         }
 
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        if (!await AppLock.TryAcquireAsync(db, AppLock.Equipment(found.VehicleId), cancellationToken))
+        {
+            return FleetProblems.TryAgainLater();
+        }
+
+        var claim = await db.VehicleExpenses.Include(candidate => candidate.Flags).Include(candidate => candidate.Vehicle).SingleAsync(candidate => candidate.Id == claimId, cancellationToken);
         switch (VehicleExpenseRules.Resubmit(claim, caller.UserId))
         {
             case ClaimDecision.NotSubmitter:
@@ -568,13 +675,75 @@ internal static class VehicleExpenseEndpoints
                 return FleetProblems.WrongStatus($"Only a claim waiting for more evidence can be resubmitted. This one is {claim.Status}.");
         }
 
+        var cameraFuel = claim.Type == VehicleExpenseType.Fuel && claim.CapturedAt is not null;
+        if (reading is not null && !cameraFuel)
+        {
+            errors.Add("reading", "Only a fuel claim made with the pump photos takes a new reading.");
+            return FleetProblems.Validation(errors);
+        }
+
         var (attachments, refused) = await AttachmentBinding.LoadAsync(db, ids, caller.UserId, FleetAttachmentOwners.VehicleExpense, claim.Id, cancellationToken);
         if (refused is not null)
         {
             return refused;
         }
 
+        foreach (var (id, purposes, what) in new (int?, FleetAttachmentPurpose[], string)[]
+        {
+            (request.OdometerAttachmentId, [FleetAttachmentPurpose.Odometer], "an odometer photo (purpose Odometer)"),
+            (request.InvoiceAttachmentId, [FleetAttachmentPurpose.Invoice, FleetAttachmentPurpose.Receipt], "an invoice or receipt photo (purpose Invoice or Receipt)"),
+            (request.PumpDisplayAttachmentId, [FleetAttachmentPurpose.PumpDisplay], "a close-up photo of the pump display (purpose PumpDisplay)"),
+            (request.VehicleAtPumpAttachmentId, [FleetAttachmentPurpose.VehicleAtPump], "a photo of the vehicle beside the pump (purpose VehicleAtPump)"),
+        })
+        {
+            if (id is not null && (attachments.SingleOrDefault(attachment => attachment.Id == id) is not { } named || !purposes.Contains(named.Purpose)))
+            {
+                return FleetProblems.EvidenceMissing(what);
+            }
+        }
+
         var now = clock.UtcNow;
+        FuelPricing? pricing = null;
+        if (reading is not null)
+        {
+            pricing = await FuelPrices.PriceAsync(priceControl, claim.Vehicle, claim.ExpenseDate, reading, cancellationToken);
+            if (pricing.Blocked)
+            {
+                return FleetProblems.AboveRangeBlocked(pricing.EffectiveUnitPrice!.Value, pricing.Verdict!.MaxPrice ?? 0);
+            }
+
+            // The earlier price case no longer describes the claim: withdrawn, so the corrected price starts clean.
+            if (claim.PriceExceptionId is not null)
+            {
+                await priceControl.WithdrawExceptionsAsync(PriceExceptionSources.VehicleExpense, claim.Id, caller.UserId, SharedTransaction.Of(db), cancellationToken);
+                claim.PriceExceptionId = null;
+            }
+
+            claim.Amount = reading.Amount;
+            claim.AmountSource = reading.Source;
+            claim.OcrAmount = reading.OcrAmount;
+            claim.OcrLiters = reading.OcrLiters;
+            claim.OcrUnitPrice = reading.OcrUnitPrice;
+            claim.OcrConfidence = reading.Confidence;
+            claim.OcrEngine = reading.Engine;
+            claim.OcrText = reading.Text;
+            claim.FuelQuantity = reading.OcrLiters;
+            claim.EffectiveUnitPrice = pricing.EffectiveUnitPrice;
+            claim.PriceItemId = pricing.PriceItemId;
+            claim.PriceCheck = pricing.PriceCheck;
+            claim.ReferenceMaxPrice = pricing.Verdict?.MaxPrice;
+            claim.Flags.AddRange(pricing.Flags.Concat(FuelClaimRules.ReadingFlags(reading))
+                .Select(flag => new VehicleExpenseFlag { Kind = flag.Kind, Detail = flag.Detail, RelatedExpenseId = flag.RelatedExpenseId, CreatedAt = now }));
+
+            var entry = await db.VehicleCustodyEntries.SingleOrDefaultAsync(candidate => candidate.SourceType == VehicleCustodySources.Expense && candidate.SourceId == claim.Id, cancellationToken);
+            if (entry is { Status: VehicleCustodyStatus.Pending })
+            {
+                entry.Amount = reading.Amount;
+                entry.UpdatedAt = now;
+                entry.UpdatedBy = caller.UserId;
+            }
+        }
+
         claim.Resubmit(caller.UserId, now);
         if (notes is not null)
         {
@@ -592,10 +761,35 @@ internal static class VehicleExpenseEndpoints
             return ApiProblem.ConcurrencyConflictResult();
         }
 
+        // Above the range again: a new case for the Executive on a project, else the Executive decides the claim itself.
+        if (pricing is { Escalate: true })
+        {
+            if (claim.ProjectId is { } projectId)
+            {
+                claim.PriceExceptionId = await priceControl.OpenExceptionAsync(
+                    new PriceExceptionDraft(PriceExceptionSources.VehicleExpense, claim.Id, projectId, claim.SupplierId, pricing.PriceItemId!.Value, pricing.Verdict!, MeasurementUnits.Liter,
+                        reading!.OcrLiters!.Value, pricing.EffectiveUnitPrice!.Value, FuelPriceReason, $"{claim.Number} fuel {claim.Vehicle.Plate}", claim.ExpenseDate, caller.UserId),
+                    SharedTransaction.Of(db), cancellationToken);
+            }
+            else
+            {
+                claim.EscalateForPrice(caller.UserId, now);
+            }
+
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
         log.ClaimReviewed(caller.UserId, claim.Id, "Resubmitted");
         var me = await employees.FindByUserAsync(caller.UserId, cancellationToken);
         return TypedResults.Ok((await views.LoadAsync(claim.Id, caller, me?.Id, cancellationToken))!);
     }
+
+    /// <summary>The vehicle's fuel claim waiting for review or returned for correction, if any (every form of claim).</summary>
+    internal static Task<VehicleExpense?> OutstandingFuelAsync(FleetDbContext db, int vehicleId, CancellationToken cancellationToken) =>
+        db.VehicleExpenses.AsNoTracking()
+            .Where(claim => claim.VehicleId == vehicleId && claim.Type == VehicleExpenseType.Fuel && VehicleExpense.Outstanding.Contains(claim.Status))
+            .OrderBy(claim => claim.Id).FirstOrDefaultAsync(cancellationToken);
 
     private static async Task<IReadOnlyList<ClaimFlag>> FlagsAsync(
         FleetDbContext db, int vehicleId, DateOnly expenseDate, decimal? odometerKm, decimal amount, string? invoiceNo, IReadOnlyList<FleetAttachment> attachments,
@@ -604,7 +798,8 @@ internal static class VehicleExpenseEndpoints
         var sameInvoice = invoiceNo is null
             ? []
             : await db.VehicleExpenses.AsNoTracking().Where(claim => claim.InvoiceNo == invoiceNo && claim.Status != VehicleExpenseStatus.Rejected).Select(claim => claim.Id).ToListAsync(cancellationToken);
-        var hashes = attachments.Where(attachment => attachment.Purpose is FleetAttachmentPurpose.Invoice or FleetAttachmentPurpose.Receipt).Select(attachment => attachment.Sha256).ToList();
+        var hashes = attachments.Where(attachment => attachment.Purpose is FleetAttachmentPurpose.Invoice or FleetAttachmentPurpose.Receipt or FleetAttachmentPurpose.PumpDisplay or FleetAttachmentPurpose.VehicleAtPump)
+            .Select(attachment => attachment.Sha256).ToList();
         var sameReceipt = hashes.Count == 0
             ? []
             : await db.Attachments.AsNoTracking()

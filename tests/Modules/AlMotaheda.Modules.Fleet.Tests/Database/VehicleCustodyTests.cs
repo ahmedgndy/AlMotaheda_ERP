@@ -19,7 +19,7 @@ namespace AlMotaheda.Modules.Fleet.Tests.Database;
 /// Vehicle GPS is in <see cref="VehicleGpsTrackingTests"/>.
 /// </summary>
 [Collection(SqlServerCollection.Name)]
-public sealed class VehicleCustodyTests(SqlServerFixture database)
+public sealed partial class VehicleCustodyTests(SqlServerFixture database)
 {
     private static readonly byte[] Jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, .. new byte[48], 0xFF, 0xD9];
 
@@ -284,19 +284,14 @@ public sealed class VehicleCustodyTests(SqlServerFixture database)
         var history = (await Json(await api.SendAsync(HttpMethod.Get, $"/api/vehicles/{cast.VehicleId}/drivers", cast.Manager))).GetProperty("items");
         Assert.Equal(2, history.GetArrayLength());
 
-        // A fuel claim goes through Price Control: above the approved range the company policy refuses it; inside it passes.
-        var diesel = (await Json(await api.SendAsync(HttpMethod.Post, "/api/price-items", cast.Executive,
-            new { nameAr = "سولار", nameEn = "Diesel", classification = "Fuel", unit = "Liter", minPrice = 12m, maxPrice = 16m, effectiveFrom = "2025-12-01" }))).GetProperty("item").Id();
-        var fuel = await ClaimBody(api, cast.OtherDriver, cast.VehicleId, today, 10_160m, null);
-        fuel["type"] = "Fuel";
-        fuel["fuelQuantity"] = 40m;
-        fuel["unitPrice"] = 20m;
-        fuel["priceItemId"] = diesel;
-        Assert.Equal("price_above_range", await CodeOf(await api.SendAsync(HttpMethod.Post, "/api/vehicle-expenses", cast.OtherDriver, fuel)));
-        fuel["unitPrice"] = 15.5m;
-        fuel["idempotencyKey"] = Guid.NewGuid().ToString();
-        var filled = await Submitted(api, cast.OtherDriver, fuel);
-        Assert.Equal((620m, "WithinRange", 16m), (filled.GetProperty("amount").GetDecimal(), filled.GetProperty("priceCheck").GetString(), filled.GetProperty("referenceMaxPrice").GetDecimal()));
+        // A fuel claim goes through Price Control (the vehicle's Diesel, total ÷ litres read): above the approved range the
+        // company policy refuses it; inside it passes.
+        await FuelItemAsync(api, cast, "سولار", "Diesel", 12m, 16m);
+        Assert.Equal("price_above_range", await CodeOf(await api.SendAsync(HttpMethod.Post, "/api/vehicle-expenses", cast.OtherDriver,
+            await FuelBody(api, cast.OtherDriver, cast.VehicleId, 800m, Read(800m, liters: 40m)))));
+        var filled = await Submitted(api, cast.OtherDriver, await FuelBody(api, cast.OtherDriver, cast.VehicleId, 620m, Read(620m, liters: 40m)));
+        Assert.Equal((620m, "WithinRange", 16m, 15.5m), (filled.GetProperty("amount").GetDecimal(), filled.GetProperty("priceCheck").GetString(),
+            filled.GetProperty("referenceMaxPrice").GetDecimal(), filled.GetProperty("effectiveUnitPrice").GetDecimal()));
     }
 
     /// <summary>
@@ -380,13 +375,20 @@ public sealed class VehicleCustodyTests(SqlServerFixture database)
         ["idempotencyKey"] = Guid.NewGuid().ToString(),
     };
 
-    private static async Task<int> UploadAsync(ProjectsApi api, Session session, string purpose)
+    /// <summary>Uploads a photo: <paramref name="bytes"/>, or a JPEG of its own (16 random bytes inside), so photos only match when a test means them to.</summary>
+    private static async Task<int> UploadAsync(ProjectsApi api, Session session, string purpose, byte[]? bytes = null)
     {
         using var content = new MultipartFormDataContent();
         content.Add(new StringContent(purpose), "purpose");
         content.Add(new StringContent(Guid.NewGuid().ToString()), "idempotencyKey");
         content.Add(new StringContent(DateTime.UtcNow.ToString("O")), "capturedAt");
-        var file = new ByteArrayContent(Jpeg);
+        if (bytes is null)
+        {
+            bytes = [.. Jpeg];
+            Guid.NewGuid().ToByteArray().CopyTo(bytes, 20);
+        }
+
+        var file = new ByteArrayContent(bytes);
         file.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
         content.Add(file, "file", $"{purpose.ToLowerInvariant()}.jpg");
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/fleet/attachments") { Content = content };

@@ -19,7 +19,7 @@ public sealed class DatabaseSchemaTests
         using var db = CreateContext();
 
         Assert.False(db.Database.HasPendingModelChanges(), "The model changed without a migration. Run dotnet ef migrations add.");
-        Assert.Equal(["InitialFleet", "EquipmentCostAdjustments", "EquipmentCostWorkItem", "VehiclesAndCustody", "ClaimOdometerOptional", "VehicleGpsTracking"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
+        Assert.Equal(["InitialFleet", "EquipmentCostAdjustments", "EquipmentCostWorkItem", "VehiclesAndCustody", "ClaimOdometerOptional", "VehicleGpsTracking", "CameraFuelClaims"], db.Database.GetMigrations().Select(id => id[(id.IndexOf('_') + 1)..]));
     }
 
     [Fact]
@@ -58,6 +58,8 @@ public sealed class DatabaseSchemaTests
     [InlineData("[ProjectItemId] int NULL")]
     [InlineData("CONSTRAINT [CK_Equipment_Category] CHECK ([Category] IN ('Tools', 'Medium', 'Heavy', 'Survey', 'Safety', 'Vehicle'))")]
     [InlineData("CONSTRAINT [CK_Equipment_Ownership] CHECK ([Ownership] IN ('Owned', 'Rented'))")]
+    [InlineData("CREATE UNIQUE INDEX [UX_VehicleExpense_OutstandingFuel] ON [fleet].[VehicleExpense] ([VehicleId]) WHERE [Type] = 'Fuel' AND [CapturedAt] IS NOT NULL AND [Status] IN ('Submitted', 'Escalated', 'EvidenceRequested')")]
+    [InlineData("CONSTRAINT [CK_FleetAttachment_Purpose] CHECK ([Purpose] IN ('Odometer', 'Invoice', 'Receipt', 'Violation', 'Supporting', 'PumpDisplay', 'VehicleAtPump'))")]
     [InlineData("CONSTRAINT [CK_Equipment_Status] CHECK ([Status] IN ('InService', 'UnderMaintenance', 'Lost', 'Retired'))")]
     [InlineData("CONSTRAINT [CK_EquipmentRental_Rate] CHECK ([Rate] > 0)")]
     [InlineData("CONSTRAINT [CK_EquipmentRental_Dates] CHECK ([EndDate] IS NULL OR [EndDate] >= [StartDate])")]

@@ -129,6 +129,11 @@ internal sealed class VehicleExpenseConfiguration : IEntityTypeConfiguration<Veh
     public const int NotesMaxLength = 1000;
     public const int NoteMaxLength = 500;
     public const int JustificationMaxLength = 500;
+    public const int OcrEngineMaxLength = 50;
+    public const int OcrTextMaxLength = 1000;
+
+    /// <summary>One fuel claim per vehicle waiting for review or correction (409 <c>fuel_claim_outstanding</c>).</summary>
+    public const string OutstandingFuelIndex = "UX_VehicleExpense_OutstandingFuel";
 
     public void Configure(EntityTypeBuilder<VehicleExpense> builder)
     {
@@ -141,12 +146,17 @@ internal sealed class VehicleExpenseConfiguration : IEntityTypeConfiguration<Veh
             table.HasCheckConstraint("CK_VehicleExpense_Odometer", "[OdometerKm] IS NULL OR [OdometerKm] >= 0");
             table.HasCheckConstraint("CK_VehicleExpense_Round", "[Round] >= 1");
 
-            // Fuel has litres and a price per litre, and its amount is their product; every other type has neither.
+            // Fuel of the earlier form has litres and a typed price per litre, and its amount is their product; a camera fuel
+            // claim has its capture moment and amount source, no typed price, and litres only when the display showed them;
+            // every other type has none of these.
             table.HasCheckConstraint(
                 "CK_VehicleExpense_Fuel",
-                "([Type] = 'Fuel' AND [FuelQuantity] IS NOT NULL AND [UnitPrice] IS NOT NULL AND [FuelQuantity] > 0 AND [UnitPrice] > 0 "
+                "([Type] = 'Fuel' AND [CapturedAt] IS NULL AND [FuelQuantity] IS NOT NULL AND [UnitPrice] IS NOT NULL AND [FuelQuantity] > 0 AND [UnitPrice] > 0 "
                 + "AND ABS([Amount] - ROUND([FuelQuantity] * [UnitPrice], 2)) < 0.01) "
-                + "OR ([Type] <> 'Fuel' AND [FuelQuantity] IS NULL AND [UnitPrice] IS NULL)");
+                + "OR ([Type] = 'Fuel' AND [CapturedAt] IS NOT NULL AND [AmountSource] IS NOT NULL AND [UnitPrice] IS NULL AND ([FuelQuantity] IS NULL OR [FuelQuantity] > 0)) "
+                + "OR ([Type] <> 'Fuel' AND [FuelQuantity] IS NULL AND [UnitPrice] IS NULL AND [CapturedAt] IS NULL AND [AmountSource] IS NULL)");
+            table.HasCheckConstraint("CK_VehicleExpense_AmountSource", $"[AmountSource] IS NULL OR [AmountSource] IN ({SqlList.Of(Enum.GetNames<VehicleExpenseAmountSource>())})");
+            table.HasCheckConstraint("CK_VehicleExpense_OcrConfidence", "[OcrConfidence] IS NULL OR ([OcrConfidence] >= 0 AND [OcrConfidence] <= 1)");
 
             // Posted exactly with its approval and its custody entry; never posted unless approved.
             table.HasCheckConstraint(
@@ -172,6 +182,14 @@ internal sealed class VehicleExpenseConfiguration : IEntityTypeConfiguration<Veh
         builder.Property(expense => expense.PostingStatus).HasConversion<string>().HasMaxLength(30).IsUnicode(false);
         builder.Property(expense => expense.OdometerKm).HasPrecision(18, 1);
         builder.Property(expense => expense.FuelQuantity).HasPrecision(18, 3);
+        builder.Property(expense => expense.EffectiveUnitPrice).HasPrecision(18, 4);
+        builder.Property(expense => expense.AmountSource).HasConversion<string>().HasMaxLength(30).IsUnicode(false);
+        builder.Property(expense => expense.OcrAmount).HasPrecision(18, 2);
+        builder.Property(expense => expense.OcrLiters).HasPrecision(18, 3);
+        builder.Property(expense => expense.OcrUnitPrice).HasPrecision(18, 4);
+        builder.Property(expense => expense.OcrConfidence).HasPrecision(5, 4);
+        builder.Property(expense => expense.OcrEngine).HasMaxLength(OcrEngineMaxLength).IsUnicode(false);
+        builder.Property(expense => expense.OcrText).HasMaxLength(OcrTextMaxLength).IsUnicode();
         builder.Property(expense => expense.VendorName).HasMaxLength(VendorMaxLength).IsUnicode();
         builder.Property(expense => expense.InvoiceNo).HasMaxLength(InvoiceNoMaxLength).IsUnicode();
         builder.Property(expense => expense.Notes).HasMaxLength(NotesMaxLength).IsUnicode();
@@ -184,6 +202,12 @@ internal sealed class VehicleExpenseConfiguration : IEntityTypeConfiguration<Veh
         builder.Property(expense => expense.RowVersion).IsRowVersion();
 
         builder.HasIndex(expense => expense.IdempotencyKey).IsUnique().HasDatabaseName(IdempotencyKeyIndex);
+
+        // One camera fuel claim per vehicle not reviewed to the end (waiting for review or returned for correction). Claims
+        // of the earlier form are left out so the index can be built over existing data; the submit checks those under
+        // the vehicle's lock.
+        builder.HasIndex(expense => expense.VehicleId).IsUnique().HasDatabaseName(OutstandingFuelIndex)
+            .HasFilter("[Type] = 'Fuel' AND [CapturedAt] IS NOT NULL AND [Status] IN ('Submitted', 'Escalated', 'EvidenceRequested')");
         builder.HasIndex(expense => new { expense.VehicleId, expense.ExpenseDate }, "IX_VehicleExpense_Vehicle_Date");
         builder.HasIndex(expense => new { expense.Status, expense.Id }, "IX_VehicleExpense_Status");
         builder.HasIndex(expense => new { expense.ProjectId, expense.ExpenseDate }, "IX_VehicleExpense_Project_Date");

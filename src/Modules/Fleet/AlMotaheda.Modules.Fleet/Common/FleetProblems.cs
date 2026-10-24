@@ -42,6 +42,7 @@ internal static class FleetProblems
     public const string NotVehicle = "not_a_vehicle";
     public const string AlreadyPosted = "already_posted";
     public const string VehicleTrackingNoticeNotAccepted = "vehicle_tracking_notice_not_accepted";
+    public const string FuelClaimOutstanding = "fuel_claim_outstanding";
 
     public static ValidationProblem Validation(ValidationErrors errors) => ApiProblem.Validation(errors.ToDictionary());
 
@@ -180,6 +181,17 @@ internal static class FleetProblems
 
     public static ProblemHttpResult PriceCaseRejected() =>
         Conflict(PriceExceptionRejected, "The Executive rejected the price of this claim. It can't be approved at this price.");
+
+    /// <summary>
+    /// The vehicle already has a fuel claim not reviewed to the end (waiting for review, or returned for correction):
+    /// a new one waits until it is approved or rejected. Carries the claim's id, number and status so the phone can
+    /// open it (the claim of another driver is shown by number only).
+    /// </summary>
+    public static ProblemHttpResult OutstandingFuelClaim(int claimId, string number, string status) =>
+        TypedResults.Problem(
+            statusCode: StatusCodes.Status409Conflict,
+            title: $"This vehicle already has fuel claim {number} ({status}) waiting. A new fuel claim can be made once it is approved or rejected.",
+            extensions: new Dictionary<string, object?> { [ApiProblem.CodeKey] = FuelClaimOutstanding, ["claimId"] = claimId, ["claimNumber"] = number, ["claimStatus"] = status });
 
     public static ProblemHttpResult PostedAlready() => Conflict(AlreadyPosted, "This claim was already posted to the vehicle's custody.");
 

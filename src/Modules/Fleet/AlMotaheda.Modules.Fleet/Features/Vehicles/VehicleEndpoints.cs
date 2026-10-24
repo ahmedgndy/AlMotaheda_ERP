@@ -8,6 +8,7 @@ using AlMotaheda.Modules.Fleet.Data;
 using AlMotaheda.Modules.Fleet.Data.Configurations;
 using AlMotaheda.Modules.Fleet.Security;
 using AlMotaheda.Modules.HR.Contracts;
+using AlMotaheda.Modules.Projects.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -66,7 +67,8 @@ internal sealed record VehicleView(
     DateTime CreatedAt,
     FleetPerson CreatedBy,
     DateTime? UpdatedAt,
-    string RowVersion);
+    string RowVersion,
+    int? FuelPriceItemId);
 
 internal sealed record VehicleCustodyLineView(
     int Id, DateOnly EntryDate, string Kind, string Status, decimal Amount, decimal BalanceAfter, string SourceType, int SourceId, DriverRef? Driver,
@@ -104,7 +106,7 @@ internal sealed class VehicleViews(FleetDbContext db, IUserDirectory users, IEmp
                 vehicle.OdometerKm, vehicle.OdometerUpdatedAt, vehicle.GpsStatus.ToString(), vehicle.TrackingEnabled, vehicle.GpsProvider, vehicle.GpsDeviceId, vehicle.Notes,
                 driver is null ? null : DriverAssignmentView.From(driver, driverRefs, seesMoney), projects.GetValueOrDefault(vehicle.Id),
                 seesMoney ? figures.Posted : null, seesMoney ? figures.Pending : null, figures.PendingCount,
-                vehicle.CreatedAt, FleetPerson.From(vehicle.CreatedBy, people), vehicle.UpdatedAt, RowVersions.Format(vehicle.RowVersion));
+                vehicle.CreatedAt, FleetPerson.From(vehicle.CreatedBy, people), vehicle.UpdatedAt, RowVersions.Format(vehicle.RowVersion), vehicle.FuelPriceItemId);
         }).ToList();
     }
 
@@ -126,7 +128,7 @@ internal static partial class VehicleEndpoints
 {
     internal sealed record VehicleRequest(
         string? AssetNo, string? NameAr, string? NameEn, string? Plate, string? Type, int? ModelYear, string? FuelType, string? Ownership, string? Condition,
-        string? Status, decimal? OdometerKm, string? GpsProvider, string? GpsDeviceId, string? Notes, string? RowVersion);
+        string? Status, decimal? OdometerKm, string? GpsProvider, string? GpsDeviceId, string? Notes, string? RowVersion, int? FuelPriceItemId = null);
 
     internal sealed record OdometerRequest(decimal? OdometerKm, string? RowVersion);
 
@@ -242,7 +244,7 @@ internal static partial class VehicleEndpoints
     }
 
     internal static async Task<Results<Created<VehicleView>, ValidationProblem, ProblemHttpResult>> CreateAsync(
-        VehicleRequest request, HttpContext httpContext, FleetDbContext db, VehicleViews views, CompanyClock clock, FleetLog log, CancellationToken cancellationToken)
+        VehicleRequest request, HttpContext httpContext, FleetDbContext db, VehicleViews views, IPriceControl priceControl, CompanyClock clock, FleetLog log, CancellationToken cancellationToken)
     {
         if (FleetCaller.From(httpContext.User) is not { } caller)
         {
@@ -251,7 +253,7 @@ internal static partial class VehicleEndpoints
 
         var errors = new ValidationErrors();
         var fields = VehicleFields.Validate(request, errors, forCreate: true);
-        if (errors.HasErrors)
+        if (errors.HasErrors || !await FuelItemValidAsync(priceControl, request.FuelPriceItemId, errors, cancellationToken))
         {
             return FleetProblems.Validation(errors);
         }
@@ -289,6 +291,7 @@ internal static partial class VehicleEndpoints
             Type = fields.Type,
             ModelYear = fields.ModelYear,
             FuelType = fields.FuelType,
+            FuelPriceItemId = request.FuelPriceItemId,
             OdometerKm = fields.OdometerKm ?? 0,
             OdometerUpdatedAt = fields.OdometerKm is null ? null : now,
             OdometerUpdatedBy = fields.OdometerKm is null ? null : caller.UserId,
@@ -319,7 +322,8 @@ internal static partial class VehicleEndpoints
     }
 
     internal static async Task<Results<Ok<VehicleView>, ValidationProblem, ProblemHttpResult>> UpdateAsync(
-        int vehicleId, VehicleRequest request, HttpContext httpContext, FleetDbContext db, VehicleViews views, CompanyClock clock, FleetLog log, CancellationToken cancellationToken)
+        int vehicleId, VehicleRequest request, HttpContext httpContext, FleetDbContext db, VehicleViews views, IPriceControl priceControl, CompanyClock clock, FleetLog log,
+        CancellationToken cancellationToken)
     {
         if (FleetCaller.From(httpContext.User) is not { } caller)
         {
@@ -329,7 +333,7 @@ internal static partial class VehicleEndpoints
         var errors = new ValidationErrors();
         var fields = VehicleFields.Validate(request, errors, forCreate: false);
         var rowVersion = RowVersions.Parse(request.RowVersion, errors);
-        if (errors.HasErrors)
+        if (errors.HasErrors || !await FuelItemValidAsync(priceControl, request.FuelPriceItemId, errors, cancellationToken))
         {
             return FleetProblems.Validation(errors);
         }
@@ -361,6 +365,13 @@ internal static partial class VehicleEndpoints
         vehicle.Type = fields.Type;
         vehicle.ModelYear = fields.ModelYear;
         vehicle.FuelType = fields.FuelType;
+
+        // Left as it is when the form doesn't name it (an older app's form never does).
+        if (request.FuelPriceItemId is { } fuelItem)
+        {
+            vehicle.FuelPriceItemId = fuelItem;
+        }
+
         if (fields.OdometerKm is { } reading && reading > vehicle.OdometerKm)
         {
             vehicle.OdometerKm = reading;
@@ -391,6 +402,24 @@ internal static partial class VehicleEndpoints
 
         log.VehicleUpdated(caller.UserId, vehicle.Id);
         return TypedResults.Ok((await views.LoadAsync(vehicle.Id, caller, cancellationToken))!);
+    }
+
+    /// <summary>The vehicle's fuel in Price Control, when named: an active litre item (fuel claims are compared with it).</summary>
+    private static async Task<bool> FuelItemValidAsync(IPriceControl priceControl, int? itemId, ValidationErrors errors, CancellationToken cancellationToken)
+    {
+        if (itemId is not { } id)
+        {
+            return true;
+        }
+
+        var items = await priceControl.FindItemsAsync([id], cancellationToken);
+        if (!items.TryGetValue(id, out var item) || !item.IsActive || item.Unit != MeasurementUnits.Liter)
+        {
+            errors.Add("fuelPriceItemId", "The vehicle's fuel must be an active Price Control item priced per litre.");
+            return false;
+        }
+
+        return true;
     }
 
     internal static async Task<Results<Ok<VehicleView>, ValidationProblem, ProblemHttpResult>> OdometerAsync(
