@@ -8,13 +8,13 @@
 
 # ---- Project files only -----------------------------------------------------------------------------------------
 # Every .csproj with its folder, nothing else, so the restore layer below stays cached until a project file changes.
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS projects
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS projects
 WORKDIR /src
 COPY src/ src/
 RUN find src -type f ! -name '*.csproj' -delete
 
 # ---- Build ------------------------------------------------------------------------------------------------------
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 
 COPY Directory.Build.props Directory.Packages.props ./
