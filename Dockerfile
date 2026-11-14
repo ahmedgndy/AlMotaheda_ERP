@@ -28,7 +28,7 @@ RUN dotnet publish src/Host/AlMotaheda.Api/AlMotaheda.Api.csproj \
 # ---- Run --------------------------------------------------------------------------------------------------------
 # The floating 10.0 tag always has the newest .NET 10 patch (security fixes such as System.Security.Cryptography.Pkcs
 # come with the runtime), so rebuild the image regularly.
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:11.0 AS final
 WORKDIR /app
 
 # The company time zone (Projects__TimeZone, default Africa/Cairo) needs time zone data.
